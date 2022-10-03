@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Mon Oct 03 2022
+// Last Modified: Tue Oct 04 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -11,45 +11,23 @@
 
 
 use crate::stdf_error::StdfError;
+use crate::stdf_types::*;
 use std::fs;
 use std::io::{BufReader, Read, SeekFrom, Seek};
 // use std::iter::Iterator;
 // use flate2::{self, Compress};
 
 
-#[derive(Debug)]
-pub enum ByteOrder {
-    LittleEndian,
-    BigEndian,
-}
-
 
 #[derive(Debug)]
-pub enum CompressType {
-    Uncompressed,
-    GzipCompressed,
-    BzipCompressed,
-    ZipCompressed,
-}
-
-
-#[derive(Debug)]
-pub struct RecordHeader {
-    len: u16,
-    typ: u8,
-    sub: u8,
-}
-
-
-#[derive(Debug)]
-pub struct StdfFile {
+pub struct StdfReader {
     pub file_path: String,
     pub compress_type: CompressType,
     pub endianness: ByteOrder,
     pub reader: BufReader<fs::File>,
 }
 
-impl StdfFile {
+impl StdfReader {
     pub fn new(path: &str) -> Result<Self, StdfError> {
         let fp = fs::OpenOptions::new().read(true).open(path)?;
         let mut reader = BufReader::with_capacity(2<<20, fp);
@@ -70,7 +48,7 @@ impl StdfFile {
         let mut buf = [0u8; 4];
         reader.read_exact(&mut buf)?;
         // parse header assuming little endian
-        let far_header = RecordHeader::from_bytes(&buf, ByteOrder::LittleEndian)?;
+        let far_header = RecordHeader::from_bytes(&buf, &ByteOrder::LittleEndian)?;
         let endianness = match far_header.len {
             2 => Ok(ByteOrder::LittleEndian),
             512 => Ok(ByteOrder::BigEndian),
@@ -83,7 +61,7 @@ impl StdfFile {
         // restore file position
         reader.seek(SeekFrom::Start(0))?;
         // return
-        Ok(StdfFile{
+        Ok(StdfReader{
             file_path: String::from(path), 
             compress_type,
             endianness,
@@ -92,25 +70,3 @@ impl StdfFile {
 }
 
 
-impl RecordHeader {
-    fn new() -> Self {
-        RecordHeader { len: 0, typ: 0, sub: 0 }
-    }
-
-    pub fn from_bytes(raw_data: &[u8], order: ByteOrder) -> Result<Self, StdfError> {
-        if raw_data.len() >= 4 {
-            let mut header = RecordHeader::new();
-            let len_bytes = [raw_data[0], raw_data[1]];
-            header.len = match order {
-                ByteOrder::LittleEndian => u16::from_le_bytes(len_bytes),
-                ByteOrder::BigEndian => u16::from_be_bytes(len_bytes)
-            };
-            header.typ = raw_data[2];
-            header.sub = raw_data[3];
-            Ok(header)
-        } else {
-            // Error("Not enough data for constructing record header")
-            Err(StdfError {code: 1, msg: String::from("Not enough data to construct record header")})
-        }
-    }
-}

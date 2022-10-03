@@ -3,14 +3,54 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Mon Oct 03 2022
+// Last Modified: Tue Oct 04 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
 //
 
 
-use crate::stdf_error;
+use crate::stdf_error::StdfError;
+extern crate smart_default;
+use smart_default::SmartDefault;
+
+
+// Common Type
+#[derive(Debug)]
+pub enum ByteOrder {
+    LittleEndian,
+    BigEndian,
+}
+
+#[derive(Debug)]
+pub enum CompressType {
+    Uncompressed,
+    GzipCompressed,
+    BzipCompressed,
+    ZipCompressed,
+}
+
+#[derive(Debug)]
+pub struct RecordHeader {
+    pub len: u16,
+    pub typ: u8,
+    pub sub: u8,
+}
+
+
+// Traits
+pub trait ParseStruct: Sized {
+    fn new() -> Self;
+    fn from_bytes(raw_data: &[u8], endian: &ByteOrder) -> Result<Self, StdfError>;
+    fn to_bytes(rec: &Self) -> Result<Box<[u8]>, StdfError>;
+}
+
+pub trait ParseRecord: Sized {
+    fn new(rec_header: &RecordHeader) -> Self;
+    fn from_bytes(rec: Self, raw_data: &[u8], endian: &ByteOrder) -> Result<Self, StdfError>;
+    fn to_bytes(rec: &Self) -> Result<Box<[u8]>, StdfError>;
+}
+
 
 // Data Types
 pub type B1 = u8;
@@ -35,10 +75,10 @@ pub type Cf = String;
 pub type Sn = String;
 
 // Bn;	//First byte = unsigned count of bytes to follow (maximum of 255 bytes)
-pub type Bn = Box<[u8]>;
+pub type Bn = Vec<u8>;
 
 // Dn;	//First two bytes = unsigned count of bits to follow (maximum of 65,535 bits)
-pub type Dn = Box<[u8]>;
+pub type Dn = Vec<u8>;
 
 pub type KxCn = Vec<Cn>;
 pub type KxSn = Vec<Sn>;
@@ -50,12 +90,15 @@ pub type KxU8 = Vec<U8>;
 pub type KxR4 = Vec<R4>;
 pub type KxN1 = Vec<U1>;
 
+#[derive(SmartDefault)]
 pub enum KxUf {
+    #[default]
     F1(KxU1),
     F2(KxU2),
     F4(KxU4),
 }
 
+#[derive(Clone)]
 pub enum V1 {
 	B0,
 	U1(U1),
@@ -69,7 +112,8 @@ pub enum V1 {
 	Cn(Cn),
 	Bn(Bn),
 	Dn(Dn),
-	N1(B1)
+	N1(B1),
+    Invalid,
 }
 
 pub type Vn = Vec<V1>;
@@ -119,23 +163,28 @@ pub enum StdfRecords {
     DTR(DTR),
     // rec type 180: Reserved
     // rec type 181: Reserved
+    ReservedRec(ReservedRec),
+    InvalidRec
 }
 
-
+#[derive(SmartDefault)]
 pub struct FAR {
     pub cpu_type: U1,  // CPU type that wrote this file
     pub stdf_ver: U1,  // STDF version number
 }
 
+#[derive(SmartDefault)]
 pub struct ATR {
     pub mod_tim: U4, //Date and time of STDF file modification
     pub cmd_line: Cn, //Command line of program
 }
 
+#[derive(SmartDefault)]
 pub struct VUR {
     pub upd_nam: Cn, //Update Version Name
 }
 
+#[derive(SmartDefault)]
 pub struct MIR {
     pub setup_t: U4, // Date and time of job setup
     pub start_t: U4, // Date and time first part tested
@@ -177,6 +226,7 @@ pub struct MIR {
     pub supr_nam: Cn, // Supervisor name or ID
 }
 
+#[derive(SmartDefault)]
 pub struct MRR {
     pub finish_t: U4, // Date and time last part tested
     pub disp_cod: C1, // Lot disposition code,default: space
@@ -184,6 +234,7 @@ pub struct MRR {
     pub exc_desc: Cn, // Lot description supplied by exec
 }
 
+#[derive(SmartDefault)]
 pub struct PCR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -194,6 +245,7 @@ pub struct PCR {
     pub func_cnt: U4, // Number of functional parts tested
 }
 
+#[derive(SmartDefault)]
 pub struct HBR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -203,6 +255,7 @@ pub struct HBR {
     pub hbin_nam: Cn, // Name of hardware bin
 }
 
+#[derive(SmartDefault)]
 pub struct SBR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -212,6 +265,7 @@ pub struct SBR {
     pub sbin_nam: Cn, // Name of software bin
 }
 
+#[derive(SmartDefault)]
 pub struct PMR {
     pub pmr_indx: U2, // Unique index associated with pin
     pub chan_typ: U2, // Channel type
@@ -222,6 +276,7 @@ pub struct PMR {
     pub site_num: U1, // Site number associated with channel
 }
 
+#[derive(SmartDefault)]
 pub struct PGR {
     pub grp_indx: U2, // Unique index associated with pin group
     pub grp_nam: Cn, // Name of pin group
@@ -229,6 +284,7 @@ pub struct PGR {
     pub pmr_indx: KxU2, // Array of indexes for pins in the group
 }
 
+#[derive(SmartDefault)]
 pub struct PLR {
     pub grp_cnt: U2, // Count (k) of pins or pin groups
     pub grp_indx: KxU2, // Array of pin or pin group indexes
@@ -240,11 +296,13 @@ pub struct PLR {
     pub rtn_chal: KxCn, // Return state encoding characters
 }
 
+#[derive(SmartDefault)]
 pub struct RDR {
     pub num_bins: U2, // Number (k) of bins being retested
     pub rtst_bin: KxU2, // Array of retest bin numbers
 }
 
+#[derive(SmartDefault)]
 pub struct SDR {
     pub head_num: U1, // Test head number
     pub site_grp: U1, // Site group number
@@ -268,6 +326,7 @@ pub struct SDR {
     pub extr_id: Cn, // Extra equipment ID
 }
 
+#[derive(SmartDefault)]
 pub struct PSR {
     pub cont_flg: B1, // Continuation PSR record exist
     pub psr_indx: U2, // PSR Record Index (used by STR records)
@@ -284,6 +343,7 @@ pub struct PSR {
     pub src_id: KxCn, // Optional array of PatternInSrcFileID
 }
 
+#[derive(SmartDefault)]
 pub struct NMR {
     pub cont_flg: B1, // Continuation NMR record follows if not 0
     pub totm_cnt: U2, // Count of PMR indexes and ATPG_NAM entries
@@ -292,18 +352,21 @@ pub struct NMR {
     pub atpg_nam: KxCn, // Array of ATPG signal names
 }
 
+#[derive(SmartDefault)]
 pub struct CNR {
     pub chn_num: U2, // Chain number. Referenced by the CHN_NUM array in an STR record
     pub bit_pos: U4, // Bit position in the chain
     pub cell_nam: Sn, // Scan Cell Name
 }
 
+#[derive(SmartDefault)]
 pub struct SSR {
     pub ssr_nam: Cn, // Name of the STIL Scan pub structure for reference
     pub chn_cnt: U2, // Count (k) of number of Chains listed in CHN_LIST
     pub chn_list: KxU2, // Array of CDR Indexes
 }
 
+#[derive(SmartDefault)]
 pub struct CDR {
     pub cont_flg: B1, // Continuation CDR record follows if not 0
     pub cdr_indx: U2, // SCR Index
@@ -320,6 +383,7 @@ pub struct CDR {
     pub cell_lst: KxSn, // Array of Scan Cell Names
 }
 
+#[derive(SmartDefault)]
 pub struct WIR {
     pub head_num: U1, // Test head number
     pub site_grp: U1, // Site group number 255
@@ -327,6 +391,7 @@ pub struct WIR {
     pub wafer_id: Cn, // Wafer ID length byte = 0
 }
 
+#[derive(SmartDefault)]
 pub struct WRR {
     pub head_num: U1, // Test head number
     pub site_grp: U1, // Site group number
@@ -344,6 +409,7 @@ pub struct WRR {
     pub exc_desc: Cn, // Wafer description supplied by exec
 }
 
+#[derive(SmartDefault)]
 pub struct WCR {
     pub wafr_siz: R4, // Diameter of wafer in WF_UNITS
     pub die_ht: R4, // Height of die in WF_UNITS
@@ -356,11 +422,13 @@ pub struct WCR {
     pub pos_y: C1, // Positive Y direction of wafer
 }
 
+#[derive(SmartDefault)]
 pub struct PIR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
 }
 
+#[derive(SmartDefault)]
 pub struct PRR {
     pub head_num: U1, //Test head number
     pub site_num: U1, //Test site number
@@ -376,6 +444,7 @@ pub struct PRR {
     pub part_fix: Bn, //Part repair information
 }
 
+#[derive(SmartDefault)]
 pub struct TSR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -395,6 +464,7 @@ pub struct TSR {
     pub tst_sqrs: R4, // Sum of squares of test result values
 }
 
+#[derive(SmartDefault)]
 pub struct PTR {
     pub test_num: U4, // Test number
     pub head_num: U1, // Test head number
@@ -418,6 +488,7 @@ pub struct PTR {
     pub hi_spec: R4, // High specification limit value
 }
 
+#[derive(SmartDefault)]
 pub struct MPR {
     pub test_num: U4, // Test number
     pub head_num: U1, // Test head number
@@ -448,6 +519,7 @@ pub struct MPR {
     pub hi_spec: R4, // High specification limit value
 }
 
+#[derive(SmartDefault)]
 pub struct FTR {
     pub test_num: U4, // Test number
     pub head_num: U1, // Test head number
@@ -479,6 +551,7 @@ pub struct FTR {
     pub spin_map: Dn, // Bit map of enabled comparators
 }
 
+#[derive(SmartDefault)]
 pub struct STR {
     pub cont_flg: B1, // Continuation STR follows if not 0
     pub test_num: U4, // Test number
@@ -541,17 +614,593 @@ pub struct STR {
     pub user_txt: KxCf, // Array of user defined fixed length strings for each logged fail
 }
 
+#[derive(SmartDefault)]
 pub struct BPS {
     pub seq_name: Cn, // Program section (or sequencer) name length byte = 0
 }
 
+#[derive(SmartDefault)]
 pub struct EPS {}
 
+#[derive(SmartDefault)]
 pub struct GDR {
     pub fld_cnt: U2, // Count of data fields in record
     pub gen_data: Vn, // Data type code and data for one field(Repeat GEN_DATA for each data field)
 }
 
+#[derive(SmartDefault)]
 pub struct DTR {
     pub text_dat: Cn, // ASCII text string
+}
+
+#[derive(SmartDefault)]
+pub struct ReservedRec {
+    pub raw_data: Cn, // unparsed data
+}
+
+// implementation
+
+impl ParseStruct for RecordHeader {
+    fn new() -> Self {
+        RecordHeader { len: 0, typ: 0, sub: 0 }
+    }
+
+    fn from_bytes(raw_data: &[u8], order: &ByteOrder) -> Result<Self, StdfError> {
+        if raw_data.len() >= 4 {
+            let mut header = RecordHeader::new();
+            let len_bytes = [raw_data[0], raw_data[1]];
+            header.len = match order {
+                ByteOrder::LittleEndian => u16::from_le_bytes(len_bytes),
+                ByteOrder::BigEndian => u16::from_be_bytes(len_bytes)
+            };
+            header.typ = raw_data[2];
+            header.sub = raw_data[3];
+            Ok(header)
+        } else {
+            // Error("Not enough data for constructing record header")
+            Err(StdfError {code: 1, msg: String::from("Not enough data to construct record header")})
+        }
+    }
+
+    fn to_bytes(rec: &Self) -> Result<Box<[u8]>, StdfError> {
+        Err(StdfError { code: 1, msg: "".to_string() })
+    }
+}
+
+impl ParseRecord for StdfRecords {
+    fn new(rec_header: &RecordHeader) -> Self {
+        match (rec_header.typ, rec_header.sub) {
+            // rec type 15
+            (15, 10) => StdfRecords::PTR(PTR::default()),
+            (15, 15) => StdfRecords::MPR(MPR::default()),
+            (15, 20) => StdfRecords::FTR(FTR::default()),
+            (15, 30) => StdfRecords::STR(STR::default()),
+            // rec type 5
+            (5, 10) => StdfRecords::PIR(PIR::default()),
+            (5, 20) => StdfRecords::PRR(PRR::default()),
+            // rec type 2
+            (2, 10) => StdfRecords::WIR(WIR::default()),
+            (2, 20) => StdfRecords::WRR(WRR::default()),
+            (2, 30) => StdfRecords::WCR(WCR::default()),
+            // rec type 50
+            (50, 10) => StdfRecords::GDR(GDR::default()),
+            (50, 30) => StdfRecords::DTR(DTR::default()),
+            // rec type 0
+            (0, 10) => StdfRecords::FAR(FAR::default()),
+            (0, 20) => StdfRecords::ATR(ATR::default()),
+            (0, 30) => StdfRecords::VUR(VUR::default()),
+            // rec type 1
+            (1, 10) => StdfRecords::MIR(MIR::default()),
+            (1, 20) => StdfRecords::MRR(MRR::default()),
+            (1, 30) => StdfRecords::PCR(PCR::default()),
+            (1, 40) => StdfRecords::HBR(HBR::default()),
+            (1, 50) => StdfRecords::SBR(SBR::default()),
+            (1, 60) => StdfRecords::PMR(PMR::default()),
+            (1, 62) => StdfRecords::PGR(PGR::default()),
+            (1, 63) => StdfRecords::PLR(PLR::default()),
+            (1, 70) => StdfRecords::RDR(RDR::default()),
+            (1, 80) => StdfRecords::SDR(SDR::default()),
+            (1, 90) => StdfRecords::PSR(PSR::default()),
+            (1, 91) => StdfRecords::NMR(NMR::default()),
+            (1, 92) => StdfRecords::CNR(CNR::default()),
+            (1, 93) => StdfRecords::SSR(SSR::default()),
+            (1, 94) => StdfRecords::CDR(CDR::default()),
+            // rec type 10
+            (10, 30) => StdfRecords::TSR(TSR::default()),
+            // rec type 20
+            (20, 10) => StdfRecords::BPS(BPS::default()),
+            (20, 20) => StdfRecords::EPS(EPS::default()),
+            // rec type 180: Reserved
+            // rec type 181: Reserved
+            (180 | 181, _) => StdfRecords::ReservedRec(ReservedRec::default()),
+            // not matched
+            (_, _) => StdfRecords::InvalidRec
+        }
+    }
+
+    fn from_bytes(rec: Self, raw_data: &[u8], endian: &ByteOrder) -> Result<Self, StdfError> {
+        match rec {
+            // rec type 15
+            StdfRecords::PTR(PTR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::MPR(MPR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::FTR(FTR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::STR(STR) => Err(StdfError{code: 1, msg: String::from("")}),
+            // rec type 5
+            StdfRecords::PIR(PIR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::PRR(PRR) => Err(StdfError{code: 1, msg: String::from("")}),
+            // rec type 2
+            StdfRecords::WIR(WIR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::WRR(WRR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::WCR(WCR) => Err(StdfError{code: 1, msg: String::from("")}),
+            // rec type 50
+            StdfRecords::GDR(GDR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::DTR(DTR) => Err(StdfError{code: 1, msg: String::from("")}),
+            // rec type 0
+            StdfRecords::FAR(FAR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::ATR(ATR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::VUR(VUR) => Err(StdfError{code: 1, msg: String::from("")}),
+            // rec type 1
+            StdfRecords::MIR(MIR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::MRR(MRR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::PCR(PCR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::HBR(HBR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::SBR(SBR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::PMR(PMR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::PGR(PGR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::PLR(PLR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::RDR(RDR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::SDR(SDR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::PSR(PSR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::NMR(NMR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::CNR(CNR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::SSR(SSR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::CDR(CDR) => Err(StdfError{code: 1, msg: String::from("")}),
+            // rec type 10
+            StdfRecords::TSR(TSR) => Err(StdfError{code: 1, msg: String::from("")}),
+            // rec type 20
+            StdfRecords::BPS(BPS) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::EPS(EPS) => Err(StdfError{code: 1, msg: String::from("")}),
+            // rec type 180: Reserved
+            // rec type 181: Reserved
+            StdfRecords::ReservedRec(ReservedRec) => Err(StdfError{code: 1, msg: String::from("")}),
+            // not matched
+            StdfRecords::InvalidRec => Ok(rec)
+        }
+    }
+
+    fn to_bytes(rec: &Self) -> Result<Box<[u8]>, StdfError> {
+        Err(StdfError { code: 1, msg: "".to_string() })
+    }
+}
+
+
+// data type functions
+fn read_B1(raw_data: &[u8], pos: &mut u16) -> B1 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize < raw_data.len() {
+        *pos += 1;
+        (*raw_data)[pos_usize]
+    } else {
+        0
+    }
+}
+
+fn read_C1(raw_data: &[u8], pos: &mut u16) -> C1 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize < raw_data.len() {
+        *pos += 1;
+        (*raw_data)[pos_usize]
+    } else {
+        0
+    }
+}
+
+fn read_U1(raw_data: &[u8], pos: &mut u16) -> U1 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize < raw_data.len() {
+        *pos += 1;
+        (*raw_data)[pos_usize]
+    } else {
+        0
+    }
+}
+
+fn read_U2(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> U2 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize + 2 <= raw_data.len() {
+        *pos += 2;
+        let mut tmp = [0u8; 2];
+        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+2]);
+
+        match order {
+            ByteOrder::LittleEndian => U2::from_le_bytes(tmp),
+            ByteOrder::BigEndian => U2::from_be_bytes(tmp),
+        }
+    } else {
+        0
+    }
+}
+
+fn read_U4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> U4 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize + 4 <= raw_data.len() {
+        *pos += 4;
+        let mut tmp = [0u8; 4];
+        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+4]);
+        
+        match order {
+            ByteOrder::LittleEndian => U4::from_le_bytes(tmp),
+            ByteOrder::BigEndian => U4::from_be_bytes(tmp),
+        }
+    } else {
+        0
+    }
+}
+
+fn read_U8(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> U8 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize + 8 <= raw_data.len() {
+        *pos += 8;
+        let mut tmp = [0u8; 8];
+        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+8]);
+        
+        match order {
+            ByteOrder::LittleEndian => U8::from_le_bytes(tmp),
+            ByteOrder::BigEndian => U8::from_be_bytes(tmp),
+        }
+    } else {
+        0
+    }
+}
+
+fn read_I1(raw_data: &[u8], pos: &mut u16) -> I1 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize < raw_data.len() {
+        *pos += 1;
+        (*raw_data)[pos_usize] as I1
+    } else {
+        0
+    }
+}
+
+fn read_I2(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> I2 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize + 2 <= raw_data.len() {
+        *pos += 2;
+        let mut tmp = [0u8; 2];
+        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+2]);
+
+        match order {
+            ByteOrder::LittleEndian => I2::from_le_bytes(tmp),
+            ByteOrder::BigEndian => I2::from_be_bytes(tmp),
+        }
+    } else {
+        0
+    }
+}
+
+fn read_I4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> I4 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize + 4 <= raw_data.len() {
+        *pos += 4;
+        let mut tmp = [0u8; 4];
+        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+4]);
+        
+        match order {
+            ByteOrder::LittleEndian => I4::from_le_bytes(tmp),
+            ByteOrder::BigEndian => I4::from_be_bytes(tmp),
+        }
+    } else {
+        0
+    }
+}
+
+fn read_R4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> R4 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize + 4 <= raw_data.len() {
+        *pos += 4;
+        let mut tmp = [0u8; 4];
+        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+4]);
+        
+        match order {
+            ByteOrder::LittleEndian => R4::from_le_bytes(tmp),
+            ByteOrder::BigEndian => R4::from_be_bytes(tmp),
+        }
+    } else {
+        0.0
+    }
+}
+
+fn read_R8(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> R8 {
+    let pos_usize = *pos as usize;
+
+    if pos_usize + 8 <= raw_data.len() {
+        *pos += 8;
+        let mut tmp = [0u8; 8];
+        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+8]);
+        
+        match order {
+            ByteOrder::LittleEndian => R8::from_le_bytes(tmp),
+            ByteOrder::BigEndian => R8::from_be_bytes(tmp),
+        }
+    } else {
+        0.0
+    }
+}
+
+fn read_Cn(raw_data: &[u8], pos: &mut u16) -> Cn {
+    let count = read_U1(raw_data, pos);
+    if count != 0 {
+        let pos_usize = *pos as usize;
+        let pos_after_read = pos_usize + (count as usize);
+        if pos_after_read <= raw_data.len() {
+            // read count
+            *pos += count as u16;
+            String::from_utf8_lossy(&raw_data[pos_usize..pos_after_read]).to_string()
+        } else {
+            // read all
+            *pos = raw_data.len() as u16;
+            String::from_utf8_lossy(&raw_data[pos_usize..]).to_string()
+        }
+    } else {
+        String::from("")
+    }
+}
+
+fn read_Sn(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> Sn {
+    let count = read_U2(raw_data, pos, order);
+    if count != 0 {
+        let pos_usize = *pos as usize;
+        let pos_after_read = pos_usize + (count as usize);
+        if pos_after_read <= raw_data.len() {
+            // read count
+            *pos += count;
+            String::from_utf8_lossy(&raw_data[pos_usize..pos_after_read]).to_string()
+        } else {
+            // read all
+            *pos = raw_data.len() as u16;
+            String::from_utf8_lossy(&raw_data[pos_usize..]).to_string()
+        }
+    } else {
+        String::from("")
+    }
+}
+
+fn read_Cf(raw_data: &[u8], pos: &mut u16, f: u8) -> Cf {
+    if f != 0 {
+        let pos_usize = *pos as usize;
+        let pos_after_read = pos_usize + (f as usize);
+        if pos_after_read <= raw_data.len() {
+            // read count
+            *pos += f as u16;
+            String::from_utf8_lossy(&raw_data[pos_usize..pos_after_read]).to_string()
+        } else {
+            // read all
+            *pos = raw_data.len() as u16;
+            String::from_utf8_lossy(&raw_data[pos_usize..]).to_string()
+        }
+    } else {
+        String::from("")
+    }
+}
+
+fn read_Bn(raw_data: &[u8], pos: &mut u16) -> Bn {
+    let count = read_U1(raw_data, pos);
+    if count != 0 {
+        let pos_usize = *pos as usize;
+        let pos_after_read = pos_usize + (count as usize);
+        if pos_after_read <= raw_data.len() {
+            // read count
+            *pos += count as u16;
+            let data_slice = &raw_data[pos_usize..pos_after_read];
+            let mut value = Vec::with_capacity(data_slice.len());
+            value.copy_from_slice(data_slice);
+            value
+        } else {
+            // read all
+            *pos = raw_data.len() as u16;
+            let data_slice = &raw_data[pos_usize..];
+            let mut value = Vec::with_capacity(data_slice.len());
+            value.copy_from_slice(data_slice);
+            value
+        }
+    } else {
+        vec![0u8; 0]
+    }
+}
+
+fn read_Dn(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> Dn {
+    let bitcount = read_U2(raw_data, pos, order);
+    let bytecount = bitcount/8 + bitcount%8;
+    if bytecount != 0 {
+        let pos_usize = *pos as usize;
+        let pos_after_read = pos_usize + (bytecount as usize);
+        if pos_after_read <= raw_data.len() {
+            // read count
+            *pos += bytecount;
+            let data_slice = &raw_data[pos_usize..pos_after_read];
+            let mut value = Vec::with_capacity(data_slice.len());
+            value.copy_from_slice(data_slice);
+            value
+        } else {
+            // read all
+            *pos = raw_data.len() as u16;
+            let data_slice = &raw_data[pos_usize..];
+            let mut value = Vec::with_capacity(data_slice.len());
+            value.copy_from_slice(data_slice);
+            value
+        }
+    } else {
+        vec![0u8; 0]
+    }
+}
+
+fn read_KxCn(raw_data: &[u8], pos: &mut u16, k: u16) -> KxCn {
+    if k != 0 {
+        let mut value = Vec::with_capacity(k as usize);
+        for _ in 0..k {
+            value.push(read_Cn(raw_data, pos));
+        }
+        value
+    } else {
+        vec!["".to_string(); 0]
+    }
+}
+
+fn read_KxSn(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxSn {
+    if k != 0 {
+        let mut value = Vec::with_capacity(k as usize);
+        for _ in 0..k {
+            value.push(read_Sn(raw_data, pos, order));
+        }
+        value
+    } else {
+        vec!["".to_string(); 0]
+    }
+}
+
+fn read_KxCf(raw_data: &[u8], pos: &mut u16, k: u16, f: u8) -> KxCf {
+    if k != 0 {
+        let mut value = Vec::with_capacity(k as usize);
+        for _ in 0..k {
+            value.push(read_Cf(raw_data, pos, f));
+        }
+        value
+    } else {
+        vec!["".to_string(); 0]
+    }
+}
+
+fn read_KxU1(raw_data: &[u8], pos: &mut u16, k: u16) -> KxU1 {
+    if k != 0 {
+        let mut value = Vec::with_capacity(k as usize);
+        for _ in 0..k {
+            value.push(read_U1(raw_data, pos));
+        }
+        value
+    } else {
+        vec![0u8; 0]
+    }
+}
+
+fn read_KxU2(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxU2 {
+    if k != 0 {
+        let mut value = Vec::with_capacity(k as usize);
+        for _ in 0..k {
+            value.push(read_U2(raw_data, pos, order));
+        }
+        value
+    } else {
+        vec![0u16; 0]
+    }
+}
+
+fn read_KxU4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxU4 {
+    if k != 0 {
+        let mut value = Vec::with_capacity(k as usize);
+        for _ in 0..k {
+            value.push(read_U4(raw_data, pos, order));
+        }
+        value
+    } else {
+        vec![0u32; 0]
+    }
+}
+
+fn read_KxU8(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxU8 {
+    if k != 0 {
+        let mut value = Vec::with_capacity(k as usize);
+        for _ in 0..k {
+            value.push(read_U8(raw_data, pos, order));
+        }
+        value
+    } else {
+        vec![0u64; 0]
+    }
+}
+
+fn read_KxUf(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16, f: u8) -> KxUf {
+    if k != 0 {
+        match f {
+            1 => KxUf::F1(read_KxU1(raw_data, pos, k)),
+            2 => KxUf::F2(read_KxU2(raw_data, pos, order, k)),
+            4 => KxUf::F4(read_KxU4(raw_data, pos, order, k)),
+            _ => KxUf::F1(vec![0u8; 0]),
+        }
+    } else {
+        KxUf::F1(vec![0u8; 0])
+    }
+}
+
+fn read_KxR4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxR4 {
+    if k != 0 {
+        let mut value = Vec::with_capacity(k as usize);
+        for _ in 0..k {
+            value.push(read_R4(raw_data, pos, order));
+        }
+        value
+    } else {
+        vec![0.0f32; 0]
+    }
+}
+
+fn read_KxN1(raw_data: &[u8], pos: &mut u16, k: u16) -> KxN1 {
+    if k != 0 {
+        let bytecount = k/2 + k%2;   // k = nibble counts, 1 byte = 2 nibble
+        let mut value = Vec::with_capacity(k as usize);
+        for i in 0..bytecount {
+            let tmp = read_U1(raw_data, pos);
+            value.push(tmp & 0x0F);
+            if (2 * i + 1) < k {
+                value.push((tmp & 0xF0) >> 4);
+            }
+        }
+        value
+    } else {
+        vec![0u8; 0]
+    }
+}
+
+fn read_V1(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> V1 {
+    let type_byte = if (*pos as usize) < raw_data.len() 
+    { read_U1(raw_data, pos) } else { 0xF };
+
+    match type_byte {
+        0 => V1::B0,
+        1 => V1::U1(read_U1(raw_data, pos)),
+        2 => V1::U2(read_U2(raw_data, pos, order)),
+        3 => V1::U4(read_U4(raw_data, pos, order)),
+        4 => V1::I1(read_I1(raw_data, pos)),
+        5 => V1::I2(read_I2(raw_data, pos, order)),
+        6 => V1::I4(read_I4(raw_data, pos, order)),
+        7 => V1::R4(read_R4(raw_data, pos, order)),
+        8 => V1::R8(read_R8(raw_data, pos, order)),
+        10 => V1::Cn(read_Cn(raw_data, pos)),
+        11 => V1::Bn(read_Bn(raw_data, pos)),
+        12 => V1::Dn(read_Dn(raw_data, pos, order)),
+        13 => V1::N1(read_B1(raw_data, pos)),
+        _ => V1::Invalid,
+    }
+}
+
+fn read_Vn(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> Vn {
+    if k != 0 {
+        let mut value = Vec::with_capacity(k as usize);
+        for _ in 0..k {
+            value.push(read_V1(raw_data, pos, order));
+        }
+        value
+    } else {
+        vec![V1::Invalid; 0]
+    }
 }
