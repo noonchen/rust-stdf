@@ -96,6 +96,7 @@ pub enum KxUf {
     F1(KxU1),
     F2(KxU2),
     F4(KxU4),
+    F8(KxU8),
 }
 
 #[derive(Clone)]
@@ -775,47 +776,25 @@ impl ParseRecord for StdfRecords {
 
 
 // data type functions
-fn read_B1(raw_data: &[u8], pos: &mut u16) -> B1 {
-    let pos_usize = *pos as usize;
-
-    if pos_usize < raw_data.len() {
+/// Read uint8 from byte array with offset "pos", compatible with B1, C1 and U1
+fn read_uint8(raw_data: &[u8], pos: &mut usize) -> u8 {
+    if *pos < raw_data.len() {
+        let value = (*raw_data)[*pos];
         *pos += 1;
-        (*raw_data)[pos_usize]
+        value
     } else {
         0
     }
 }
 
-fn read_C1(raw_data: &[u8], pos: &mut u16) -> C1 {
-    let pos_usize = *pos as usize;
+/// Read U2 (u16) from byte array with offset "pos"
+fn read_U2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U2 {
+    let pos_after_read = *pos + 2;
 
-    if pos_usize < raw_data.len() {
-        *pos += 1;
-        (*raw_data)[pos_usize]
-    } else {
-        0
-    }
-}
-
-fn read_U1(raw_data: &[u8], pos: &mut u16) -> U1 {
-    let pos_usize = *pos as usize;
-
-    if pos_usize < raw_data.len() {
-        *pos += 1;
-        (*raw_data)[pos_usize]
-    } else {
-        0
-    }
-}
-
-fn read_U2(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> U2 {
-    let pos_usize = *pos as usize;
-
-    if pos_usize + 2 <= raw_data.len() {
-        *pos += 2;
+    if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 2];
-        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+2]);
-
+        tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
+        *pos = pos_after_read;
         match order {
             ByteOrder::LittleEndian => U2::from_le_bytes(tmp),
             ByteOrder::BigEndian => U2::from_be_bytes(tmp),
@@ -825,14 +804,14 @@ fn read_U2(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> U2 {
     }
 }
 
-fn read_U4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> U4 {
-    let pos_usize = *pos as usize;
-
-    if pos_usize + 4 <= raw_data.len() {
-        *pos += 4;
+/// Read U4 (u32) from byte array with offset "pos"
+fn read_U4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U4 {
+    let pos_after_read = *pos + 4;
+    
+    if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 4];
-        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+4]);
-        
+        tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
+        *pos = pos_after_read;
         match order {
             ByteOrder::LittleEndian => U4::from_le_bytes(tmp),
             ByteOrder::BigEndian => U4::from_be_bytes(tmp),
@@ -842,14 +821,14 @@ fn read_U4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> U4 {
     }
 }
 
-fn read_U8(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> U8 {
-    let pos_usize = *pos as usize;
-
-    if pos_usize + 8 <= raw_data.len() {
-        *pos += 8;
+/// Read U8 (u64) from byte array with offset "pos"
+fn read_U8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U8 {
+    let pos_after_read = *pos + 8;
+    
+    if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 8];
-        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+8]);
-        
+        tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
+        *pos = pos_after_read;
         match order {
             ByteOrder::LittleEndian => U8::from_le_bytes(tmp),
             ByteOrder::BigEndian => U8::from_be_bytes(tmp),
@@ -859,25 +838,25 @@ fn read_U8(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> U8 {
     }
 }
 
-fn read_I1(raw_data: &[u8], pos: &mut u16) -> I1 {
-    let pos_usize = *pos as usize;
-
-    if pos_usize < raw_data.len() {
+/// Read I1 (i8) from byte array with offset "pos"
+fn read_I1(raw_data: &[u8], pos: &mut usize) -> I1 {
+    if *pos < raw_data.len() {
+        let value = (*raw_data)[*pos] as I1;
         *pos += 1;
-        (*raw_data)[pos_usize] as I1
+        value
     } else {
         0
     }
 }
 
-fn read_I2(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> I2 {
-    let pos_usize = *pos as usize;
-
-    if pos_usize + 2 <= raw_data.len() {
-        *pos += 2;
+/// Read I2 (i16) from byte array with offset "pos"
+fn read_I2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I2 {
+    let pos_after_read = *pos + 2;
+    
+    if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 2];
-        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+2]);
-
+        tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
+        *pos = pos_after_read;
         match order {
             ByteOrder::LittleEndian => I2::from_le_bytes(tmp),
             ByteOrder::BigEndian => I2::from_be_bytes(tmp),
@@ -887,14 +866,14 @@ fn read_I2(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> I2 {
     }
 }
 
-fn read_I4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> I4 {
-    let pos_usize = *pos as usize;
-
-    if pos_usize + 4 <= raw_data.len() {
-        *pos += 4;
+/// Read I4 (i32) from byte array with offset "pos"
+fn read_I4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I4 {
+    let pos_after_read = *pos + 4;
+    
+    if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 4];
-        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+4]);
-        
+        tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
+        *pos = pos_after_read;
         match order {
             ByteOrder::LittleEndian => I4::from_le_bytes(tmp),
             ByteOrder::BigEndian => I4::from_be_bytes(tmp),
@@ -904,14 +883,14 @@ fn read_I4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> I4 {
     }
 }
 
-fn read_R4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> R4 {
-    let pos_usize = *pos as usize;
-
-    if pos_usize + 4 <= raw_data.len() {
-        *pos += 4;
+/// Read R4 (f32) from byte array with offset "pos"
+fn read_R4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R4 {
+    let pos_after_read = *pos + 4;
+    
+    if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 4];
-        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+4]);
-        
+        tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
+        *pos = pos_after_read;
         match order {
             ByteOrder::LittleEndian => R4::from_le_bytes(tmp),
             ByteOrder::BigEndian => R4::from_be_bytes(tmp),
@@ -921,14 +900,14 @@ fn read_R4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> R4 {
     }
 }
 
-fn read_R8(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> R8 {
-    let pos_usize = *pos as usize;
-
-    if pos_usize + 8 <= raw_data.len() {
-        *pos += 8;
+/// Read R8 (f64) from byte array with offset "pos"
+fn read_R8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R8 {
+    let pos_after_read = *pos + 8;
+    
+    if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 8];
-        tmp.copy_from_slice(&raw_data[pos_usize..pos_usize+8]);
-        
+        tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
+        *pos = pos_after_read;
         match order {
             ByteOrder::LittleEndian => R8::from_le_bytes(tmp),
             ByteOrder::BigEndian => R8::from_be_bytes(tmp),
@@ -938,114 +917,112 @@ fn read_R8(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> R8 {
     }
 }
 
-fn read_Cn(raw_data: &[u8], pos: &mut u16) -> Cn {
-    let count = read_U1(raw_data, pos);
+/// Read Cn (u8 + String) from byte array with offset "pos"
+fn read_Cn(raw_data: &[u8], pos: &mut usize) -> Cn {
+    let count = read_uint8(raw_data, pos) as usize;
+    let mut value = String::from("");
     if count != 0 {
-        let pos_usize = *pos as usize;
-        let pos_after_read = pos_usize + (count as usize);
+        let pos_after_read = *pos + count;
         if pos_after_read <= raw_data.len() {
             // read count
-            *pos += count as u16;
-            String::from_utf8_lossy(&raw_data[pos_usize..pos_after_read]).to_string()
+            value.push_str(std::str::from_utf8(&raw_data[*pos..pos_after_read]).unwrap());
+            *pos = pos_after_read;
         } else {
             // read all
-            *pos = raw_data.len() as u16;
-            String::from_utf8_lossy(&raw_data[pos_usize..]).to_string()
+            value.push_str(std::str::from_utf8(&raw_data[*pos..]).unwrap());
+            *pos = raw_data.len();
         }
-    } else {
-        String::from("")
     }
+    value
 }
 
-fn read_Sn(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> Sn {
-    let count = read_U2(raw_data, pos, order);
+/// Read Sn (u16 + String) from byte array with offset "pos"
+fn read_Sn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Sn {
+    let count = read_U2(raw_data, pos, order) as usize;
+    let mut value = String::from("");
     if count != 0 {
-        let pos_usize = *pos as usize;
-        let pos_after_read = pos_usize + (count as usize);
+        let pos_after_read = *pos + count;
         if pos_after_read <= raw_data.len() {
             // read count
-            *pos += count;
-            String::from_utf8_lossy(&raw_data[pos_usize..pos_after_read]).to_string()
+            value.push_str(std::str::from_utf8(&raw_data[*pos..pos_after_read]).unwrap());
+            *pos = pos_after_read;
         } else {
             // read all
-            *pos = raw_data.len() as u16;
-            String::from_utf8_lossy(&raw_data[pos_usize..]).to_string()
+            value.push_str(std::str::from_utf8(&raw_data[*pos..]).unwrap());
+            *pos = raw_data.len();
         }
-    } else {
-        String::from("")
     }
+    value
 }
 
-fn read_Cf(raw_data: &[u8], pos: &mut u16, f: u8) -> Cf {
+/// Read Cf (String) from byte array with offset "pos", String length is provide by "f"
+fn read_Cf(raw_data: &[u8], pos: &mut usize, f: u8) -> Cf {
+    let mut value = String::from("");
     if f != 0 {
-        let pos_usize = *pos as usize;
-        let pos_after_read = pos_usize + (f as usize);
+        let pos_after_read = *pos + (f as usize);
         if pos_after_read <= raw_data.len() {
             // read count
-            *pos += f as u16;
-            String::from_utf8_lossy(&raw_data[pos_usize..pos_after_read]).to_string()
+            value.push_str(std::str::from_utf8(&raw_data[*pos..pos_after_read]).unwrap());
+            *pos = pos_after_read;
         } else {
             // read all
-            *pos = raw_data.len() as u16;
-            String::from_utf8_lossy(&raw_data[pos_usize..]).to_string()
+            value.push_str(std::str::from_utf8(&raw_data[*pos..]).unwrap());
+            *pos = raw_data.len();
         }
-    } else {
-        String::from("")
     }
+    value
 }
 
-fn read_Bn(raw_data: &[u8], pos: &mut u16) -> Bn {
-    let count = read_U1(raw_data, pos);
+/// Read Bn (u8 + Vec<u8>) from byte array with offset "pos"
+fn read_Bn(raw_data: &[u8], pos: &mut usize) -> Bn {
+    let count = read_uint8(raw_data, pos) as usize;
     if count != 0 {
-        let pos_usize = *pos as usize;
-        let pos_after_read = pos_usize + (count as usize);
+        let pos_after_read = *pos + count;
+        let data_slice: &[u8];
         if pos_after_read <= raw_data.len() {
             // read count
-            *pos += count as u16;
-            let data_slice = &raw_data[pos_usize..pos_after_read];
-            let mut value = Vec::with_capacity(data_slice.len());
-            value.copy_from_slice(data_slice);
-            value
+            data_slice = &raw_data[*pos..pos_after_read];
+            *pos = pos_after_read;
         } else {
             // read all
-            *pos = raw_data.len() as u16;
-            let data_slice = &raw_data[pos_usize..];
-            let mut value = Vec::with_capacity(data_slice.len());
-            value.copy_from_slice(data_slice);
-            value
+            data_slice = &raw_data[*pos..];
+            *pos = raw_data.len();
         }
+        let mut value = Vec::with_capacity(data_slice.len());
+        value.copy_from_slice(data_slice);
+        value
     } else {
         vec![0u8; 0]
     }
 }
 
-fn read_Dn(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> Dn {
-    let bitcount = read_U2(raw_data, pos, order);
+/// Read Dn (u16 + Vec<u8>) from byte array with offset "pos", u16 is bit counts
+fn read_Dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn {
+    let bitcount = read_U2(raw_data, pos, order) as usize;
     let bytecount = bitcount/8 + bitcount%8;
     if bytecount != 0 {
-        let pos_usize = *pos as usize;
-        let pos_after_read = pos_usize + (bytecount as usize);
+        let pos_after_read = *pos + bytecount;
+        let data_slice: &[u8];
         if pos_after_read <= raw_data.len() {
             // read count
-            *pos += bytecount;
-            let data_slice = &raw_data[pos_usize..pos_after_read];
-            let mut value = Vec::with_capacity(data_slice.len());
-            value.copy_from_slice(data_slice);
-            value
+            data_slice = &raw_data[*pos..pos_after_read];
+            *pos = pos_after_read;
         } else {
             // read all
-            *pos = raw_data.len() as u16;
-            let data_slice = &raw_data[pos_usize..];
-            let mut value = Vec::with_capacity(data_slice.len());
-            value.copy_from_slice(data_slice);
-            value
+            data_slice = &raw_data[*pos..];
+            *pos = raw_data.len();
         }
+        let mut value = Vec::with_capacity(data_slice.len());
+        value.copy_from_slice(data_slice);
+        value
+    
     } else {
         vec![0u8; 0]
     }
 }
 
-fn read_KxCn(raw_data: &[u8], pos: &mut u16, k: u16) -> KxCn {
+/// Read KxCn (Vec<Cn>) from byte array with offset "pos", vector size is provide by "k"
+fn read_KxCn(raw_data: &[u8], pos: &mut usize, k: u16) -> KxCn {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
@@ -1057,7 +1034,8 @@ fn read_KxCn(raw_data: &[u8], pos: &mut u16, k: u16) -> KxCn {
     }
 }
 
-fn read_KxSn(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxSn {
+/// Read KxSn (Vec<Sn>) from byte array with offset "pos", vector size is provide by "k"
+fn read_KxSn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxSn {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
@@ -1069,7 +1047,8 @@ fn read_KxSn(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxSn 
     }
 }
 
-fn read_KxCf(raw_data: &[u8], pos: &mut u16, k: u16, f: u8) -> KxCf {
+/// Read KxCf (Vec<Cf>) from byte array with offset "pos", vector size is provide by "k", String size is "f"
+fn read_KxCf(raw_data: &[u8], pos: &mut usize, k: u16, f: u8) -> KxCf {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
@@ -1081,11 +1060,12 @@ fn read_KxCf(raw_data: &[u8], pos: &mut u16, k: u16, f: u8) -> KxCf {
     }
 }
 
-fn read_KxU1(raw_data: &[u8], pos: &mut u16, k: u16) -> KxU1 {
+/// Read KxU1 (Vec<u8>) from byte array with offset "pos", vector size is provide by "k"
+fn read_KxU1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxU1 {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
-            value.push(read_U1(raw_data, pos));
+            value.push(read_uint8(raw_data, pos));
         }
         value
     } else {
@@ -1093,7 +1073,8 @@ fn read_KxU1(raw_data: &[u8], pos: &mut u16, k: u16) -> KxU1 {
     }
 }
 
-fn read_KxU2(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxU2 {
+/// Read KxU2 (Vec<u16>) from byte array with offset "pos", vector size is provide by "k"
+fn read_KxU2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU2 {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
@@ -1105,7 +1086,8 @@ fn read_KxU2(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxU2 
     }
 }
 
-fn read_KxU4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxU4 {
+/// Read KxU4 (Vec<u32>) from byte array with offset "pos", vector size is provide by "k"
+fn read_KxU4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU4 {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
@@ -1117,7 +1099,8 @@ fn read_KxU4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxU4 
     }
 }
 
-fn read_KxU8(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxU8 {
+/// Read KxU8 (Vec<u64>) from byte array with offset "pos", vector size is provide by "k"
+fn read_KxU8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU8 {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
@@ -1129,12 +1112,14 @@ fn read_KxU8(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxU8 
     }
 }
 
-fn read_KxUf(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16, f: u8) -> KxUf {
+/// Read KxUf (Vec<u8|u16|u32|u64>) from byte array with offset "pos", vector size is provide by "k", size of number is "f"
+fn read_KxUf(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16, f: u8) -> KxUf {
     if k != 0 {
         match f {
             1 => KxUf::F1(read_KxU1(raw_data, pos, k)),
             2 => KxUf::F2(read_KxU2(raw_data, pos, order, k)),
             4 => KxUf::F4(read_KxU4(raw_data, pos, order, k)),
+            8 => KxUf::F8(read_KxU8(raw_data, pos, order, k)),
             _ => KxUf::F1(vec![0u8; 0]),
         }
     } else {
@@ -1142,7 +1127,8 @@ fn read_KxUf(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16, f: u8) -
     }
 }
 
-fn read_KxR4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxR4 {
+/// Read KxR4 (Vec<f32>) from byte array with offset "pos", vector size is provide by "k"
+fn read_KxR4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxR4 {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
@@ -1154,12 +1140,14 @@ fn read_KxR4(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> KxR4 
     }
 }
 
-fn read_KxN1(raw_data: &[u8], pos: &mut u16, k: u16) -> KxN1 {
+/// Read KxN1 (Vec<u8>) from byte array with offset "pos", vector size is provide by "k"
+/// size of N1 = 4 bits, hence total bytes of k * N1 = k/2 + k%2
+fn read_KxN1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxN1 {
     if k != 0 {
         let bytecount = k/2 + k%2;   // k = nibble counts, 1 byte = 2 nibble
         let mut value = Vec::with_capacity(k as usize);
         for i in 0..bytecount {
-            let tmp = read_U1(raw_data, pos);
+            let tmp = read_uint8(raw_data, pos);
             value.push(tmp & 0x0F);
             if (2 * i + 1) < k {
                 value.push((tmp & 0xF0) >> 4);
@@ -1171,13 +1159,14 @@ fn read_KxN1(raw_data: &[u8], pos: &mut u16, k: u16) -> KxN1 {
     }
 }
 
-fn read_V1(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> V1 {
+/// Read V1 (u8 + generic value) from byte array with offset "pos"
+fn read_V1(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> V1 {
     let type_byte = if (*pos as usize) < raw_data.len() 
-    { read_U1(raw_data, pos) } else { 0xF };
+    { read_uint8(raw_data, pos) } else { 0xF };
 
     match type_byte {
         0 => V1::B0,
-        1 => V1::U1(read_U1(raw_data, pos)),
+        1 => V1::U1(read_uint8(raw_data, pos)),
         2 => V1::U2(read_U2(raw_data, pos, order)),
         3 => V1::U4(read_U4(raw_data, pos, order)),
         4 => V1::I1(read_I1(raw_data, pos)),
@@ -1188,12 +1177,13 @@ fn read_V1(raw_data: &[u8], pos: &mut u16, order: &ByteOrder) -> V1 {
         10 => V1::Cn(read_Cn(raw_data, pos)),
         11 => V1::Bn(read_Bn(raw_data, pos)),
         12 => V1::Dn(read_Dn(raw_data, pos, order)),
-        13 => V1::N1(read_B1(raw_data, pos)),
+        13 => V1::N1(read_uint8(raw_data, pos)),
         _ => V1::Invalid,
     }
 }
 
-fn read_Vn(raw_data: &[u8], pos: &mut u16, order: &ByteOrder, k: u16) -> Vn {
+/// Read Vn (Vec<V1>) from byte array with offset "pos", vector size is provide by "k"
+fn read_Vn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> Vn {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
