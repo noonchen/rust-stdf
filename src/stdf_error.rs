@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Mon Oct 03 2022
+// Last Modified: Wed Oct 05 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -12,7 +12,7 @@
 
 
 use std::fmt;
-use std::io;
+use std::io::{self, ErrorKind};
     
 #[derive(Debug)]
 pub struct StdfError {
@@ -26,7 +26,8 @@ impl fmt::Display for StdfError {
             1 => "Invalid STDF File",
             2 => "Invalid Record Type",
             3 => "IO Error",
-            4 => "Insufficient Data",
+            4 => "EOF",
+            5 => "Insufficient Data",
             _ => "Other error",
         };
         write!(f, "{}, {}", short_msg, self.msg)
@@ -35,9 +36,9 @@ impl fmt::Display for StdfError {
 
 impl From<io::Error> for StdfError {
     fn from(error: io::Error) -> Self {
-        StdfError { 
-            code: 3, 
-            msg: format!("{}, {}", error.kind(), error)
+        match error.kind() {
+            ErrorKind::UnexpectedEof => StdfError { code: 4, msg: String::from("End of file detected") },
+            _ => StdfError { code: 3, msg: format!("{}, {}", error.kind(), error) },    
         }
     }
 }

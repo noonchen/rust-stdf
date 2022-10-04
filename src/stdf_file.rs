@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Tue Oct 04 2022
+// Last Modified: Wed Oct 05 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -67,6 +67,34 @@ impl StdfReader {
             endianness,
             reader})
     }
-}
 
+    fn read_header(&mut self) -> Result<RecordHeader, StdfError> {
+        let mut buf = [0u8; 4];
+        self.reader.read_exact(&mut buf)?;
+        // parse header assuming little endian
+        Ok(RecordHeader::new().from_bytes(&buf, &self.endianness)?)
+    }
+
+    pub fn read_all_records(&mut self) -> Result<Vec<StdfRecord>, StdfError> {
+        let mut rec_list = Vec::new();
+        loop {
+            let header = match self.read_header() {
+                Ok(h) => h,
+                Err(error) => {
+                    if error.code == 4 {
+                        // EOF, break loop
+                        break ();
+                    } else {
+                        return Err(error);
+                    }
+                }
+            };
+            // create a buffer to store record raw data
+            let mut buffer = vec![0u8; header.len as usize];
+            self.reader.read_exact(&mut buffer)?;
+            rec_list.push(StdfRecord::new(&header).from_bytes(&buffer, &self.endianness));
+        }
+        Ok(rec_list)
+    }
+}
 

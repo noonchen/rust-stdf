@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Tue Oct 04 2022
+// Last Modified: Wed Oct 05 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -30,7 +30,7 @@ pub enum CompressType {
     ZipCompressed,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct RecordHeader {
     pub len: u16,
     pub typ: u8,
@@ -78,7 +78,7 @@ pub type KxU8 = Vec<U8>;
 pub type KxR4 = Vec<R4>;
 pub type KxN1 = Vec<U1>;
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub enum KxUf {
     #[default]
     F1(KxU1),
@@ -87,7 +87,7 @@ pub enum KxUf {
     F8(KxU8),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum V1 {
 	B0,
 	U1(U1),
@@ -109,7 +109,8 @@ pub type Vn = Vec<V1>;
 
 
 // Record Types
-pub enum StdfRecords {
+#[derive(Debug)]
+pub enum StdfRecord {
     // rec type 0
     FAR(FAR),
     ATR(ATR),
@@ -153,27 +154,27 @@ pub enum StdfRecords {
     // rec type 180: Reserved
     // rec type 181: Reserved
     ReservedRec(ReservedRec),
-    InvalidRec
+    InvalidRec(RecordHeader)    // for debug
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct FAR {
     pub cpu_type: U1,  // CPU type that wrote this file
     pub stdf_ver: U1,  // STDF version number
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct ATR {
     pub mod_tim: U4, //Date and time of STDF file modification
     pub cmd_line: Cn, //Command line of program
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct VUR {
     pub upd_nam: Cn, //Update Version Name
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct MIR {
     pub setup_t: U4, // Date and time of job setup
     pub start_t: U4, // Date and time first part tested
@@ -215,7 +216,7 @@ pub struct MIR {
     pub supr_nam: Cn, // Supervisor name or ID
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct MRR {
     pub finish_t: U4, // Date and time last part tested
     pub disp_cod: C1, // Lot disposition code,default: space
@@ -223,7 +224,7 @@ pub struct MRR {
     pub exc_desc: Cn, // Lot description supplied by exec
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct PCR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -234,7 +235,7 @@ pub struct PCR {
     pub func_cnt: U4, // Number of functional parts tested
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct HBR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -244,7 +245,7 @@ pub struct HBR {
     pub hbin_nam: Cn, // Name of hardware bin
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct SBR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -254,7 +255,7 @@ pub struct SBR {
     pub sbin_nam: Cn, // Name of software bin
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct PMR {
     pub pmr_indx: U2, // Unique index associated with pin
     pub chan_typ: U2, // Channel type
@@ -265,7 +266,7 @@ pub struct PMR {
     pub site_num: U1, // Site number associated with channel
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct PGR {
     pub grp_indx: U2, // Unique index associated with pin group
     pub grp_nam: Cn, // Name of pin group
@@ -273,7 +274,7 @@ pub struct PGR {
     pub pmr_indx: KxU2, // Array of indexes for pins in the group
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct PLR {
     pub grp_cnt: U2, // Count (k) of pins or pin groups
     pub grp_indx: KxU2, // Array of pin or pin group indexes
@@ -285,13 +286,13 @@ pub struct PLR {
     pub rtn_chal: KxCn, // Return state encoding characters
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct RDR {
     pub num_bins: U2, // Number (k) of bins being retested
     pub rtst_bin: KxU2, // Array of retest bin numbers
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct SDR {
     pub head_num: U1, // Test head number
     pub site_grp: U1, // Site group number
@@ -315,7 +316,7 @@ pub struct SDR {
     pub extr_id: Cn, // Extra equipment ID
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct PSR {
     pub cont_flg: B1, // Continuation PSR record exist
     pub psr_indx: U2, // PSR Record Index (used by STR records)
@@ -332,7 +333,7 @@ pub struct PSR {
     pub src_id: KxCn, // Optional array of PatternInSrcFileID
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct NMR {
     pub cont_flg: B1, // Continuation NMR record follows if not 0
     pub totm_cnt: U2, // Count of PMR indexes and ATPG_NAM entries
@@ -341,21 +342,21 @@ pub struct NMR {
     pub atpg_nam: KxCn, // Array of ATPG signal names
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct CNR {
     pub chn_num: U2, // Chain number. Referenced by the CHN_NUM array in an STR record
     pub bit_pos: U4, // Bit position in the chain
     pub cell_nam: Sn, // Scan Cell Name
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct SSR {
     pub ssr_nam: Cn, // Name of the STIL Scan pub structure for reference
     pub chn_cnt: U2, // Count (k) of number of Chains listed in CHN_LIST
     pub chn_list: KxU2, // Array of CDR Indexes
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct CDR {
     pub cont_flg: B1, // Continuation CDR record follows if not 0
     pub cdr_indx: U2, // SCR Index
@@ -372,7 +373,7 @@ pub struct CDR {
     pub cell_lst: KxSn, // Array of Scan Cell Names
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct WIR {
     pub head_num: U1, // Test head number
     pub site_grp: U1, // Site group number 255
@@ -380,7 +381,7 @@ pub struct WIR {
     pub wafer_id: Cn, // Wafer ID length byte = 0
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct WRR {
     pub head_num: U1, // Test head number
     pub site_grp: U1, // Site group number
@@ -398,7 +399,7 @@ pub struct WRR {
     pub exc_desc: Cn, // Wafer description supplied by exec
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct WCR {
     pub wafr_siz: R4, // Diameter of wafer in WF_UNITS
     pub die_ht: R4, // Height of die in WF_UNITS
@@ -411,13 +412,13 @@ pub struct WCR {
     pub pos_y: C1, // Positive Y direction of wafer
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct PIR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct PRR {
     pub head_num: U1, //Test head number
     pub site_num: U1, //Test site number
@@ -433,7 +434,7 @@ pub struct PRR {
     pub part_fix: Bn, //Part repair information
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct TSR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -453,7 +454,7 @@ pub struct TSR {
     pub tst_sqrs: R4, // Sum of squares of test result values
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct PTR {
     pub test_num: U4, // Test number
     pub head_num: U1, // Test head number
@@ -477,7 +478,7 @@ pub struct PTR {
     pub hi_spec: R4, // High specification limit value
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct MPR {
     pub test_num: U4, // Test number
     pub head_num: U1, // Test head number
@@ -508,7 +509,7 @@ pub struct MPR {
     pub hi_spec: R4, // High specification limit value
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct FTR {
     pub test_num: U4, // Test number
     pub head_num: U1, // Test head number
@@ -540,7 +541,7 @@ pub struct FTR {
     pub spin_map: Dn, // Bit map of enabled comparators
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct STR {
     pub cont_flg: B1, // Continuation STR follows if not 0
     pub test_num: U4, // Test number
@@ -603,26 +604,26 @@ pub struct STR {
     pub user_txt: KxCf, // Array of user defined fixed length strings for each logged fail
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct BPS {
     pub seq_name: Cn, // Program section (or sequencer) name length byte = 0
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct EPS {}
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct GDR {
     pub fld_cnt: U2, // Count of data fields in record
     pub gen_data: Vn, // Data type code and data for one field(Repeat GEN_DATA for each data field)
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct DTR {
     pub text_dat: Cn, // ASCII text string
 }
 
-#[derive(SmartDefault)]
+#[derive(SmartDefault, Debug)]
 pub struct ReservedRec {
     pub raw_data: Cn, // unparsed data
 }
@@ -658,7 +659,7 @@ impl FAR {
         FAR::default()
     }
 
-    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+    pub fn from_bytes(mut self, raw_data: &[u8], _order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.cpu_type = read_uint8(raw_data, pos);
         self.stdf_ver = read_uint8(raw_data, pos);
@@ -684,7 +685,7 @@ impl VUR {
         VUR::default()
     }
 
-    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+    pub fn from_bytes(mut self, raw_data: &[u8], _order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.upd_nam = read_cn(raw_data, pos);
         self
@@ -881,7 +882,7 @@ impl SDR {
         SDR::default()
     }
 
-    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+    pub fn from_bytes(mut self, raw_data: &[u8], _order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.head_num = read_uint8(raw_data, pos);
         self.site_grp = read_uint8(raw_data, pos);
@@ -1064,7 +1065,7 @@ impl PIR {
         PIR::default()
     }
 
-    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+    pub fn from_bytes(mut self, raw_data: &[u8], _order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.head_num = read_uint8(raw_data, pos);
         self.site_num = read_uint8(raw_data, pos);
@@ -1319,7 +1320,7 @@ impl BPS {
         BPS::default()
     }
 
-    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+    pub fn from_bytes(mut self, raw_data: &[u8], _order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.seq_name = read_cn(raw_data, pos);
         self
@@ -1331,7 +1332,7 @@ impl EPS {
         EPS::default()
     }
 
-    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+    pub fn from_bytes(self, _raw_data: &[u8], _order: &ByteOrder) -> Self {
         self
     }
 }
@@ -1354,7 +1355,7 @@ impl DTR {
         DTR::default()
     }
 
-    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+    pub fn from_bytes(mut self, raw_data: &[u8], _order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.text_dat = read_cn(raw_data, pos);
         self
@@ -1366,7 +1367,7 @@ impl ReservedRec {
         ReservedRec::default()
     }
 
-    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+    pub fn from_bytes(mut self, raw_data: &[u8], _order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.raw_data = read_cn(raw_data, pos);
         self
@@ -1374,104 +1375,104 @@ impl ReservedRec {
 }
 
 
-impl StdfRecords {
+impl StdfRecord {
     pub fn new(rec_header: &RecordHeader) -> Self {
         match (rec_header.typ, rec_header.sub) {
             // rec type 15
-            (15, 10) => StdfRecords::PTR(PTR::new()),
-            (15, 15) => StdfRecords::MPR(MPR::new()),
-            (15, 20) => StdfRecords::FTR(FTR::new()),
-            (15, 30) => StdfRecords::STR(STR::new()),
+            (15, 10) => StdfRecord::PTR(PTR::new()),
+            (15, 15) => StdfRecord::MPR(MPR::new()),
+            (15, 20) => StdfRecord::FTR(FTR::new()),
+            (15, 30) => StdfRecord::STR(STR::new()),
             // rec type 5
-            (5, 10) => StdfRecords::PIR(PIR::new()),
-            (5, 20) => StdfRecords::PRR(PRR::new()),
+            (5, 10) => StdfRecord::PIR(PIR::new()),
+            (5, 20) => StdfRecord::PRR(PRR::new()),
             // rec type 2
-            (2, 10) => StdfRecords::WIR(WIR::new()),
-            (2, 20) => StdfRecords::WRR(WRR::new()),
-            (2, 30) => StdfRecords::WCR(WCR::new()),
+            (2, 10) => StdfRecord::WIR(WIR::new()),
+            (2, 20) => StdfRecord::WRR(WRR::new()),
+            (2, 30) => StdfRecord::WCR(WCR::new()),
             // rec type 50
-            (50, 10) => StdfRecords::GDR(GDR::new()),
-            (50, 30) => StdfRecords::DTR(DTR::new()),
+            (50, 10) => StdfRecord::GDR(GDR::new()),
+            (50, 30) => StdfRecord::DTR(DTR::new()),
             // rec type 0
-            (0, 10) => StdfRecords::FAR(FAR::new()),
-            (0, 20) => StdfRecords::ATR(ATR::new()),
-            (0, 30) => StdfRecords::VUR(VUR::new()),
+            (0, 10) => StdfRecord::FAR(FAR::new()),
+            (0, 20) => StdfRecord::ATR(ATR::new()),
+            (0, 30) => StdfRecord::VUR(VUR::new()),
             // rec type 1
-            (1, 10) => StdfRecords::MIR(MIR::new()),
-            (1, 20) => StdfRecords::MRR(MRR::new()),
-            (1, 30) => StdfRecords::PCR(PCR::new()),
-            (1, 40) => StdfRecords::HBR(HBR::new()),
-            (1, 50) => StdfRecords::SBR(SBR::new()),
-            (1, 60) => StdfRecords::PMR(PMR::new()),
-            (1, 62) => StdfRecords::PGR(PGR::new()),
-            (1, 63) => StdfRecords::PLR(PLR::new()),
-            (1, 70) => StdfRecords::RDR(RDR::new()),
-            (1, 80) => StdfRecords::SDR(SDR::new()),
-            (1, 90) => StdfRecords::PSR(PSR::new()),
-            (1, 91) => StdfRecords::NMR(NMR::new()),
-            (1, 92) => StdfRecords::CNR(CNR::new()),
-            (1, 93) => StdfRecords::SSR(SSR::new()),
-            (1, 94) => StdfRecords::CDR(CDR::new()),
+            (1, 10) => StdfRecord::MIR(MIR::new()),
+            (1, 20) => StdfRecord::MRR(MRR::new()),
+            (1, 30) => StdfRecord::PCR(PCR::new()),
+            (1, 40) => StdfRecord::HBR(HBR::new()),
+            (1, 50) => StdfRecord::SBR(SBR::new()),
+            (1, 60) => StdfRecord::PMR(PMR::new()),
+            (1, 62) => StdfRecord::PGR(PGR::new()),
+            (1, 63) => StdfRecord::PLR(PLR::new()),
+            (1, 70) => StdfRecord::RDR(RDR::new()),
+            (1, 80) => StdfRecord::SDR(SDR::new()),
+            (1, 90) => StdfRecord::PSR(PSR::new()),
+            (1, 91) => StdfRecord::NMR(NMR::new()),
+            (1, 92) => StdfRecord::CNR(CNR::new()),
+            (1, 93) => StdfRecord::SSR(SSR::new()),
+            (1, 94) => StdfRecord::CDR(CDR::new()),
             // rec type 10
-            (10, 30) => StdfRecords::TSR(TSR::new()),
+            (10, 30) => StdfRecord::TSR(TSR::new()),
             // rec type 20
-            (20, 10) => StdfRecords::BPS(BPS::new()),
-            (20, 20) => StdfRecords::EPS(EPS::new()),
+            (20, 10) => StdfRecord::BPS(BPS::new()),
+            (20, 20) => StdfRecord::EPS(EPS::new()),
             // rec type 180: Reserved
             // rec type 181: Reserved
-            (180 | 181, _) => StdfRecords::ReservedRec(ReservedRec::new()),
+            (180 | 181, _) => StdfRecord::ReservedRec(ReservedRec::new()),
             // not matched
-            (_, _) => StdfRecords::InvalidRec
+            (_, _) => StdfRecord::InvalidRec(*rec_header)
         }
     }
 
-    pub fn from_bytes(rec: Self, raw_data: &[u8], order: &ByteOrder) -> Self {
-        match rec {
+    pub fn from_bytes(self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        match self {
             // rec type 15
-            StdfRecords::PTR(ptr_rec) => StdfRecords::PTR(ptr_rec.from_bytes(raw_data, order)),
-            StdfRecords::MPR(mpr_rec) => StdfRecords::MPR(mpr_rec.from_bytes(raw_data, order)),
-            StdfRecords::FTR(ftr_rec) => StdfRecords::FTR(ftr_rec.from_bytes(raw_data, order)),
-            StdfRecords::STR(str_rec) => StdfRecords::STR(str_rec.from_bytes(raw_data, order)),
+            StdfRecord::PTR(ptr_rec) => StdfRecord::PTR(ptr_rec.from_bytes(raw_data, order)),
+            StdfRecord::MPR(mpr_rec) => StdfRecord::MPR(mpr_rec.from_bytes(raw_data, order)),
+            StdfRecord::FTR(ftr_rec) => StdfRecord::FTR(ftr_rec.from_bytes(raw_data, order)),
+            StdfRecord::STR(str_rec) => StdfRecord::STR(str_rec.from_bytes(raw_data, order)),
             // rec type 5
-            StdfRecords::PIR(pir_rec) => StdfRecords::PIR(pir_rec.from_bytes(raw_data, order)),
-            StdfRecords::PRR(prr_rec) => StdfRecords::PRR(prr_rec.from_bytes(raw_data, order)),
+            StdfRecord::PIR(pir_rec) => StdfRecord::PIR(pir_rec.from_bytes(raw_data, order)),
+            StdfRecord::PRR(prr_rec) => StdfRecord::PRR(prr_rec.from_bytes(raw_data, order)),
             // rec type 2
-            StdfRecords::WIR(wir_rec) => StdfRecords::WIR(wir_rec.from_bytes(raw_data, order)),
-            StdfRecords::WRR(wrr_rec) => StdfRecords::WRR(wrr_rec.from_bytes(raw_data, order)),
-            StdfRecords::WCR(wcr_rec) => StdfRecords::WCR(wcr_rec.from_bytes(raw_data, order)),
+            StdfRecord::WIR(wir_rec) => StdfRecord::WIR(wir_rec.from_bytes(raw_data, order)),
+            StdfRecord::WRR(wrr_rec) => StdfRecord::WRR(wrr_rec.from_bytes(raw_data, order)),
+            StdfRecord::WCR(wcr_rec) => StdfRecord::WCR(wcr_rec.from_bytes(raw_data, order)),
             // rec type 50
-            StdfRecords::GDR(gdr_rec) => StdfRecords::GDR(gdr_rec.from_bytes(raw_data, order)),
-            StdfRecords::DTR(dtr_rec) => StdfRecords::DTR(dtr_rec.from_bytes(raw_data, order)),
+            StdfRecord::GDR(gdr_rec) => StdfRecord::GDR(gdr_rec.from_bytes(raw_data, order)),
+            StdfRecord::DTR(dtr_rec) => StdfRecord::DTR(dtr_rec.from_bytes(raw_data, order)),
             // rec type 10
-            StdfRecords::TSR(tsr_rec) => StdfRecords::TSR(tsr_rec.from_bytes(raw_data, order)),            
+            StdfRecord::TSR(tsr_rec) => StdfRecord::TSR(tsr_rec.from_bytes(raw_data, order)),            
             // rec type 1
-            StdfRecords::MIR(mir_rec) => StdfRecords::MIR(mir_rec.from_bytes(raw_data, order)),
-            StdfRecords::MRR(mrr_rec) => StdfRecords::MRR(mrr_rec.from_bytes(raw_data, order)),
-            StdfRecords::PCR(pcr_rec) => StdfRecords::PCR(pcr_rec.from_bytes(raw_data, order)),
-            StdfRecords::HBR(hbr_rec) => StdfRecords::HBR(hbr_rec.from_bytes(raw_data, order)),
-            StdfRecords::SBR(sbr_rec) => StdfRecords::SBR(sbr_rec.from_bytes(raw_data, order)),
-            StdfRecords::PMR(pmr_rec) => StdfRecords::PMR(pmr_rec.from_bytes(raw_data, order)),
-            StdfRecords::PGR(pgr_rec) => StdfRecords::PGR(pgr_rec.from_bytes(raw_data, order)),
-            StdfRecords::PLR(plr_rec) => StdfRecords::PLR(plr_rec.from_bytes(raw_data, order)),
-            StdfRecords::RDR(rdr_rec) => StdfRecords::RDR(rdr_rec.from_bytes(raw_data, order)),
-            StdfRecords::SDR(sdr_rec) => StdfRecords::SDR(sdr_rec.from_bytes(raw_data, order)),
-            StdfRecords::PSR(psr_rec) => StdfRecords::PSR(psr_rec.from_bytes(raw_data, order)),
-            StdfRecords::NMR(nmr_rec) => StdfRecords::NMR(nmr_rec.from_bytes(raw_data, order)),
-            StdfRecords::CNR(cnr_rec) => StdfRecords::CNR(cnr_rec.from_bytes(raw_data, order)),
-            StdfRecords::SSR(ssr_rec) => StdfRecords::SSR(ssr_rec.from_bytes(raw_data, order)),
-            StdfRecords::CDR(cdr_rec) => StdfRecords::CDR(cdr_rec.from_bytes(raw_data, order)),
+            StdfRecord::MIR(mir_rec) => StdfRecord::MIR(mir_rec.from_bytes(raw_data, order)),
+            StdfRecord::MRR(mrr_rec) => StdfRecord::MRR(mrr_rec.from_bytes(raw_data, order)),
+            StdfRecord::PCR(pcr_rec) => StdfRecord::PCR(pcr_rec.from_bytes(raw_data, order)),
+            StdfRecord::HBR(hbr_rec) => StdfRecord::HBR(hbr_rec.from_bytes(raw_data, order)),
+            StdfRecord::SBR(sbr_rec) => StdfRecord::SBR(sbr_rec.from_bytes(raw_data, order)),
+            StdfRecord::PMR(pmr_rec) => StdfRecord::PMR(pmr_rec.from_bytes(raw_data, order)),
+            StdfRecord::PGR(pgr_rec) => StdfRecord::PGR(pgr_rec.from_bytes(raw_data, order)),
+            StdfRecord::PLR(plr_rec) => StdfRecord::PLR(plr_rec.from_bytes(raw_data, order)),
+            StdfRecord::RDR(rdr_rec) => StdfRecord::RDR(rdr_rec.from_bytes(raw_data, order)),
+            StdfRecord::SDR(sdr_rec) => StdfRecord::SDR(sdr_rec.from_bytes(raw_data, order)),
+            StdfRecord::PSR(psr_rec) => StdfRecord::PSR(psr_rec.from_bytes(raw_data, order)),
+            StdfRecord::NMR(nmr_rec) => StdfRecord::NMR(nmr_rec.from_bytes(raw_data, order)),
+            StdfRecord::CNR(cnr_rec) => StdfRecord::CNR(cnr_rec.from_bytes(raw_data, order)),
+            StdfRecord::SSR(ssr_rec) => StdfRecord::SSR(ssr_rec.from_bytes(raw_data, order)),
+            StdfRecord::CDR(cdr_rec) => StdfRecord::CDR(cdr_rec.from_bytes(raw_data, order)),
             // rec type 0
-            StdfRecords::FAR(far_rec) => StdfRecords::FAR(far_rec.from_bytes(raw_data, order)),
-            StdfRecords::ATR(atr_rec) => StdfRecords::ATR(atr_rec.from_bytes(raw_data, order)),
-            StdfRecords::VUR(vur_rec) => StdfRecords::VUR(vur_rec.from_bytes(raw_data, order)),            
+            StdfRecord::FAR(far_rec) => StdfRecord::FAR(far_rec.from_bytes(raw_data, order)),
+            StdfRecord::ATR(atr_rec) => StdfRecord::ATR(atr_rec.from_bytes(raw_data, order)),
+            StdfRecord::VUR(vur_rec) => StdfRecord::VUR(vur_rec.from_bytes(raw_data, order)),            
             // rec type 20
-            StdfRecords::BPS(bps_rec) => StdfRecords::BPS(bps_rec.from_bytes(raw_data, order)),
-            StdfRecords::EPS(eps_rec) => StdfRecords::EPS(eps_rec.from_bytes(raw_data, order)),
+            StdfRecord::BPS(bps_rec) => StdfRecord::BPS(bps_rec.from_bytes(raw_data, order)),
+            StdfRecord::EPS(eps_rec) => StdfRecord::EPS(eps_rec.from_bytes(raw_data, order)),
             // rec type 180: Reserved
             // rec type 181: Reserved
-            StdfRecords::ReservedRec(reserve_rec) => StdfRecords::ReservedRec(reserve_rec.from_bytes(raw_data, order)),
+            StdfRecord::ReservedRec(reserve_rec) => StdfRecord::ReservedRec(reserve_rec.from_bytes(raw_data, order)),
             // not matched
-            StdfRecords::InvalidRec => rec,
+            StdfRecord::InvalidRec(_) => self,
         }
     }
 }
