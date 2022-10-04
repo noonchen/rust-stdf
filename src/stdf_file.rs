@@ -48,7 +48,7 @@ impl StdfReader {
         let mut buf = [0u8; 4];
         reader.read_exact(&mut buf)?;
         // parse header assuming little endian
-        let far_header = RecordHeader::from_bytes(&buf, &ByteOrder::LittleEndian)?;
+        let far_header = RecordHeader::new().from_bytes(&buf, &ByteOrder::LittleEndian)?;
         let endianness = match far_header.len {
             2 => Ok(ByteOrder::LittleEndian),
             512 => Ok(ByteOrder::BigEndian),

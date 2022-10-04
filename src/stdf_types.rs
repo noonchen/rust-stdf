@@ -38,23 +38,11 @@ pub struct RecordHeader {
 }
 
 
-// Traits
-pub trait ParseStruct: Sized {
-    fn new() -> Self;
-    fn from_bytes(raw_data: &[u8], endian: &ByteOrder) -> Result<Self, StdfError>;
-    fn to_bytes(rec: &Self) -> Result<Box<[u8]>, StdfError>;
-}
-
-pub trait ParseRecord: Sized {
-    fn new(rec_header: &RecordHeader) -> Self;
-    fn from_bytes(rec: Self, raw_data: &[u8], endian: &ByteOrder) -> Result<Self, StdfError>;
-    fn to_bytes(rec: &Self) -> Result<Box<[u8]>, StdfError>;
-}
-
-
 // Data Types
 pub type B1 = u8;
-pub type C1 = u8;
+// Rust char is 4 bytes long, however STDF char is only 1 byte
+// we will read u8 from file stream and convert to Rust char during parse step
+pub type C1 = char;
 pub type U1 = u8;
 pub type U2 = u16;
 pub type U4 = u32;
@@ -641,136 +629,850 @@ pub struct ReservedRec {
 
 // implementation
 
-impl ParseStruct for RecordHeader {
-    fn new() -> Self {
+impl RecordHeader {
+    pub fn new() -> Self {
         RecordHeader { len: 0, typ: 0, sub: 0 }
     }
 
-    fn from_bytes(raw_data: &[u8], order: &ByteOrder) -> Result<Self, StdfError> {
+    /// Construct a STDF record header from first 4 elements of given byte array.
+    /// 
+    /// If array size is less than 4, this function return a StdfError
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Result<Self, StdfError> {
         if raw_data.len() >= 4 {
-            let mut header = RecordHeader::new();
             let len_bytes = [raw_data[0], raw_data[1]];
-            header.len = match order {
+            self.len = match order {
                 ByteOrder::LittleEndian => u16::from_le_bytes(len_bytes),
                 ByteOrder::BigEndian => u16::from_be_bytes(len_bytes)
             };
-            header.typ = raw_data[2];
-            header.sub = raw_data[3];
-            Ok(header)
+            self.typ = raw_data[2];
+            self.sub = raw_data[3];
+            Ok(self)
         } else {
-            // Error("Not enough data for constructing record header")
             Err(StdfError {code: 1, msg: String::from("Not enough data to construct record header")})
         }
     }
+}
 
-    fn to_bytes(rec: &Self) -> Result<Box<[u8]>, StdfError> {
-        Err(StdfError { code: 1, msg: "".to_string() })
+impl FAR {
+    pub fn new() -> Self {
+        FAR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.cpu_type = read_uint8(raw_data, pos);
+        self.stdf_ver = read_uint8(raw_data, pos);
+        self
     }
 }
 
-impl ParseRecord for StdfRecords {
-    fn new(rec_header: &RecordHeader) -> Self {
+impl ATR {
+    pub fn new() -> Self {
+        ATR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.mod_tim = read_u4(raw_data, pos, order);
+        self.cmd_line = read_cn(raw_data, pos);
+        self
+    }
+}
+
+impl VUR {
+    pub fn new() -> Self {
+        VUR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.upd_nam = read_cn(raw_data, pos);
+        self
+    }
+}
+
+impl MIR {
+    pub fn new() -> Self {
+        MIR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.setup_t = read_u4(raw_data, pos, order);
+        self.start_t = read_u4(raw_data, pos, order);
+        self.stat_num = read_uint8(raw_data, pos);
+        self.mode_cod = read_uint8(raw_data, pos) as char;
+        self.rtst_cod = read_uint8(raw_data, pos) as char;
+        self.prot_cod = read_uint8(raw_data, pos) as char;
+        self.burn_tim = read_u2(raw_data, pos, order);
+        self.cmod_cod = read_uint8(raw_data, pos) as char;
+        self.lot_id = read_cn(raw_data, pos);
+        self.part_typ = read_cn(raw_data, pos);
+        self.node_nam = read_cn(raw_data, pos);
+        self.tstr_typ = read_cn(raw_data, pos);
+        self.job_nam = read_cn(raw_data, pos);
+        self.job_rev = read_cn(raw_data, pos);
+        self.sblot_id = read_cn(raw_data, pos);
+        self.oper_nam = read_cn(raw_data, pos);
+        self.exec_typ = read_cn(raw_data, pos);
+        self.exec_ver = read_cn(raw_data, pos);
+        self.test_cod = read_cn(raw_data, pos);
+        self.tst_temp = read_cn(raw_data, pos);
+        self.user_txt = read_cn(raw_data, pos);
+        self.aux_file = read_cn(raw_data, pos);
+        self.pkg_typ = read_cn(raw_data, pos);
+        self.famly_id = read_cn(raw_data, pos);
+        self.date_cod = read_cn(raw_data, pos);
+        self.facil_id = read_cn(raw_data, pos);
+        self.floor_id = read_cn(raw_data, pos);
+        self.proc_id = read_cn(raw_data, pos);
+        self.oper_frq = read_cn(raw_data, pos);
+        self.spec_nam = read_cn(raw_data, pos);
+        self.spec_ver = read_cn(raw_data, pos);
+        self.flow_id = read_cn(raw_data, pos);
+        self.setup_id = read_cn(raw_data, pos);
+        self.dsgn_rev = read_cn(raw_data, pos);
+        self.eng_id = read_cn(raw_data, pos);
+        self.rom_cod = read_cn(raw_data, pos);
+        self.serl_num = read_cn(raw_data, pos);
+        self.supr_nam = read_cn(raw_data, pos);
+        self
+    }
+}
+
+impl MRR {
+    pub fn new() -> Self {
+        MRR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.finish_t = read_u4(raw_data, pos, order);
+        self.disp_cod = read_uint8(raw_data, pos) as char;
+        self.usr_desc = read_cn(raw_data, pos);
+        self.exc_desc = read_cn(raw_data, pos);
+        self
+    }
+}
+
+impl PCR {
+    pub fn new() -> Self {
+        PCR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_num = read_uint8(raw_data, pos);
+        self.part_cnt = read_u4(raw_data, pos, order);
+        self.rtst_cnt = read_u4(raw_data, pos, order);
+        self.abrt_cnt = read_u4(raw_data, pos, order);
+        self.good_cnt = read_u4(raw_data, pos, order);
+        self.func_cnt = read_u4(raw_data, pos, order);
+        self
+    }
+}
+
+impl HBR {
+    pub fn new() -> Self {
+        HBR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_num = read_uint8(raw_data, pos);
+        self.hbin_num = read_u2(raw_data, pos, order);
+        self.hbin_cnt = read_u4(raw_data, pos, order);
+        self.hbin_pf = read_uint8(raw_data, pos) as char;
+        self.hbin_nam = read_cn(raw_data, pos);
+        self
+
+    }
+}
+
+impl SBR {
+    pub fn new() -> Self {
+        SBR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_num = read_uint8(raw_data, pos);
+        self.sbin_num = read_u2(raw_data, pos, order);
+        self.sbin_cnt = read_u4(raw_data, pos, order);
+        self.sbin_pf = read_uint8(raw_data, pos) as char;
+        self.sbin_nam = read_cn(raw_data, pos);
+        self
+    }
+}
+
+impl PMR {
+    pub fn new() -> Self {
+        PMR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.pmr_indx = read_u2(raw_data, pos, order);
+        self.chan_typ = read_u2(raw_data, pos, order);
+        self.chan_nam = read_cn(raw_data, pos);
+        self.phy_nam = read_cn(raw_data, pos);
+        self.log_nam = read_cn(raw_data, pos);
+        // default value for head & site is 1
+        self.head_num = if *pos < raw_data.len() 
+            { read_uint8(raw_data, pos) } else { 1 };
+        self.site_num = if *pos < raw_data.len() 
+            { read_uint8(raw_data, pos) } else { 1 };
+        self
+    }
+}
+
+impl PGR {
+    pub fn new() -> Self {
+        PGR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.grp_indx = read_u2(raw_data, pos, order);
+        self.grp_nam = read_cn(raw_data, pos);
+        self.indx_cnt = read_u2(raw_data, pos, order);
+        self.pmr_indx = read_kx_u2(raw_data, pos, order, self.indx_cnt);      
+        self  
+    }
+}
+
+impl PLR {
+    pub fn new() -> Self {
+        PLR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.grp_cnt = read_u2(raw_data, pos, order);
+        self.grp_indx = read_kx_u2(raw_data, pos, order, self.grp_cnt);
+        self.grp_mode = read_kx_u2(raw_data, pos, order, self.grp_cnt);
+        self.grp_radx = read_kx_u1(raw_data, pos, self.grp_cnt);
+        self.pgm_char = read_kx_cn(raw_data, pos, self.grp_cnt);
+        self.rtn_char = read_kx_cn(raw_data, pos, self.grp_cnt);
+        self.pgm_chal = read_kx_cn(raw_data, pos, self.grp_cnt);
+        self.rtn_chal = read_kx_cn(raw_data, pos, self.grp_cnt);
+        self
+    }
+}
+
+impl RDR {
+    pub fn new() -> Self {
+        RDR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.num_bins = read_u2(raw_data, pos, order);
+        self.rtst_bin = read_kx_u2(raw_data, pos, order, self.num_bins);
+        self
+    }
+}
+
+impl SDR {
+    pub fn new() -> Self {
+        SDR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_grp = read_uint8(raw_data, pos);
+        self.site_cnt = read_uint8(raw_data, pos);
+        self.site_num = read_kx_u1(raw_data, pos, self.site_cnt as u16);
+        self.hand_typ = read_cn(raw_data, pos);
+        self.hand_id = read_cn(raw_data, pos);
+        self.card_typ = read_cn(raw_data, pos);
+        self.card_id = read_cn(raw_data, pos);
+        self.load_typ = read_cn(raw_data, pos);
+        self.load_id = read_cn(raw_data, pos);
+        self.dib_typ = read_cn(raw_data, pos);
+        self.dib_id = read_cn(raw_data, pos);
+        self.cabl_typ = read_cn(raw_data, pos);
+        self.cabl_id = read_cn(raw_data, pos);
+        self.cont_typ = read_cn(raw_data, pos);
+        self.cont_id = read_cn(raw_data, pos);
+        self.lasr_typ = read_cn(raw_data, pos);
+        self.lasr_id = read_cn(raw_data, pos);
+        self.extr_typ = read_cn(raw_data, pos);
+        self.extr_id = read_cn(raw_data, pos);
+        self
+    }
+}
+
+impl PSR {
+    pub fn new() -> Self {
+        PSR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.cont_flg = read_uint8(raw_data, pos);
+        self.psr_indx = read_u2(raw_data, pos, order);
+        self.psr_nam = read_cn(raw_data, pos);
+        self.opt_flg = read_uint8(raw_data, pos);
+        self.totp_cnt = read_u2(raw_data, pos, order);
+        self.locp_cnt = read_u2(raw_data, pos, order);
+        self.pat_bgn = read_kx_u8(raw_data, pos, order, self.locp_cnt);
+        self.pat_end = read_kx_u8(raw_data, pos, order, self.locp_cnt);
+        self.pat_file = read_kx_cn(raw_data, pos, self.locp_cnt);
+        self.pat_lbl = read_kx_cn(raw_data, pos, self.locp_cnt);
+        self.file_uid = read_kx_cn(raw_data, pos, self.locp_cnt);
+        self.atpg_dsc = read_kx_cn(raw_data, pos, self.locp_cnt);
+        self.src_id = read_kx_cn(raw_data, pos, self.locp_cnt);
+        self
+    }
+}
+
+impl NMR {
+    pub fn new() -> Self {
+        NMR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.cont_flg = read_uint8(raw_data, pos);
+        self.totm_cnt = read_u2(raw_data, pos, order);
+        self.locm_cnt = read_u2(raw_data, pos, order);
+        self.pmr_indx = read_kx_u2(raw_data, pos, order, self.locm_cnt);
+        self.atpg_nam = read_kx_cn(raw_data, pos, self.locm_cnt);
+        self
+    }
+}
+
+impl CNR {
+    pub fn new() -> Self {
+        CNR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.chn_num = read_u2(raw_data, pos, order);
+        self.bit_pos = read_u4(raw_data, pos, order);
+        self.cell_nam = read_sn(raw_data, pos, order);
+        self
+    }
+}
+
+impl SSR {
+    pub fn new() -> Self {
+        SSR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.ssr_nam = read_cn(raw_data, pos);
+        self.chn_cnt = read_u2(raw_data, pos, order);
+        self.chn_list = read_kx_u2(raw_data, pos, order, self.chn_cnt);
+        self
+    }
+}
+
+impl CDR {
+    pub fn new() -> Self {
+        CDR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.cont_flg = read_uint8(raw_data, pos);
+        self.cdr_indx = read_u2(raw_data, pos, order);
+        self.chn_nam = read_cn(raw_data, pos);
+        self.chn_len = read_u4(raw_data, pos, order);
+        self.sin_pin = read_u2(raw_data, pos, order);
+        self.sout_pin = read_u2(raw_data, pos, order);
+        self.mstr_cnt = read_uint8(raw_data, pos);
+        self.m_clks = read_kx_u2(raw_data, pos, order, self.mstr_cnt as u16);
+        self.slav_cnt = read_uint8(raw_data, pos);
+        self.s_clks = read_kx_u2(raw_data, pos, order, self.slav_cnt as u16);
+        self.inv_val = read_uint8(raw_data, pos);
+        self.lst_cnt = read_u2(raw_data, pos, order);
+        self.cell_lst = read_kx_sn(raw_data, pos, order, self.lst_cnt);
+        self
+    }
+}
+
+impl WIR {
+    pub fn new() -> Self {
+        WIR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_grp = read_uint8(raw_data, pos);
+        self.start_t = read_u4(raw_data, pos, order);
+        self.wafer_id = read_cn(raw_data, pos);
+        self
+    }
+}
+
+impl WRR {
+    pub fn new() -> Self {
+        WRR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_grp = read_uint8(raw_data, pos);
+        self.finish_t = read_u4(raw_data, pos, order);
+        self.part_cnt = read_u4(raw_data, pos, order);
+        self.rtst_cnt = read_u4(raw_data, pos, order);
+        self.abrt_cnt = read_u4(raw_data, pos, order);
+        self.good_cnt = read_u4(raw_data, pos, order);
+        self.func_cnt = read_u4(raw_data, pos, order);
+        self.wafer_id = read_cn(raw_data, pos);
+        self.fabwf_id = read_cn(raw_data, pos);
+        self.frame_id = read_cn(raw_data, pos);
+        self.mask_id = read_cn(raw_data, pos);
+        self.usr_desc = read_cn(raw_data, pos);
+        self.exc_desc = read_cn(raw_data, pos);
+        self
+    }
+}
+
+impl WCR {
+    pub fn new() -> Self {
+        WCR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.wafr_siz = read_r4(raw_data, pos, order);
+        self.die_ht = read_r4(raw_data, pos, order);
+        self.die_wid = read_r4(raw_data, pos, order);
+        self.wf_units = read_uint8(raw_data, pos);
+        self.wf_flat = read_uint8(raw_data, pos) as char;
+        self.center_x = read_i2(raw_data, pos, order);
+        self.center_y = read_i2(raw_data, pos, order);
+        self.pos_x = read_uint8(raw_data, pos) as char;
+        self.pos_y = read_uint8(raw_data, pos) as char;
+        self
+    }
+}
+
+impl PIR {
+    pub fn new() -> Self {
+        PIR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_num = read_uint8(raw_data, pos);
+        self
+    }
+}
+
+impl PRR {
+    pub fn new() -> Self {
+        PRR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_num = read_uint8(raw_data, pos);
+        self.part_flg = read_uint8(raw_data, pos);
+        self.num_test = read_u2(raw_data, pos, order);
+        self.hard_bin = read_u2(raw_data, pos, order);
+        self.soft_bin = read_u2(raw_data, pos, order);
+        self.x_coord = read_i2(raw_data, pos, order);
+        self.y_coord = read_i2(raw_data, pos, order);
+        self.test_t = read_u4(raw_data, pos, order);
+        self.part_id = read_cn(raw_data, pos);
+        self.part_txt = read_cn(raw_data, pos);
+        self.part_fix = read_bn(raw_data, pos);
+        self
+    }
+}
+
+impl TSR {
+    pub fn new() -> Self {
+        TSR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_num = read_uint8(raw_data, pos);
+        self.test_typ = read_uint8(raw_data, pos) as char;
+        self.test_num = read_u4(raw_data, pos, order);
+        self.exec_cnt = read_u4(raw_data, pos, order);
+        self.fail_cnt = read_u4(raw_data, pos, order);
+        self.alrm_cnt = read_u4(raw_data, pos, order);
+        self.test_nam = read_cn(raw_data, pos);
+        self.seq_name = read_cn(raw_data, pos);
+        self.test_lbl = read_cn(raw_data, pos);
+        self.opt_flag = read_uint8(raw_data, pos);
+        self.test_tim = read_r4(raw_data, pos, order);
+        self.test_min = read_r4(raw_data, pos, order);
+        self.test_max = read_r4(raw_data, pos, order);
+        self.tst_sums = read_r4(raw_data, pos, order);
+        self.tst_sqrs = read_r4(raw_data, pos, order);
+        self
+    }
+}
+
+impl PTR {
+    pub fn new() -> Self {
+        PTR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.test_num = read_u4(raw_data, pos, order);
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_num = read_uint8(raw_data, pos);
+        self.test_flg = read_uint8(raw_data, pos);
+        self.parm_flg = read_uint8(raw_data, pos);
+        self.result = read_r4(raw_data, pos, order);
+        self.test_txt = read_cn(raw_data, pos);
+        self.alarm_id = read_cn(raw_data, pos);
+        self.opt_flag = read_uint8(raw_data, pos);
+        self.res_scal = read_i1(raw_data, pos);
+        self.llm_scal = read_i1(raw_data, pos);
+        self.hlm_scal = read_i1(raw_data, pos);
+        self.lo_limit = read_r4(raw_data, pos, order);
+        self.hi_limit = read_r4(raw_data, pos, order);
+        self.units = read_cn(raw_data, pos);
+        self.c_resfmt = read_cn(raw_data, pos);
+        self.c_llmfmt = read_cn(raw_data, pos);
+        self.c_hlmfmt = read_cn(raw_data, pos);
+        self.lo_spec = read_r4(raw_data, pos, order);
+        self.hi_spec = read_r4(raw_data, pos, order);
+        self
+    }
+}
+
+impl MPR {
+    pub fn new() -> Self {
+        MPR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.test_num = read_u4(raw_data, pos, order);
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_num = read_uint8(raw_data, pos);
+        self.test_flg = read_uint8(raw_data, pos);
+        self.parm_flg = read_uint8(raw_data, pos);
+        self.rtn_icnt = read_u2(raw_data, pos, order);
+        self.rslt_cnt = read_u2(raw_data, pos, order);
+        self.rtn_stat = read_kx_n1(raw_data, pos, self.rtn_icnt);
+        self.rtn_rslt = read_kx_r4(raw_data, pos, order, self.rslt_cnt);
+        self.test_txt = read_cn(raw_data, pos);
+        self.alarm_id = read_cn(raw_data, pos);
+        self.opt_flag = read_uint8(raw_data, pos);
+        self.res_scal = read_i1(raw_data, pos);
+        self.llm_scal = read_i1(raw_data, pos);
+        self.hlm_scal = read_i1(raw_data, pos);
+        self.lo_limit = read_r4(raw_data, pos, order);
+        self.hi_limit = read_r4(raw_data, pos, order);
+        self.start_in = read_r4(raw_data, pos, order);
+        self.incr_in = read_r4(raw_data, pos, order);
+        self.rtn_indx = read_kx_u2(raw_data, pos, order, self.rtn_icnt);
+        self.units = read_cn(raw_data, pos);
+        self.units_in = read_cn(raw_data, pos);
+        self.c_resfmt = read_cn(raw_data, pos);
+        self.c_llmfmt = read_cn(raw_data, pos);
+        self.c_hlmfmt = read_cn(raw_data, pos);
+        self.lo_spec = read_r4(raw_data, pos, order);
+        self.hi_spec = read_r4(raw_data, pos, order);
+        self
+    }
+}
+
+impl FTR {
+    pub fn new() -> Self {
+        FTR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.test_num = read_u4(raw_data, pos, order);
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_num = read_uint8(raw_data, pos);
+        self.test_flg = read_uint8(raw_data, pos);
+        self.opt_flag = read_uint8(raw_data, pos);
+        self.cycl_cnt = read_u4(raw_data, pos, order);
+        self.rel_vadr = read_u4(raw_data, pos, order);
+        self.rept_cnt = read_u4(raw_data, pos, order);
+        self.num_fail = read_u4(raw_data, pos, order);
+        self.xfail_ad = read_i4(raw_data, pos, order);
+        self.yfail_ad = read_i4(raw_data, pos, order);
+        self.vect_off = read_i2(raw_data, pos, order);
+        self.rtn_icnt = read_u2(raw_data, pos, order);
+        self.pgm_icnt = read_u2(raw_data, pos, order);
+        self.rtn_indx = read_kx_u2(raw_data, pos, order, self.rtn_icnt);
+        self.rtn_stat = read_kx_n1(raw_data, pos, self.rtn_icnt);
+        self.pgm_indx = read_kx_u2(raw_data, pos, order, self.pgm_icnt);
+        self.pgm_stat = read_kx_n1(raw_data, pos, self.pgm_icnt);
+        self.fail_pin = read_dn(raw_data, pos, order);
+        self.vect_nam = read_cn(raw_data, pos);
+        self.time_set = read_cn(raw_data, pos);
+        self.op_code = read_cn(raw_data, pos);
+        self.test_txt = read_cn(raw_data, pos);
+        self.alarm_id = read_cn(raw_data, pos);
+        self.prog_txt = read_cn(raw_data, pos);
+        self.rslt_txt = read_cn(raw_data, pos);
+        self.patg_num = read_uint8(raw_data, pos);  // default 255
+        self.spin_map = read_dn(raw_data, pos, order);
+        self
+    }
+}
+
+impl STR {
+    pub fn new() -> Self {
+        STR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.cont_flg = read_uint8(raw_data, pos);
+        self.test_num = read_u4(raw_data, pos, order);
+        self.head_num = read_uint8(raw_data, pos);
+        self.site_num = read_uint8(raw_data, pos);
+        self.psr_ref = read_u2(raw_data, pos, order);
+        self.test_flg = read_uint8(raw_data, pos);
+        self.log_typ = read_cn(raw_data, pos);
+        self.test_txt = read_cn(raw_data, pos);
+        self.alarm_id = read_cn(raw_data, pos);
+        self.prog_txt = read_cn(raw_data, pos);
+        self.rslt_txt = read_cn(raw_data, pos);
+        self.z_val = read_uint8(raw_data, pos);
+        self.fmu_flg = read_uint8(raw_data, pos);
+        self.mask_map = read_dn(raw_data, pos, order);
+        self.fal_map = read_dn(raw_data, pos, order);
+        self.cyc_cnt_t = read_u8(raw_data, pos, order);
+        self.totf_cnt = read_u4(raw_data, pos, order);
+        self.totl_cnt = read_u4(raw_data, pos, order);
+        self.cyc_base = read_u8(raw_data, pos, order);
+        self.bit_base = read_u4(raw_data, pos, order);
+        self.cond_cnt = read_u2(raw_data, pos, order);
+        self.lim_cnt = read_u2(raw_data, pos, order);
+        self.cyc_size = read_uint8(raw_data, pos);
+        self.pmr_size = read_uint8(raw_data, pos);
+        self.chn_size = read_uint8(raw_data, pos);
+        self.pat_size = read_uint8(raw_data, pos);
+        self.bit_size = read_uint8(raw_data, pos);
+        self.u1_size = read_uint8(raw_data, pos);
+        self.u2_size = read_uint8(raw_data, pos);
+        self.u3_size = read_uint8(raw_data, pos);
+        self.utx_size = read_uint8(raw_data, pos);
+        self.cap_bgn = read_u2(raw_data, pos, order);
+        // k: LIM_CNT
+        self.lim_indx = read_kx_u2(raw_data, pos, order, self.lim_cnt);
+        self.lim_spec = read_kx_u4(raw_data, pos, order, self.lim_cnt);
+        // k: COND_CNT
+        self.cond_lst = read_kx_cn(raw_data, pos, self.cond_cnt);
+        self.cyc_cnt = read_u2(raw_data, pos, order);
+        // k: CYC_CNT, f: CYC_SIZE
+        self.cyc_ofst = read_kx_uf(raw_data, pos, order, self.cyc_cnt, self.cyc_size);
+        self.pmr_cnt = read_u2(raw_data, pos, order);
+        // k: PMR_CNT, f: PMR_SIZE
+        self.pmr_indx = read_kx_uf(raw_data, pos, order, self.pmr_cnt, self.pmr_size);
+        self.chn_cnt = read_u2(raw_data, pos, order);
+        // k: CHN_CNT, f: CHN_SIZE
+        self.chn_num = read_kx_uf(raw_data, pos, order, self.chn_cnt, self.chn_size);
+        self.exp_cnt = read_u2(raw_data, pos, order);
+        // k: EXP_CNT
+        self.exp_data = read_kx_u1(raw_data, pos, self.exp_cnt);
+        self.cap_cnt = read_u2(raw_data, pos, order);
+        // k: CAP_CNT
+        self.cap_data = read_kx_u1(raw_data, pos, self.cap_cnt);
+        self.new_cnt = read_u2(raw_data, pos, order);
+        // k: NEW_CNT
+        self.new_data = read_kx_u1(raw_data, pos, self.new_cnt);
+        self.pat_cnt = read_u2(raw_data, pos, order);
+        // k: PAT_CNT, f: PAT_SIZE
+        self.pat_num = read_kx_uf(raw_data, pos, order, self.pat_cnt, self.pat_size);
+        self.bpos_cnt = read_u2(raw_data, pos, order);
+        // k: BPOS_CNT, f: BIT_SIZE
+        self.bit_pos = read_kx_uf(raw_data, pos, order, self.bpos_cnt, self.bit_size);
+        self.usr1_cnt = read_u2(raw_data, pos, order);
+        // k: USR1_CNT, f: U1_SIZE
+        self.usr1 = read_kx_uf(raw_data, pos, order, self.usr1_cnt, self.u1_size);
+        self.usr2_cnt = read_u2(raw_data, pos, order);
+        // k: USR2_CNT, f: U2_SIZE
+        self.usr2 = read_kx_uf(raw_data, pos, order, self.usr2_cnt, self.u2_size);
+        self.usr3_cnt = read_u2(raw_data, pos, order);
+        // k: USR3_CNT, f: U3_SIZE
+        self.usr3 = read_kx_uf(raw_data, pos, order, self.usr3_cnt, self.u3_size);
+        self.txt_cnt = read_u2(raw_data, pos, order);
+        // k: TXT_CNT
+        self.user_txt = read_kx_cf(raw_data, pos, self.txt_cnt, self.utx_size);
+        self
+    }
+}
+
+impl BPS {
+    pub fn new() -> Self {
+        BPS::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.seq_name = read_cn(raw_data, pos);
+        self
+    }
+}
+
+impl EPS {
+    pub fn new() -> Self {
+        EPS::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        self
+    }
+}
+
+impl GDR {
+    pub fn new() -> Self {
+        GDR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.fld_cnt = read_u2(raw_data, pos, order);
+        self.gen_data = read_vn(raw_data, pos, order, self.fld_cnt);
+        self
+    }
+}
+
+impl DTR {
+    pub fn new() -> Self {
+        DTR::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.text_dat = read_cn(raw_data, pos);
+        self
+    }
+}
+
+impl ReservedRec {
+    pub fn new() -> Self {
+        ReservedRec::default()
+    }
+
+    pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
+        let pos = &mut 0;
+        self.raw_data = read_cn(raw_data, pos);
+        self
+    }
+}
+
+
+impl StdfRecords {
+    pub fn new(rec_header: &RecordHeader) -> Self {
         match (rec_header.typ, rec_header.sub) {
             // rec type 15
-            (15, 10) => StdfRecords::PTR(PTR::default()),
-            (15, 15) => StdfRecords::MPR(MPR::default()),
-            (15, 20) => StdfRecords::FTR(FTR::default()),
-            (15, 30) => StdfRecords::STR(STR::default()),
+            (15, 10) => StdfRecords::PTR(PTR::new()),
+            (15, 15) => StdfRecords::MPR(MPR::new()),
+            (15, 20) => StdfRecords::FTR(FTR::new()),
+            (15, 30) => StdfRecords::STR(STR::new()),
             // rec type 5
-            (5, 10) => StdfRecords::PIR(PIR::default()),
-            (5, 20) => StdfRecords::PRR(PRR::default()),
+            (5, 10) => StdfRecords::PIR(PIR::new()),
+            (5, 20) => StdfRecords::PRR(PRR::new()),
             // rec type 2
-            (2, 10) => StdfRecords::WIR(WIR::default()),
-            (2, 20) => StdfRecords::WRR(WRR::default()),
-            (2, 30) => StdfRecords::WCR(WCR::default()),
+            (2, 10) => StdfRecords::WIR(WIR::new()),
+            (2, 20) => StdfRecords::WRR(WRR::new()),
+            (2, 30) => StdfRecords::WCR(WCR::new()),
             // rec type 50
-            (50, 10) => StdfRecords::GDR(GDR::default()),
-            (50, 30) => StdfRecords::DTR(DTR::default()),
+            (50, 10) => StdfRecords::GDR(GDR::new()),
+            (50, 30) => StdfRecords::DTR(DTR::new()),
             // rec type 0
-            (0, 10) => StdfRecords::FAR(FAR::default()),
-            (0, 20) => StdfRecords::ATR(ATR::default()),
-            (0, 30) => StdfRecords::VUR(VUR::default()),
+            (0, 10) => StdfRecords::FAR(FAR::new()),
+            (0, 20) => StdfRecords::ATR(ATR::new()),
+            (0, 30) => StdfRecords::VUR(VUR::new()),
             // rec type 1
-            (1, 10) => StdfRecords::MIR(MIR::default()),
-            (1, 20) => StdfRecords::MRR(MRR::default()),
-            (1, 30) => StdfRecords::PCR(PCR::default()),
-            (1, 40) => StdfRecords::HBR(HBR::default()),
-            (1, 50) => StdfRecords::SBR(SBR::default()),
-            (1, 60) => StdfRecords::PMR(PMR::default()),
-            (1, 62) => StdfRecords::PGR(PGR::default()),
-            (1, 63) => StdfRecords::PLR(PLR::default()),
-            (1, 70) => StdfRecords::RDR(RDR::default()),
-            (1, 80) => StdfRecords::SDR(SDR::default()),
-            (1, 90) => StdfRecords::PSR(PSR::default()),
-            (1, 91) => StdfRecords::NMR(NMR::default()),
-            (1, 92) => StdfRecords::CNR(CNR::default()),
-            (1, 93) => StdfRecords::SSR(SSR::default()),
-            (1, 94) => StdfRecords::CDR(CDR::default()),
+            (1, 10) => StdfRecords::MIR(MIR::new()),
+            (1, 20) => StdfRecords::MRR(MRR::new()),
+            (1, 30) => StdfRecords::PCR(PCR::new()),
+            (1, 40) => StdfRecords::HBR(HBR::new()),
+            (1, 50) => StdfRecords::SBR(SBR::new()),
+            (1, 60) => StdfRecords::PMR(PMR::new()),
+            (1, 62) => StdfRecords::PGR(PGR::new()),
+            (1, 63) => StdfRecords::PLR(PLR::new()),
+            (1, 70) => StdfRecords::RDR(RDR::new()),
+            (1, 80) => StdfRecords::SDR(SDR::new()),
+            (1, 90) => StdfRecords::PSR(PSR::new()),
+            (1, 91) => StdfRecords::NMR(NMR::new()),
+            (1, 92) => StdfRecords::CNR(CNR::new()),
+            (1, 93) => StdfRecords::SSR(SSR::new()),
+            (1, 94) => StdfRecords::CDR(CDR::new()),
             // rec type 10
-            (10, 30) => StdfRecords::TSR(TSR::default()),
+            (10, 30) => StdfRecords::TSR(TSR::new()),
             // rec type 20
-            (20, 10) => StdfRecords::BPS(BPS::default()),
-            (20, 20) => StdfRecords::EPS(EPS::default()),
+            (20, 10) => StdfRecords::BPS(BPS::new()),
+            (20, 20) => StdfRecords::EPS(EPS::new()),
             // rec type 180: Reserved
             // rec type 181: Reserved
-            (180 | 181, _) => StdfRecords::ReservedRec(ReservedRec::default()),
+            (180 | 181, _) => StdfRecords::ReservedRec(ReservedRec::new()),
             // not matched
             (_, _) => StdfRecords::InvalidRec
         }
     }
 
-    fn from_bytes(rec: Self, raw_data: &[u8], endian: &ByteOrder) -> Result<Self, StdfError> {
+    pub fn from_bytes(rec: Self, raw_data: &[u8], order: &ByteOrder) -> Self {
         match rec {
             // rec type 15
-            StdfRecords::PTR(PTR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::MPR(MPR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::FTR(FTR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::STR(STR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::PTR(ptr_rec) => StdfRecords::PTR(ptr_rec.from_bytes(raw_data, order)),
+            StdfRecords::MPR(mpr_rec) => StdfRecords::MPR(mpr_rec.from_bytes(raw_data, order)),
+            StdfRecords::FTR(ftr_rec) => StdfRecords::FTR(ftr_rec.from_bytes(raw_data, order)),
+            StdfRecords::STR(str_rec) => StdfRecords::STR(str_rec.from_bytes(raw_data, order)),
             // rec type 5
-            StdfRecords::PIR(PIR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::PRR(PRR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::PIR(pir_rec) => StdfRecords::PIR(pir_rec.from_bytes(raw_data, order)),
+            StdfRecords::PRR(prr_rec) => StdfRecords::PRR(prr_rec.from_bytes(raw_data, order)),
             // rec type 2
-            StdfRecords::WIR(WIR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::WRR(WRR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::WCR(WCR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::WIR(wir_rec) => StdfRecords::WIR(wir_rec.from_bytes(raw_data, order)),
+            StdfRecords::WRR(wrr_rec) => StdfRecords::WRR(wrr_rec.from_bytes(raw_data, order)),
+            StdfRecords::WCR(wcr_rec) => StdfRecords::WCR(wcr_rec.from_bytes(raw_data, order)),
             // rec type 50
-            StdfRecords::GDR(GDR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::DTR(DTR) => Err(StdfError{code: 1, msg: String::from("")}),
-            // rec type 0
-            StdfRecords::FAR(FAR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::ATR(ATR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::VUR(VUR) => Err(StdfError{code: 1, msg: String::from("")}),
-            // rec type 1
-            StdfRecords::MIR(MIR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::MRR(MRR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::PCR(PCR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::HBR(HBR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::SBR(SBR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::PMR(PMR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::PGR(PGR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::PLR(PLR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::RDR(RDR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::SDR(SDR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::PSR(PSR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::NMR(NMR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::CNR(CNR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::SSR(SSR) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::CDR(CDR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::GDR(gdr_rec) => StdfRecords::GDR(gdr_rec.from_bytes(raw_data, order)),
+            StdfRecords::DTR(dtr_rec) => StdfRecords::DTR(dtr_rec.from_bytes(raw_data, order)),
             // rec type 10
-            StdfRecords::TSR(TSR) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::TSR(tsr_rec) => StdfRecords::TSR(tsr_rec.from_bytes(raw_data, order)),            
+            // rec type 1
+            StdfRecords::MIR(mir_rec) => StdfRecords::MIR(mir_rec.from_bytes(raw_data, order)),
+            StdfRecords::MRR(mrr_rec) => StdfRecords::MRR(mrr_rec.from_bytes(raw_data, order)),
+            StdfRecords::PCR(pcr_rec) => StdfRecords::PCR(pcr_rec.from_bytes(raw_data, order)),
+            StdfRecords::HBR(hbr_rec) => StdfRecords::HBR(hbr_rec.from_bytes(raw_data, order)),
+            StdfRecords::SBR(sbr_rec) => StdfRecords::SBR(sbr_rec.from_bytes(raw_data, order)),
+            StdfRecords::PMR(pmr_rec) => StdfRecords::PMR(pmr_rec.from_bytes(raw_data, order)),
+            StdfRecords::PGR(pgr_rec) => StdfRecords::PGR(pgr_rec.from_bytes(raw_data, order)),
+            StdfRecords::PLR(plr_rec) => StdfRecords::PLR(plr_rec.from_bytes(raw_data, order)),
+            StdfRecords::RDR(rdr_rec) => StdfRecords::RDR(rdr_rec.from_bytes(raw_data, order)),
+            StdfRecords::SDR(sdr_rec) => StdfRecords::SDR(sdr_rec.from_bytes(raw_data, order)),
+            StdfRecords::PSR(psr_rec) => StdfRecords::PSR(psr_rec.from_bytes(raw_data, order)),
+            StdfRecords::NMR(nmr_rec) => StdfRecords::NMR(nmr_rec.from_bytes(raw_data, order)),
+            StdfRecords::CNR(cnr_rec) => StdfRecords::CNR(cnr_rec.from_bytes(raw_data, order)),
+            StdfRecords::SSR(ssr_rec) => StdfRecords::SSR(ssr_rec.from_bytes(raw_data, order)),
+            StdfRecords::CDR(cdr_rec) => StdfRecords::CDR(cdr_rec.from_bytes(raw_data, order)),
+            // rec type 0
+            StdfRecords::FAR(far_rec) => StdfRecords::FAR(far_rec.from_bytes(raw_data, order)),
+            StdfRecords::ATR(atr_rec) => StdfRecords::ATR(atr_rec.from_bytes(raw_data, order)),
+            StdfRecords::VUR(vur_rec) => StdfRecords::VUR(vur_rec.from_bytes(raw_data, order)),            
             // rec type 20
-            StdfRecords::BPS(BPS) => Err(StdfError{code: 1, msg: String::from("")}),
-            StdfRecords::EPS(EPS) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::BPS(bps_rec) => StdfRecords::BPS(bps_rec.from_bytes(raw_data, order)),
+            StdfRecords::EPS(eps_rec) => StdfRecords::EPS(eps_rec.from_bytes(raw_data, order)),
             // rec type 180: Reserved
             // rec type 181: Reserved
-            StdfRecords::ReservedRec(ReservedRec) => Err(StdfError{code: 1, msg: String::from("")}),
+            StdfRecords::ReservedRec(reserve_rec) => StdfRecords::ReservedRec(reserve_rec.from_bytes(raw_data, order)),
             // not matched
-            StdfRecords::InvalidRec => Ok(rec)
+            StdfRecords::InvalidRec => rec,
         }
-    }
-
-    fn to_bytes(rec: &Self) -> Result<Box<[u8]>, StdfError> {
-        Err(StdfError { code: 1, msg: "".to_string() })
     }
 }
 
@@ -788,7 +1490,7 @@ fn read_uint8(raw_data: &[u8], pos: &mut usize) -> u8 {
 }
 
 /// Read U2 (u16) from byte array with offset "pos"
-fn read_U2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U2 {
+fn read_u2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U2 {
     let pos_after_read = *pos + 2;
 
     if pos_after_read <= raw_data.len() {
@@ -805,7 +1507,7 @@ fn read_U2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U2 {
 }
 
 /// Read U4 (u32) from byte array with offset "pos"
-fn read_U4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U4 {
+fn read_u4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U4 {
     let pos_after_read = *pos + 4;
     
     if pos_after_read <= raw_data.len() {
@@ -822,7 +1524,7 @@ fn read_U4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U4 {
 }
 
 /// Read U8 (u64) from byte array with offset "pos"
-fn read_U8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U8 {
+fn read_u8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U8 {
     let pos_after_read = *pos + 8;
     
     if pos_after_read <= raw_data.len() {
@@ -839,7 +1541,7 @@ fn read_U8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U8 {
 }
 
 /// Read I1 (i8) from byte array with offset "pos"
-fn read_I1(raw_data: &[u8], pos: &mut usize) -> I1 {
+fn read_i1(raw_data: &[u8], pos: &mut usize) -> I1 {
     if *pos < raw_data.len() {
         let value = (*raw_data)[*pos] as I1;
         *pos += 1;
@@ -850,7 +1552,7 @@ fn read_I1(raw_data: &[u8], pos: &mut usize) -> I1 {
 }
 
 /// Read I2 (i16) from byte array with offset "pos"
-fn read_I2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I2 {
+fn read_i2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I2 {
     let pos_after_read = *pos + 2;
     
     if pos_after_read <= raw_data.len() {
@@ -867,7 +1569,7 @@ fn read_I2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I2 {
 }
 
 /// Read I4 (i32) from byte array with offset "pos"
-fn read_I4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I4 {
+fn read_i4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I4 {
     let pos_after_read = *pos + 4;
     
     if pos_after_read <= raw_data.len() {
@@ -884,7 +1586,7 @@ fn read_I4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I4 {
 }
 
 /// Read R4 (f32) from byte array with offset "pos"
-fn read_R4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R4 {
+fn read_r4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R4 {
     let pos_after_read = *pos + 4;
     
     if pos_after_read <= raw_data.len() {
@@ -901,7 +1603,7 @@ fn read_R4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R4 {
 }
 
 /// Read R8 (f64) from byte array with offset "pos"
-fn read_R8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R8 {
+fn read_r8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R8 {
     let pos_after_read = *pos + 8;
     
     if pos_after_read <= raw_data.len() {
@@ -918,7 +1620,7 @@ fn read_R8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R8 {
 }
 
 /// Read Cn (u8 + String) from byte array with offset "pos"
-fn read_Cn(raw_data: &[u8], pos: &mut usize) -> Cn {
+fn read_cn(raw_data: &[u8], pos: &mut usize) -> Cn {
     let count = read_uint8(raw_data, pos) as usize;
     let mut value = String::from("");
     if count != 0 {
@@ -937,8 +1639,8 @@ fn read_Cn(raw_data: &[u8], pos: &mut usize) -> Cn {
 }
 
 /// Read Sn (u16 + String) from byte array with offset "pos"
-fn read_Sn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Sn {
-    let count = read_U2(raw_data, pos, order) as usize;
+fn read_sn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Sn {
+    let count = read_u2(raw_data, pos, order) as usize;
     let mut value = String::from("");
     if count != 0 {
         let pos_after_read = *pos + count;
@@ -956,7 +1658,7 @@ fn read_Sn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Sn {
 }
 
 /// Read Cf (String) from byte array with offset "pos", String length is provide by "f"
-fn read_Cf(raw_data: &[u8], pos: &mut usize, f: u8) -> Cf {
+fn read_cf(raw_data: &[u8], pos: &mut usize, f: u8) -> Cf {
     let mut value = String::from("");
     if f != 0 {
         let pos_after_read = *pos + (f as usize);
@@ -974,7 +1676,7 @@ fn read_Cf(raw_data: &[u8], pos: &mut usize, f: u8) -> Cf {
 }
 
 /// Read Bn (u8 + Vec<u8>) from byte array with offset "pos"
-fn read_Bn(raw_data: &[u8], pos: &mut usize) -> Bn {
+fn read_bn(raw_data: &[u8], pos: &mut usize) -> Bn {
     let count = read_uint8(raw_data, pos) as usize;
     if count != 0 {
         let pos_after_read = *pos + count;
@@ -997,8 +1699,8 @@ fn read_Bn(raw_data: &[u8], pos: &mut usize) -> Bn {
 }
 
 /// Read Dn (u16 + Vec<u8>) from byte array with offset "pos", u16 is bit counts
-fn read_Dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn {
-    let bitcount = read_U2(raw_data, pos, order) as usize;
+fn read_dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn {
+    let bitcount = read_u2(raw_data, pos, order) as usize;
     let bytecount = bitcount/8 + bitcount%8;
     if bytecount != 0 {
         let pos_after_read = *pos + bytecount;
@@ -1022,11 +1724,11 @@ fn read_Dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn {
 }
 
 /// Read KxCn (Vec<Cn>) from byte array with offset "pos", vector size is provide by "k"
-fn read_KxCn(raw_data: &[u8], pos: &mut usize, k: u16) -> KxCn {
+fn read_kx_cn(raw_data: &[u8], pos: &mut usize, k: u16) -> KxCn {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
-            value.push(read_Cn(raw_data, pos));
+            value.push(read_cn(raw_data, pos));
         }
         value
     } else {
@@ -1035,11 +1737,11 @@ fn read_KxCn(raw_data: &[u8], pos: &mut usize, k: u16) -> KxCn {
 }
 
 /// Read KxSn (Vec<Sn>) from byte array with offset "pos", vector size is provide by "k"
-fn read_KxSn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxSn {
+fn read_kx_sn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxSn {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
-            value.push(read_Sn(raw_data, pos, order));
+            value.push(read_sn(raw_data, pos, order));
         }
         value
     } else {
@@ -1048,11 +1750,11 @@ fn read_KxSn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxS
 }
 
 /// Read KxCf (Vec<Cf>) from byte array with offset "pos", vector size is provide by "k", String size is "f"
-fn read_KxCf(raw_data: &[u8], pos: &mut usize, k: u16, f: u8) -> KxCf {
+fn read_kx_cf(raw_data: &[u8], pos: &mut usize, k: u16, f: u8) -> KxCf {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
-            value.push(read_Cf(raw_data, pos, f));
+            value.push(read_cf(raw_data, pos, f));
         }
         value
     } else {
@@ -1061,7 +1763,7 @@ fn read_KxCf(raw_data: &[u8], pos: &mut usize, k: u16, f: u8) -> KxCf {
 }
 
 /// Read KxU1 (Vec<u8>) from byte array with offset "pos", vector size is provide by "k"
-fn read_KxU1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxU1 {
+fn read_kx_u1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxU1 {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
@@ -1074,11 +1776,11 @@ fn read_KxU1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxU1 {
 }
 
 /// Read KxU2 (Vec<u16>) from byte array with offset "pos", vector size is provide by "k"
-fn read_KxU2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU2 {
+fn read_kx_u2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU2 {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
-            value.push(read_U2(raw_data, pos, order));
+            value.push(read_u2(raw_data, pos, order));
         }
         value
     } else {
@@ -1087,11 +1789,11 @@ fn read_KxU2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU
 }
 
 /// Read KxU4 (Vec<u32>) from byte array with offset "pos", vector size is provide by "k"
-fn read_KxU4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU4 {
+fn read_kx_u4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU4 {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
-            value.push(read_U4(raw_data, pos, order));
+            value.push(read_u4(raw_data, pos, order));
         }
         value
     } else {
@@ -1100,11 +1802,11 @@ fn read_KxU4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU
 }
 
 /// Read KxU8 (Vec<u64>) from byte array with offset "pos", vector size is provide by "k"
-fn read_KxU8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU8 {
+fn read_kx_u8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU8 {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
-            value.push(read_U8(raw_data, pos, order));
+            value.push(read_u8(raw_data, pos, order));
         }
         value
     } else {
@@ -1113,13 +1815,13 @@ fn read_KxU8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU
 }
 
 /// Read KxUf (Vec<u8|u16|u32|u64>) from byte array with offset "pos", vector size is provide by "k", size of number is "f"
-fn read_KxUf(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16, f: u8) -> KxUf {
+fn read_kx_uf(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16, f: u8) -> KxUf {
     if k != 0 {
         match f {
-            1 => KxUf::F1(read_KxU1(raw_data, pos, k)),
-            2 => KxUf::F2(read_KxU2(raw_data, pos, order, k)),
-            4 => KxUf::F4(read_KxU4(raw_data, pos, order, k)),
-            8 => KxUf::F8(read_KxU8(raw_data, pos, order, k)),
+            1 => KxUf::F1(read_kx_u1(raw_data, pos, k)),
+            2 => KxUf::F2(read_kx_u2(raw_data, pos, order, k)),
+            4 => KxUf::F4(read_kx_u4(raw_data, pos, order, k)),
+            8 => KxUf::F8(read_kx_u8(raw_data, pos, order, k)),
             _ => KxUf::F1(vec![0u8; 0]),
         }
     } else {
@@ -1128,11 +1830,11 @@ fn read_KxUf(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16, f: u8)
 }
 
 /// Read KxR4 (Vec<f32>) from byte array with offset "pos", vector size is provide by "k"
-fn read_KxR4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxR4 {
+fn read_kx_r4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxR4 {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
-            value.push(read_R4(raw_data, pos, order));
+            value.push(read_r4(raw_data, pos, order));
         }
         value
     } else {
@@ -1141,8 +1843,9 @@ fn read_KxR4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxR
 }
 
 /// Read KxN1 (Vec<u8>) from byte array with offset "pos", vector size is provide by "k"
+/// 
 /// size of N1 = 4 bits, hence total bytes of k * N1 = k/2 + k%2
-fn read_KxN1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxN1 {
+fn read_kx_n1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxN1 {
     if k != 0 {
         let bytecount = k/2 + k%2;   // k = nibble counts, 1 byte = 2 nibble
         let mut value = Vec::with_capacity(k as usize);
@@ -1160,34 +1863,34 @@ fn read_KxN1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxN1 {
 }
 
 /// Read V1 (u8 + generic value) from byte array with offset "pos"
-fn read_V1(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> V1 {
+fn read_v1(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> V1 {
     let type_byte = if (*pos as usize) < raw_data.len() 
     { read_uint8(raw_data, pos) } else { 0xF };
 
     match type_byte {
         0 => V1::B0,
         1 => V1::U1(read_uint8(raw_data, pos)),
-        2 => V1::U2(read_U2(raw_data, pos, order)),
-        3 => V1::U4(read_U4(raw_data, pos, order)),
-        4 => V1::I1(read_I1(raw_data, pos)),
-        5 => V1::I2(read_I2(raw_data, pos, order)),
-        6 => V1::I4(read_I4(raw_data, pos, order)),
-        7 => V1::R4(read_R4(raw_data, pos, order)),
-        8 => V1::R8(read_R8(raw_data, pos, order)),
-        10 => V1::Cn(read_Cn(raw_data, pos)),
-        11 => V1::Bn(read_Bn(raw_data, pos)),
-        12 => V1::Dn(read_Dn(raw_data, pos, order)),
+        2 => V1::U2(read_u2(raw_data, pos, order)),
+        3 => V1::U4(read_u4(raw_data, pos, order)),
+        4 => V1::I1(read_i1(raw_data, pos)),
+        5 => V1::I2(read_i2(raw_data, pos, order)),
+        6 => V1::I4(read_i4(raw_data, pos, order)),
+        7 => V1::R4(read_r4(raw_data, pos, order)),
+        8 => V1::R8(read_r8(raw_data, pos, order)),
+        10 => V1::Cn(read_cn(raw_data, pos)),
+        11 => V1::Bn(read_bn(raw_data, pos)),
+        12 => V1::Dn(read_dn(raw_data, pos, order)),
         13 => V1::N1(read_uint8(raw_data, pos)),
         _ => V1::Invalid,
     }
 }
 
 /// Read Vn (Vec<V1>) from byte array with offset "pos", vector size is provide by "k"
-fn read_Vn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> Vn {
+fn read_vn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> Vn {
     if k != 0 {
         let mut value = Vec::with_capacity(k as usize);
         for _ in 0..k {
-            value.push(read_V1(raw_data, pos, order));
+            value.push(read_v1(raw_data, pos, order));
         }
         value
     } else {
