@@ -27,6 +27,12 @@ pub struct StdfReader {
     pub reader: BufReader<fs::File>,
 }
 
+pub struct RecordIter<'a> { 
+    inner: &'a mut StdfReader
+}
+
+// implementations
+
 impl StdfReader {
     pub fn new(path: &str) -> Result<Self, StdfError> {
         let fp = fs::OpenOptions::new().read(true).open(path)?;
@@ -75,26 +81,34 @@ impl StdfReader {
         Ok(RecordHeader::new().from_bytes(&buf, &self.endianness)?)
     }
 
-    pub fn read_all_records(&mut self) -> Result<Vec<StdfRecord>, StdfError> {
-        let mut rec_list = Vec::new();
-        loop {
-            let header = match self.read_header() {
-                Ok(h) => h,
-                Err(error) => {
-                    if error.code == 4 {
-                        // EOF, break loop
-                        break ();
-                    } else {
-                        return Err(error);
-                    }
-                }
-            };
-            // create a buffer to store record raw data
-            let mut buffer = vec![0u8; header.len as usize];
-            self.reader.read_exact(&mut buffer)?;
-            rec_list.push(StdfRecord::new(&header).from_bytes(&buffer, &self.endianness));
-        }
-        Ok(rec_list)
+    pub fn get_record_iter(&mut self) -> RecordIter {
+        RecordIter { inner: self }
     }
+
+    pub fn read_all_records(&mut self) -> Result<Vec<StdfRecord>, StdfError> {
+        // restore file position
+        self.reader.seek(SeekFrom::Start(0))?;
+        Ok(self.get_record_iter().collect())
+    }
+
 }
 
+
+impl Iterator for RecordIter<'_> {
+    type Item = StdfRecord;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let header = match self.inner.read_header() {
+            Ok(h) => h,
+            Err(_) => {
+                return None;
+            }
+        };
+        // create a buffer to store record raw data
+        let mut buffer = vec![0u8; header.len as usize];
+        if let Err(_) = self.inner.reader.read_exact(&mut buffer) {
+            return None;
+        }
+        Some(StdfRecord::new(&header).from_bytes(&buffer, &self.inner.endianness))
+    }
+}
