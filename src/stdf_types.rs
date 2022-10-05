@@ -230,10 +230,15 @@ pub struct MIR {
     pub setup_t: U4, // Date and time of job setup
     pub start_t: U4, // Date and time first part tested
     pub stat_num: U1, // Tester station number
+    #[default = ' ']
     pub mode_cod: C1, // Test mode code (e.g. prod, dev)
+    #[default = ' ']
     pub rtst_cod: C1, // Lot retest code
+    #[default = ' ']
     pub prot_cod: C1, // Data protection code
+    #[default = 65535]
     pub burn_tim: U2, // Burn-in time (in minutes)
+    #[default = ' ']
     pub cmod_cod: C1, // Command mode code
     pub lot_id: Cn, // Lot ID (customer specified)
     pub part_typ: Cn, // Part Type (or product ID)
@@ -270,6 +275,7 @@ pub struct MIR {
 #[derive(SmartDefault, Debug)]
 pub struct MRR {
     pub finish_t: U4, // Date and time last part tested
+    #[default = ' ']
     pub disp_cod: C1, // Lot disposition code,default: space
     pub usr_desc: Cn, // Lot description supplied by user
     pub exc_desc: Cn, // Lot description supplied by exec
@@ -280,9 +286,13 @@ pub struct PCR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
     pub part_cnt: U4, // Number of parts tested
+    #[default = 4_294_967_295]
     pub rtst_cnt: U4, // Number of parts retested
+    #[default = 4_294_967_295]
     pub abrt_cnt: U4, // Number of aborts during testing
+    #[default = 4_294_967_295]
     pub good_cnt: U4, // Number of good (passed) parts tested
+    #[default = 4_294_967_295]
     pub func_cnt: U4, // Number of functional parts tested
 }
 
@@ -292,6 +302,7 @@ pub struct HBR {
     pub site_num: U1, // Test site number
     pub hbin_num: U2, // Hardware bin number
     pub hbin_cnt: U4, // Number of parts in bin
+    #[default = ' ']
     pub hbin_pf: C1, // Pass/fail indication
     pub hbin_nam: Cn, // Name of hardware bin
 }
@@ -302,6 +313,7 @@ pub struct SBR {
     pub site_num: U1, // Test site number
     pub sbin_num: U2, // Software bin number
     pub sbin_cnt: U4, // Number of parts in bin
+    #[default = ' ']
     pub sbin_pf: C1, // Pass/fail indication
     pub sbin_nam: Cn, // Name of software bin
 }
@@ -309,11 +321,14 @@ pub struct SBR {
 #[derive(SmartDefault, Debug)]
 pub struct PMR {
     pub pmr_indx: U2, // Unique index associated with pin
+    #[default = 0]
     pub chan_typ: U2, // Channel type
     pub chan_nam: Cn, // Channel name
     pub phy_nam: Cn, // Physical name of pin
     pub log_nam: Cn, // Logical name of pin
+    #[default = 1]
     pub head_num: U1, // Head number associated with channel
+    #[default = 1]
     pub site_num: U1, // Site number associated with channel
 }
 
@@ -419,6 +434,7 @@ pub struct CDR {
     pub m_clks: KxU2, // Array of PMR indexes for the master clocks assigned to this chain
     pub slav_cnt: U1, // Count (n) of slave clock pins specified for this scan chain
     pub s_clks: KxU2, // Array of PMR indexes for the slave clocks assigned to this chain
+    #[default = 255]
     pub inv_val: U1, // 0: No Inversion, 1: Inversion
     pub lst_cnt: U2, // Count (k) of scan cells listed in this record
     pub cell_lst: KxSn, // Array of Scan Cell Names
@@ -427,7 +443,8 @@ pub struct CDR {
 #[derive(SmartDefault, Debug)]
 pub struct WIR {
     pub head_num: U1, // Test head number
-    pub site_grp: U1, // Site group number 255
+    #[default = 255]
+    pub site_grp: U1, // Site group number
     pub start_t: U4, // Date and time first part tested
     pub wafer_id: Cn, // Wafer ID length byte = 0
 }
@@ -435,12 +452,17 @@ pub struct WIR {
 #[derive(SmartDefault, Debug)]
 pub struct WRR {
     pub head_num: U1, // Test head number
+    #[default = 255]
     pub site_grp: U1, // Site group number
     pub finish_t: U4, // Date and time last part tested
     pub part_cnt: U4, // Number of parts tested
+    #[default = 4_294_967_295]
     pub rtst_cnt: U4, // Number of parts retested
+    #[default = 4_294_967_295]
     pub abrt_cnt: U4, // Number of aborts during testing
+    #[default = 4_294_967_295]
     pub good_cnt: U4, // Number of good (passed) parts tested
+    #[default = 4_294_967_295]
     pub func_cnt: U4, // Number of functional parts tested
     pub wafer_id: Cn, // Wafer ID
     pub fabwf_id: Cn, // Fab wafer ID
@@ -452,14 +474,23 @@ pub struct WRR {
 
 #[derive(SmartDefault, Debug)]
 pub struct WCR {
+    #[default = 0.0]
     pub wafr_siz: R4, // Diameter of wafer in WF_UNITS
+    #[default = 0.0]
     pub die_ht: R4, // Height of die in WF_UNITS
+    #[default = 0.0]
     pub die_wid: R4, // Width of die in WF_UNITS
+    #[default = 0]
     pub wf_units: U1, // Units for wafer and die dimensions
+    #[default = ' ']
     pub wf_flat: C1, // Orientation of wafer flat
+    #[default(-32768)]
     pub center_x: I2, // X coordinate of center die on wafer
+    #[default(-32768)]
     pub center_y: I2, // Y coordinate of center die on wafer
+    #[default = ' ']
     pub pos_x: C1, // Positive X direction of wafer
+    #[default = ' ']
     pub pos_y: C1, // Positive Y direction of wafer
 }
 
@@ -476,9 +507,13 @@ pub struct PRR {
     pub part_flg: B1, //Part information flag
     pub num_test: U2, //Number of tests executed
     pub hard_bin: U2, //Hardware bin number
+    #[default = 65535]
     pub soft_bin: U2, //Software bin number
+    #[default(-32768)]
     pub x_coord: I2, //(Wafer) X coordinate
+    #[default(-32768)]
     pub y_coord: I2, //(Wafer) Y coordinate
+    #[default = 0]
     pub test_t: U4, //Elapsed test time in milliseconds
     pub part_id: Cn, //Part identification
     pub part_txt: Cn, //Part description text
@@ -489,10 +524,14 @@ pub struct PRR {
 pub struct TSR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
+    #[default = ' ']
     pub test_typ: C1, // Test type
     pub test_num: U4, // Test number
+    #[default = 4_294_967_295]
     pub exec_cnt: U4, // Number of test executions
+    #[default = 4_294_967_295]
     pub fail_cnt: U4, // Number of test failures
+    #[default = 4_294_967_295]
     pub alrm_cnt: U4, // Number of alarmed tests
     pub test_nam: Cn, // Test name
     pub seq_name: Cn, // Sequencer (program segment/flow) name
@@ -588,6 +627,7 @@ pub struct FTR {
     pub alarm_id: Cn, // Name of alarm
     pub prog_txt: Cn, // Additional programmed information
     pub rslt_txt: Cn, // Additional result information
+    #[default = 255]
     pub patg_num: U1, // Pattern generator number
     pub spin_map: Dn, // Bit map of enabled comparators
 }
@@ -811,11 +851,18 @@ impl MIR {
         self.setup_t = read_u4(raw_data, pos, order);
         self.start_t = read_u4(raw_data, pos, order);
         self.stat_num = read_uint8(raw_data, pos);
-        self.mode_cod = read_uint8(raw_data, pos) as char;
-        self.rtst_cod = read_uint8(raw_data, pos) as char;
-        self.prot_cod = read_uint8(raw_data, pos) as char;
-        self.burn_tim = read_u2(raw_data, pos, order);
-        self.cmod_cod = read_uint8(raw_data, pos) as char;
+        // if raw_data is completely parsed, 
+        // don't overwrite fields with default data
+        if *pos < raw_data.len() {
+            self.mode_cod = read_uint8(raw_data, pos) as char;}
+        if *pos < raw_data.len() {
+            self.rtst_cod = read_uint8(raw_data, pos) as char;}
+        if *pos < raw_data.len() {
+            self.prot_cod = read_uint8(raw_data, pos) as char;}
+        if *pos + 2 <= raw_data.len() {
+            self.burn_tim = read_u2(raw_data, pos, order);}
+        if *pos < raw_data.len() {
+            self.cmod_cod = read_uint8(raw_data, pos) as char;}
         self.lot_id = read_cn(raw_data, pos);
         self.part_typ = read_cn(raw_data, pos);
         self.node_nam = read_cn(raw_data, pos);
@@ -858,7 +905,8 @@ impl MRR {
     pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.finish_t = read_u4(raw_data, pos, order);
-        self.disp_cod = read_uint8(raw_data, pos) as char;
+        if *pos < raw_data.len() {
+            self.disp_cod = read_uint8(raw_data, pos) as char;}
         self.usr_desc = read_cn(raw_data, pos);
         self.exc_desc = read_cn(raw_data, pos);
         self
@@ -875,10 +923,14 @@ impl PCR {
         self.head_num = read_uint8(raw_data, pos);
         self.site_num = read_uint8(raw_data, pos);
         self.part_cnt = read_u4(raw_data, pos, order);
-        self.rtst_cnt = read_u4(raw_data, pos, order);
-        self.abrt_cnt = read_u4(raw_data, pos, order);
-        self.good_cnt = read_u4(raw_data, pos, order);
-        self.func_cnt = read_u4(raw_data, pos, order);
+        if *pos + 4 <= raw_data.len() {
+            self.rtst_cnt = read_u4(raw_data, pos, order);}
+        if *pos + 4 <= raw_data.len() {
+            self.abrt_cnt = read_u4(raw_data, pos, order);}
+        if *pos + 4 <= raw_data.len() {
+            self.good_cnt = read_u4(raw_data, pos, order);}
+        if *pos + 4 <= raw_data.len() {
+            self.func_cnt = read_u4(raw_data, pos, order);}
         self
     }
 }
@@ -894,7 +946,8 @@ impl HBR {
         self.site_num = read_uint8(raw_data, pos);
         self.hbin_num = read_u2(raw_data, pos, order);
         self.hbin_cnt = read_u4(raw_data, pos, order);
-        self.hbin_pf = read_uint8(raw_data, pos) as char;
+        if *pos < raw_data.len() {
+            self.hbin_pf = read_uint8(raw_data, pos) as char;}
         self.hbin_nam = read_cn(raw_data, pos);
         self
 
@@ -912,7 +965,8 @@ impl SBR {
         self.site_num = read_uint8(raw_data, pos);
         self.sbin_num = read_u2(raw_data, pos, order);
         self.sbin_cnt = read_u4(raw_data, pos, order);
-        self.sbin_pf = read_uint8(raw_data, pos) as char;
+        if *pos < raw_data.len() {
+            self.sbin_pf = read_uint8(raw_data, pos) as char;}
         self.sbin_nam = read_cn(raw_data, pos);
         self
     }
@@ -926,15 +980,15 @@ impl PMR {
     pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.pmr_indx = read_u2(raw_data, pos, order);
-        self.chan_typ = read_u2(raw_data, pos, order);
+        if *pos + 2 <= raw_data.len() {
+            self.chan_typ = read_u2(raw_data, pos, order);}
         self.chan_nam = read_cn(raw_data, pos);
         self.phy_nam = read_cn(raw_data, pos);
         self.log_nam = read_cn(raw_data, pos);
-        // default value for head & site is 1
-        self.head_num = if *pos < raw_data.len() 
-            { read_uint8(raw_data, pos) } else { 1 };
-        self.site_num = if *pos < raw_data.len() 
-            { read_uint8(raw_data, pos) } else { 1 };
+        if *pos < raw_data.len() {
+            self.head_num = read_uint8(raw_data, pos)};
+        if *pos < raw_data.len() {
+            self.site_num = read_uint8(raw_data, pos)};
         self
     }
 }
@@ -1102,7 +1156,8 @@ impl CDR {
         self.m_clks = read_kx_u2(raw_data, pos, order, self.mstr_cnt as u16);
         self.slav_cnt = read_uint8(raw_data, pos);
         self.s_clks = read_kx_u2(raw_data, pos, order, self.slav_cnt as u16);
-        self.inv_val = read_uint8(raw_data, pos);
+        if *pos < raw_data.len() {
+            self.inv_val = read_uint8(raw_data, pos);}
         self.lst_cnt = read_u2(raw_data, pos, order);
         self.cell_lst = read_kx_sn(raw_data, pos, order, self.lst_cnt);
         self
@@ -1117,7 +1172,8 @@ impl WIR {
     pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.head_num = read_uint8(raw_data, pos);
-        self.site_grp = read_uint8(raw_data, pos);
+        if *pos < raw_data.len() {
+            self.site_grp = read_uint8(raw_data, pos);}
         self.start_t = read_u4(raw_data, pos, order);
         self.wafer_id = read_cn(raw_data, pos);
         self
@@ -1132,13 +1188,18 @@ impl WRR {
     pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
         let pos = &mut 0;
         self.head_num = read_uint8(raw_data, pos);
-        self.site_grp = read_uint8(raw_data, pos);
+        if *pos < raw_data.len() {
+            self.site_grp = read_uint8(raw_data, pos);}
         self.finish_t = read_u4(raw_data, pos, order);
         self.part_cnt = read_u4(raw_data, pos, order);
-        self.rtst_cnt = read_u4(raw_data, pos, order);
-        self.abrt_cnt = read_u4(raw_data, pos, order);
-        self.good_cnt = read_u4(raw_data, pos, order);
-        self.func_cnt = read_u4(raw_data, pos, order);
+        if *pos + 4 <= raw_data.len() {
+            self.rtst_cnt = read_u4(raw_data, pos, order);}
+        if *pos + 4 <= raw_data.len() {
+            self.abrt_cnt = read_u4(raw_data, pos, order);}
+        if *pos + 4 <= raw_data.len() {
+            self.good_cnt = read_u4(raw_data, pos, order);}
+        if *pos + 4 <= raw_data.len() {
+            self.func_cnt = read_u4(raw_data, pos, order);}
         self.wafer_id = read_cn(raw_data, pos);
         self.fabwf_id = read_cn(raw_data, pos);
         self.frame_id = read_cn(raw_data, pos);
@@ -1160,11 +1221,16 @@ impl WCR {
         self.die_ht = read_r4(raw_data, pos, order);
         self.die_wid = read_r4(raw_data, pos, order);
         self.wf_units = read_uint8(raw_data, pos);
-        self.wf_flat = read_uint8(raw_data, pos) as char;
-        self.center_x = read_i2(raw_data, pos, order);
-        self.center_y = read_i2(raw_data, pos, order);
-        self.pos_x = read_uint8(raw_data, pos) as char;
-        self.pos_y = read_uint8(raw_data, pos) as char;
+        if *pos < raw_data.len() {
+            self.wf_flat = read_uint8(raw_data, pos) as char;}
+        if *pos + 2 <= raw_data.len() {
+            self.center_x = read_i2(raw_data, pos, order);}
+        if *pos + 2 <= raw_data.len() {
+            self.center_y = read_i2(raw_data, pos, order);}
+        if *pos < raw_data.len() {
+            self.pos_x = read_uint8(raw_data, pos) as char;}
+        if *pos < raw_data.len() {
+            self.pos_y = read_uint8(raw_data, pos) as char;}
         self
     }
 }
@@ -1194,10 +1260,14 @@ impl PRR {
         self.part_flg = [read_uint8(raw_data, pos)];
         self.num_test = read_u2(raw_data, pos, order);
         self.hard_bin = read_u2(raw_data, pos, order);
-        self.soft_bin = read_u2(raw_data, pos, order);
-        self.x_coord = read_i2(raw_data, pos, order);
-        self.y_coord = read_i2(raw_data, pos, order);
-        self.test_t = read_u4(raw_data, pos, order);
+        if *pos + 2 <= raw_data.len() {
+            self.soft_bin = read_u2(raw_data, pos, order);}
+        if *pos + 2 <= raw_data.len() {
+            self.x_coord = read_i2(raw_data, pos, order);}
+        if *pos + 2 <= raw_data.len() {
+            self.y_coord = read_i2(raw_data, pos, order);}
+        if *pos + 4 <= raw_data.len() {
+            self.test_t = read_u4(raw_data, pos, order);}
         self.part_id = read_cn(raw_data, pos);
         self.part_txt = read_cn(raw_data, pos);
         self.part_fix = read_bn(raw_data, pos);
@@ -1214,11 +1284,15 @@ impl TSR {
         let pos = &mut 0;
         self.head_num = read_uint8(raw_data, pos);
         self.site_num = read_uint8(raw_data, pos);
-        self.test_typ = read_uint8(raw_data, pos) as char;
+        if *pos < raw_data.len() {
+            self.test_typ = read_uint8(raw_data, pos) as char;}
         self.test_num = read_u4(raw_data, pos, order);
-        self.exec_cnt = read_u4(raw_data, pos, order);
-        self.fail_cnt = read_u4(raw_data, pos, order);
-        self.alrm_cnt = read_u4(raw_data, pos, order);
+        if *pos + 4 <= raw_data.len() {
+            self.exec_cnt = read_u4(raw_data, pos, order);}
+        if *pos + 4 <= raw_data.len() {
+            self.fail_cnt = read_u4(raw_data, pos, order);}
+        if *pos + 4 <= raw_data.len() {
+            self.alrm_cnt = read_u4(raw_data, pos, order);}
         self.test_nam = read_cn(raw_data, pos);
         self.seq_name = read_cn(raw_data, pos);
         self.test_lbl = read_cn(raw_data, pos);
@@ -1334,7 +1408,8 @@ impl FTR {
         self.alarm_id = read_cn(raw_data, pos);
         self.prog_txt = read_cn(raw_data, pos);
         self.rslt_txt = read_cn(raw_data, pos);
-        self.patg_num = read_uint8(raw_data, pos);  // default 255
+        if *pos < raw_data.len() {
+            self.patg_num = read_uint8(raw_data, pos);}
         self.spin_map = read_dn(raw_data, pos, order);
         self
     }
