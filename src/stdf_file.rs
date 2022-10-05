@@ -9,15 +9,12 @@
 // Copyright (c) 2022 noonchen
 //
 
-
 use crate::stdf_error::StdfError;
 use crate::stdf_types::*;
+use flate2::bufread::GzDecoder;
 use std::fs;
-use std::io::{self, BufReader, SeekFrom};     // struct or enum
-use std::io::{Read, Seek, BufRead};     // trait
-use flate2::{bufread::GzDecoder, };
-
-
+use std::io::{self, BufReader, SeekFrom}; // struct or enum
+use std::io::{BufRead, Read, Seek}; // trait
 
 type StreamT = StdfStream<BufReader<fs::File>>;
 
@@ -33,8 +30,8 @@ pub struct StdfReader {
     stream: StreamT,
 }
 
-pub struct RecordIter<'a> { 
-    inner: &'a mut StdfReader
+pub struct RecordIter<'a> {
+    inner: &'a mut StdfReader,
 }
 
 // implementations
@@ -42,20 +39,19 @@ pub struct RecordIter<'a> {
 impl StdfReader {
     pub fn new(path: &str) -> Result<Self, StdfError> {
         // determine the compress type by file extension
-        let compress_type = 
-            if path.ends_with(".gz") {
-                CompressType::GzipCompressed
-            } else if path.ends_with(".bz2") {
-                CompressType::BzipCompressed
-            } else if path.ends_with(".zip") {
-                CompressType::ZipCompressed
-            } else {
-                CompressType::Uncompressed
-            };
-        
+        let compress_type = if path.ends_with(".gz") {
+            CompressType::GzipCompressed
+        } else if path.ends_with(".bz2") {
+            CompressType::BzipCompressed
+        } else if path.ends_with(".zip") {
+            CompressType::ZipCompressed
+        } else {
+            CompressType::Uncompressed
+        };
+
         let fp = fs::OpenOptions::new().read(true).open(path)?;
-        let br = BufReader::with_capacity(2<<20, fp);
-    
+        let br = BufReader::with_capacity(2 << 20, fp);
+
         let mut stream = match compress_type {
             CompressType::GzipCompressed => StdfStream::GzStream(GzDecoder::new(br)),
             _ => StdfStream::BinaryStream(br),
@@ -69,33 +65,43 @@ impl StdfReader {
         let endianness = match far_header.len {
             2 => Ok(ByteOrder::LittleEndian),
             512 => Ok(ByteOrder::BigEndian),
-            _ => Err(StdfError {code: 1, msg: String::from("Cannot determine endianness")})
+            _ => Err(StdfError {
+                code: 1,
+                msg: String::from("Cannot determine endianness"),
+            }),
         }?;
         // check if it's FAR
         if (far_header.typ, far_header.sub) != (0, 10) {
-            return Err(StdfError {code: 1, msg: format!("FAR header (0, 10) expected, but {:?} is found", (far_header.typ, far_header.sub)) })
+            return Err(StdfError {
+                code: 1,
+                msg: format!(
+                    "FAR header (0, 10) expected, but {:?} is found",
+                    (far_header.typ, far_header.sub)
+                ),
+            });
         }
         // restore file position
         // current flate2 does not support fseek, we need to consume
         // old stream and create a new one.
         // If seek is supported, this function can be replaced by:
-        // 
+        //
         // stream.seek(SeekFrom::Start(0))?;
-        //        
+        //
         stream = StdfReader::rewind_stream_position(stream)?;
 
-        Ok(StdfReader{
+        Ok(StdfReader {
             file_path: String::from(path),
             endianness,
-            stream})
+            stream,
+        })
     }
 
     fn rewind_stream_position(old_stream: StreamT) -> Result<StreamT, StdfError> {
         let new_stream = match old_stream {
-            StdfStream::BinaryStream(mut br) => { 
+            StdfStream::BinaryStream(mut br) => {
                 br.seek(SeekFrom::Start(0))?;
                 StdfStream::BinaryStream(br)
-            },
+            }
             StdfStream::GzStream(gzr) => {
                 // get the inner handle and create a new stream after seek
                 let mut fp = gzr.into_inner();
@@ -105,7 +111,7 @@ impl StdfReader {
         };
         Ok(new_stream)
     }
-    
+
     fn read_header(&mut self) -> Result<RecordHeader, StdfError> {
         let mut buf = [0u8; 4];
         self.stream.read_exact(&mut buf)?;
@@ -118,7 +124,6 @@ impl StdfReader {
     }
 }
 
-
 impl<R: BufRead> Read for StdfStream<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
@@ -127,7 +132,6 @@ impl<R: BufRead> Read for StdfStream<R> {
         }
     }
 }
-
 
 impl<R: Seek> Seek for StdfStream<R> {
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
@@ -138,7 +142,6 @@ impl<R: Seek> Seek for StdfStream<R> {
         }
     }
 }
-
 
 impl Iterator for RecordIter<'_> {
     type Item = StdfRecord;

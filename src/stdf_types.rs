@@ -9,12 +9,10 @@
 // Copyright (c) 2022 noonchen
 //
 
-
 use crate::stdf_error::StdfError;
-extern crate smart_default;
 extern crate chrono;
+extern crate smart_default;
 use smart_default::SmartDefault;
-
 
 // Common Type
 #[derive(Debug)]
@@ -39,12 +37,11 @@ pub struct RecordHeader {
     pub type_code: u64,
 }
 
-
 // Data Types
 
 // Altough B1 can be treated as u8, but its representation
 // in ATDF is differ from U1, so I used a array of one u8 for B1
-pub type B1 = [u8;1];
+pub type B1 = [u8; 1];
 // Rust char is 4 bytes long, however STDF char is only 1 byte
 // we will read u8 from file stream and convert to Rust char during parse step
 pub type C1 = char;
@@ -52,7 +49,7 @@ pub type U1 = u8;
 pub type U2 = u16;
 pub type U4 = u32;
 pub type U8 = u64;
-pub type I1 = i8; 
+pub type I1 = i8;
 pub type I2 = i16;
 pub type I4 = i32;
 pub type R4 = f32;
@@ -94,71 +91,70 @@ pub enum KxUf {
 
 #[derive(Clone, Debug)]
 pub enum V1 {
-	B0,
-	U1(U1),
-	U2(U2),
-	U4(U4),
-	I1(I1),
-	I2(I2),
-	I4(I4),
-	R4(R4),
-	R8(R8),
-	Cn(Cn),
-	Bn(Bn),
-	Dn(Dn),
-	N1(U1),
+    B0,
+    U1(U1),
+    U2(U2),
+    U4(U4),
+    I1(I1),
+    I2(I2),
+    I4(I4),
+    R4(R4),
+    R8(R8),
+    Cn(Cn),
+    Bn(Bn),
+    Dn(Dn),
+    N1(U1),
     Invalid,
 }
 
 pub type Vn = Vec<V1>;
 
-
 // Record Types
 pub mod stdf_record_type {
     // rec type 0
     pub const REC_FAR: u64 = 1;
-    pub const REC_ATR: u64 = 1<<1;
-    pub const REC_VUR: u64 = 1<<2;
+    pub const REC_ATR: u64 = 1 << 1;
+    pub const REC_VUR: u64 = 1 << 2;
     // rec type 1
-    pub const REC_MIR: u64 = 1<<3;
-    pub const REC_MRR: u64 = 1<<4;
-    pub const REC_PCR: u64 = 1<<5;
-    pub const REC_HBR: u64 = 1<<6;
-    pub const REC_SBR: u64 = 1<<7;
-    pub const REC_PMR: u64 = 1<<8;
-    pub const REC_PGR: u64 = 1<<9;
-    pub const REC_PLR: u64 = 1<<10;
-    pub const REC_RDR: u64 = 1<<11;
-    pub const REC_SDR: u64 = 1<<12;
-    pub const REC_PSR: u64 = 1<<13;
-    pub const REC_NMR: u64 = 1<<14;
-    pub const REC_CNR: u64 = 1<<15;
-    pub const REC_SSR: u64 = 1<<16;
-    pub const REC_CDR: u64 = 1<<17;
+    pub const REC_MIR: u64 = 1 << 3;
+    pub const REC_MRR: u64 = 1 << 4;
+    pub const REC_PCR: u64 = 1 << 5;
+    pub const REC_HBR: u64 = 1 << 6;
+    pub const REC_SBR: u64 = 1 << 7;
+    pub const REC_PMR: u64 = 1 << 8;
+    pub const REC_PGR: u64 = 1 << 9;
+    pub const REC_PLR: u64 = 1 << 10;
+    pub const REC_RDR: u64 = 1 << 11;
+    pub const REC_SDR: u64 = 1 << 12;
+    pub const REC_PSR: u64 = 1 << 13;
+    pub const REC_NMR: u64 = 1 << 14;
+    pub const REC_CNR: u64 = 1 << 15;
+    pub const REC_SSR: u64 = 1 << 16;
+    pub const REC_CDR: u64 = 1 << 17;
     // rec type 2
-    pub const REC_WIR: u64 = 1<<18;
-    pub const REC_WRR: u64 = 1<<19;
-    pub const REC_WCR: u64 = 1<<20;
+    pub const REC_WIR: u64 = 1 << 18;
+    pub const REC_WRR: u64 = 1 << 19;
+    pub const REC_WCR: u64 = 1 << 20;
     // rec type 5
-    pub const REC_PIR: u64 = 1<<21;
-    pub const REC_PRR: u64 = 1<<22;
+    pub const REC_PIR: u64 = 1 << 21;
+    pub const REC_PRR: u64 = 1 << 22;
     // rec type 10
-    pub const REC_TSR: u64 = 1<<23;
+    pub const REC_TSR: u64 = 1 << 23;
     // rec type 15
-    pub const REC_PTR: u64 = 1<<24;
-    pub const REC_MPR: u64 = 1<<25;
-    pub const REC_FTR: u64 = 1<<26;
-    pub const REC_STR: u64 = 1<<27;
+    pub const REC_PTR: u64 = 1 << 24;
+    pub const REC_MPR: u64 = 1 << 25;
+    pub const REC_FTR: u64 = 1 << 26;
+    pub const REC_STR: u64 = 1 << 27;
     // rec type 20
-    pub const REC_BPS: u64 = 1<<28;
-    pub const REC_EPS: u64 = 1<<29;
+    pub const REC_BPS: u64 = 1 << 28;
+    pub const REC_EPS: u64 = 1 << 29;
     // rec type 50
-    pub const REC_GDR: u64 = 1<<30;
-    pub const REC_DTR: u64 = 1<<31;
+    pub const REC_GDR: u64 = 1 << 30;
+    pub const REC_DTR: u64 = 1 << 31;
     // rec type 180: Reserved
     // rec type 181: Reserved
-    pub const REC_RESERVE: u64 = 1<<32;
-    pub const REC_INVALID: u64 = 1<<33;
+    pub const REC_RESERVE: u64 = 1 << 32;
+    pub const REC_INVALID: u64 = 1 << 33;
 }
 
 #[derive(Debug)]
@@ -211,13 +207,13 @@ pub enum StdfRecord {
 
 #[derive(SmartDefault, Debug)]
 pub struct FAR {
-    pub cpu_type: U1,  // CPU type that wrote this file
-    pub stdf_ver: U1,  // STDF version number
+    pub cpu_type: U1, // CPU type that wrote this file
+    pub stdf_ver: U1, // STDF version number
 }
 
 #[derive(SmartDefault, Debug)]
 pub struct ATR {
-    pub mod_tim: U4, //Date and time of STDF file modification
+    pub mod_tim: U4,  //Date and time of STDF file modification
     pub cmd_line: Cn, //Command line of program
 }
 
@@ -228,8 +224,8 @@ pub struct VUR {
 
 #[derive(SmartDefault, Debug)]
 pub struct MIR {
-    pub setup_t: U4, // Date and time of job setup
-    pub start_t: U4, // Date and time first part tested
+    pub setup_t: U4,  // Date and time of job setup
+    pub start_t: U4,  // Date and time first part tested
     pub stat_num: U1, // Tester station number
     #[default = ' ']
     pub mode_cod: C1, // Test mode code (e.g. prod, dev)
@@ -241,12 +237,12 @@ pub struct MIR {
     pub burn_tim: U2, // Burn-in time (in minutes)
     #[default = ' ']
     pub cmod_cod: C1, // Command mode code
-    pub lot_id: Cn, // Lot ID (customer specified)
+    pub lot_id: Cn,   // Lot ID (customer specified)
     pub part_typ: Cn, // Part Type (or product ID)
     pub node_nam: Cn, // Name of node that generated data
     pub tstr_typ: Cn, // Tester type
-    pub job_nam: Cn, // Job name (test program name)
-    pub job_rev: Cn, // Job (test program) revision number
+    pub job_nam: Cn,  // Job name (test program name)
+    pub job_rev: Cn,  // Job (test program) revision number
     pub sblot_id: Cn, // Sublot ID
     pub oper_nam: Cn, // Operator name or ID (at setup time)
     pub exec_typ: Cn, // Tester executive software type
@@ -255,20 +251,20 @@ pub struct MIR {
     pub tst_temp: Cn, // Test temperature
     pub user_txt: Cn, // Generic user text
     pub aux_file: Cn, // Name of auxiliary data file
-    pub pkg_typ: Cn, // Package type
+    pub pkg_typ: Cn,  // Package type
     pub famly_id: Cn, // Product family ID
     pub date_cod: Cn, // Date code
     pub facil_id: Cn, // Test facility ID
     pub floor_id: Cn, // Test floor ID
-    pub proc_id: Cn, // Fabrication process ID
+    pub proc_id: Cn,  // Fabrication process ID
     pub oper_frq: Cn, // Operation frequency or step
     pub spec_nam: Cn, // Test specification name
     pub spec_ver: Cn, // Test specification version number
-    pub flow_id: Cn, // Test flow ID
+    pub flow_id: Cn,  // Test flow ID
     pub setup_id: Cn, // Test setup ID
     pub dsgn_rev: Cn, // Device design revision
-    pub eng_id: Cn, // Engineering lot ID
-    pub rom_cod: Cn, // ROM code ID
+    pub eng_id: Cn,   // Engineering lot ID
+    pub rom_cod: Cn,  // ROM code ID
     pub serl_num: Cn, // Tester serial number
     pub supr_nam: Cn, // Supervisor name or ID
 }
@@ -325,8 +321,8 @@ pub struct PMR {
     #[default = 0]
     pub chan_typ: U2, // Channel type
     pub chan_nam: Cn, // Channel name
-    pub phy_nam: Cn, // Physical name of pin
-    pub log_nam: Cn, // Logical name of pin
+    pub phy_nam: Cn,  // Physical name of pin
+    pub log_nam: Cn,  // Logical name of pin
     #[default = 1]
     pub head_num: U1, // Head number associated with channel
     #[default = 1]
@@ -335,15 +331,15 @@ pub struct PMR {
 
 #[derive(SmartDefault, Debug)]
 pub struct PGR {
-    pub grp_indx: U2, // Unique index associated with pin group
-    pub grp_nam: Cn, // Name of pin group
-    pub indx_cnt: U2, // Count of PMR indexes
+    pub grp_indx: U2,   // Unique index associated with pin group
+    pub grp_nam: Cn,    // Name of pin group
+    pub indx_cnt: U2,   // Count of PMR indexes
     pub pmr_indx: KxU2, // Array of indexes for pins in the group
 }
 
 #[derive(SmartDefault, Debug)]
 pub struct PLR {
-    pub grp_cnt: U2, // Count (k) of pins or pin groups
+    pub grp_cnt: U2,    // Count (k) of pins or pin groups
     pub grp_indx: KxU2, // Array of pin or pin group indexes
     pub grp_mode: KxU2, // Operating mode of pin group
     pub grp_radx: KxU1, // Display radix of pin group
@@ -355,39 +351,39 @@ pub struct PLR {
 
 #[derive(SmartDefault, Debug)]
 pub struct RDR {
-    pub num_bins: U2, // Number (k) of bins being retested
+    pub num_bins: U2,   // Number (k) of bins being retested
     pub rtst_bin: KxU2, // Array of retest bin numbers
 }
 
 #[derive(SmartDefault, Debug)]
 pub struct SDR {
-    pub head_num: U1, // Test head number
-    pub site_grp: U1, // Site group number
-    pub site_cnt: U1, // Number (k) of test sites in site group
+    pub head_num: U1,   // Test head number
+    pub site_grp: U1,   // Site group number
+    pub site_cnt: U1,   // Number (k) of test sites in site group
     pub site_num: KxU1, // Array of test site numbers
-    pub hand_typ: Cn, // Handler or prober type
-    pub hand_id: Cn, // Handler or prober ID
-    pub card_typ: Cn, // Probe card type
-    pub card_id: Cn, // Probe card ID
-    pub load_typ: Cn, // Load board type
-    pub load_id: Cn, // Load board ID
-    pub dib_typ: Cn, // DIB board type
-    pub dib_id: Cn, // DIB board ID
-    pub cabl_typ: Cn, // Interface cable type
-    pub cabl_id: Cn, // Interface cable ID
-    pub cont_typ: Cn, // Handler contactor type
-    pub cont_id: Cn, // Handler contactor ID
-    pub lasr_typ: Cn, // Laser type
-    pub lasr_id: Cn, // Laser ID
-    pub extr_typ: Cn, // Extra equipment type field
-    pub extr_id: Cn, // Extra equipment ID
+    pub hand_typ: Cn,   // Handler or prober type
+    pub hand_id: Cn,    // Handler or prober ID
+    pub card_typ: Cn,   // Probe card type
+    pub card_id: Cn,    // Probe card ID
+    pub load_typ: Cn,   // Load board type
+    pub load_id: Cn,    // Load board ID
+    pub dib_typ: Cn,    // DIB board type
+    pub dib_id: Cn,     // DIB board ID
+    pub cabl_typ: Cn,   // Interface cable type
+    pub cabl_id: Cn,    // Interface cable ID
+    pub cont_typ: Cn,   // Handler contactor type
+    pub cont_id: Cn,    // Handler contactor ID
+    pub lasr_typ: Cn,   // Laser type
+    pub lasr_id: Cn,    // Laser ID
+    pub extr_typ: Cn,   // Extra equipment type field
+    pub extr_id: Cn,    // Extra equipment ID
 }
 
 #[derive(SmartDefault, Debug)]
 pub struct PSR {
-    pub cont_flg: B1, // Continuation PSR record exist
-    pub psr_indx: U2, // PSR Record Index (used by STR records)
-    pub psr_nam: Cn, // Symbolic name of PSR record
+    pub cont_flg: B1,   // Continuation PSR record exist
+    pub psr_indx: U2,   // PSR Record Index (used by STR records)
+    pub psr_nam: Cn,    // Symbolic name of PSR record
     pub opt_flg: B1, // Contains PAT_LBL, FILE_UID, ATPG_DSC, and SRC_ID field missing flag bits and flag for start index for first cycle number.
     pub totp_cnt: U2, // Count of total pattern file information sets in the complete PSR data set
     pub locp_cnt: U2, // Count (k) of pattern file information sets in this record
@@ -402,24 +398,24 @@ pub struct PSR {
 
 #[derive(SmartDefault, Debug)]
 pub struct NMR {
-    pub cont_flg: B1, // Continuation NMR record follows if not 0
-    pub totm_cnt: U2, // Count of PMR indexes and ATPG_NAM entries
-    pub locm_cnt: U2, // Count of (k) PMR indexes and ATPG_NAM entries in this record
+    pub cont_flg: B1,   // Continuation NMR record follows if not 0
+    pub totm_cnt: U2,   // Count of PMR indexes and ATPG_NAM entries
+    pub locm_cnt: U2,   // Count of (k) PMR indexes and ATPG_NAM entries in this record
     pub pmr_indx: KxU2, // Array of PMR indexes
     pub atpg_nam: KxCn, // Array of ATPG signal names
 }
 
 #[derive(SmartDefault, Debug)]
 pub struct CNR {
-    pub chn_num: U2, // Chain number. Referenced by the CHN_NUM array in an STR record
-    pub bit_pos: U4, // Bit position in the chain
+    pub chn_num: U2,  // Chain number. Referenced by the CHN_NUM array in an STR record
+    pub bit_pos: U4,  // Bit position in the chain
     pub cell_nam: Sn, // Scan Cell Name
 }
 
 #[derive(SmartDefault, Debug)]
 pub struct SSR {
-    pub ssr_nam: Cn, // Name of the STIL Scan pub structure for reference
-    pub chn_cnt: U2, // Count (k) of number of Chains listed in CHN_LIST
+    pub ssr_nam: Cn,    // Name of the STIL Scan pub structure for reference
+    pub chn_cnt: U2,    // Count (k) of number of Chains listed in CHN_LIST
     pub chn_list: KxU2, // Array of CDR Indexes
 }
 
@@ -427,9 +423,9 @@ pub struct SSR {
 pub struct CDR {
     pub cont_flg: B1, // Continuation CDR record follows if not 0
     pub cdr_indx: U2, // SCR Index
-    pub chn_nam: Cn, // Chain Name
-    pub chn_len: U4, // Chain Length (# of scan cells in chain)
-    pub sin_pin: U2, // PMR index of the chain's Scan In Signal
+    pub chn_nam: Cn,  // Chain Name
+    pub chn_len: U4,  // Chain Length (# of scan cells in chain)
+    pub sin_pin: U2,  // PMR index of the chain's Scan In Signal
     pub sout_pin: U2, // PMR index of the chain's Scan Out Signal
     pub mstr_cnt: U1, // Count (m) of master clock pins specified for this scan chain
     pub m_clks: KxU2, // Array of PMR indexes for the master clocks assigned to this chain
@@ -437,7 +433,7 @@ pub struct CDR {
     pub s_clks: KxU2, // Array of PMR indexes for the slave clocks assigned to this chain
     #[default = 255]
     pub inv_val: U1, // 0: No Inversion, 1: Inversion
-    pub lst_cnt: U2, // Count (k) of scan cells listed in this record
+    pub lst_cnt: U2,  // Count (k) of scan cells listed in this record
     pub cell_lst: KxSn, // Array of Scan Cell Names
 }
 
@@ -446,7 +442,7 @@ pub struct WIR {
     pub head_num: U1, // Test head number
     #[default = 255]
     pub site_grp: U1, // Site group number
-    pub start_t: U4, // Date and time first part tested
+    pub start_t: U4,  // Date and time first part tested
     pub wafer_id: Cn, // Wafer ID length byte = 0
 }
 
@@ -468,7 +464,7 @@ pub struct WRR {
     pub wafer_id: Cn, // Wafer ID
     pub fabwf_id: Cn, // Fab wafer ID
     pub frame_id: Cn, // Wafer frame ID
-    pub mask_id: Cn, // Wafer mask ID
+    pub mask_id: Cn,  // Wafer mask ID
     pub usr_desc: Cn, // Wafer description supplied by user
     pub exc_desc: Cn, // Wafer description supplied by exec
 }
@@ -516,7 +512,7 @@ pub struct PRR {
     pub y_coord: I2, //(Wafer) Y coordinate
     #[default = 0]
     pub test_t: U4, //Elapsed test time in milliseconds
-    pub part_id: Cn, //Part identification
+    pub part_id: Cn,  //Part identification
     pub part_txt: Cn, //Part description text
     pub part_fix: Bn, //Part repair information
 }
@@ -552,7 +548,7 @@ pub struct PTR {
     pub site_num: U1, // Test site number
     pub test_flg: B1, // Test flags (fail, alarm, etc.)
     pub parm_flg: B1, // Parametric test flags (drift, etc.)
-    pub result: R4, // Test result
+    pub result: R4,   // Test result
     pub test_txt: Cn, // Test description text or label
     pub alarm_id: Cn, // Name of alarm
     pub opt_flag: B1, // Optional data flag
@@ -561,138 +557,138 @@ pub struct PTR {
     pub hlm_scal: I1, // High limit scaling exponent
     pub lo_limit: R4, // Low test limit value
     pub hi_limit: R4, // High test limit value
-    pub units: Cn, // Test units
+    pub units: Cn,    // Test units
     pub c_resfmt: Cn, // ANSI C result format string
     pub c_llmfmt: Cn, // ANSI C low limit format string
     pub c_hlmfmt: Cn, // ANSI C high limit format string
-    pub lo_spec: R4, // Low specification limit value
-    pub hi_spec: R4, // High specification limit value
+    pub lo_spec: R4,  // Low specification limit value
+    pub hi_spec: R4,  // High specification limit value
 }
 
 #[derive(SmartDefault, Debug)]
 pub struct MPR {
-    pub test_num: U4, // Test number
-    pub head_num: U1, // Test head number
-    pub site_num: U1, // Test site number
-    pub test_flg: B1, // Test flags (fail, alarm, etc.)
-    pub parm_flg: B1, // Parametric test flags (drift, etc.)
-    pub rtn_icnt: U2, // Count of PMR indexes
-    pub rslt_cnt: U2, // Count of returned results
+    pub test_num: U4,   // Test number
+    pub head_num: U1,   // Test head number
+    pub site_num: U1,   // Test site number
+    pub test_flg: B1,   // Test flags (fail, alarm, etc.)
+    pub parm_flg: B1,   // Parametric test flags (drift, etc.)
+    pub rtn_icnt: U2,   // Count of PMR indexes
+    pub rslt_cnt: U2,   // Count of returned results
     pub rtn_stat: KxN1, // Array of returned states
     pub rtn_rslt: KxR4, // Array of returned results
-    pub test_txt: Cn, // Descriptive text or label
-    pub alarm_id: Cn, // Name of alarm
-    pub opt_flag: B1, // Optional data flag
-    pub res_scal: I1, // Test result scaling exponent
-    pub llm_scal: I1, // Test low limit scaling exponent
-    pub hlm_scal: I1, // Test high limit scaling exponent
-    pub lo_limit: R4, // Test low limit value
-    pub hi_limit: R4, // Test high limit value
-    pub start_in: R4, // Starting input value (condition)
-    pub incr_in: R4, // Increment of input condition
+    pub test_txt: Cn,   // Descriptive text or label
+    pub alarm_id: Cn,   // Name of alarm
+    pub opt_flag: B1,   // Optional data flag
+    pub res_scal: I1,   // Test result scaling exponent
+    pub llm_scal: I1,   // Test low limit scaling exponent
+    pub hlm_scal: I1,   // Test high limit scaling exponent
+    pub lo_limit: R4,   // Test low limit value
+    pub hi_limit: R4,   // Test high limit value
+    pub start_in: R4,   // Starting input value (condition)
+    pub incr_in: R4,    // Increment of input condition
     pub rtn_indx: KxU2, // Array of PMR indexes
-    pub units: Cn, // Units of returned results
-    pub units_in: Cn, // Input condition units
-    pub c_resfmt: Cn, // ANSI C result format string
-    pub c_llmfmt: Cn, // ANSI C low limit format string
-    pub c_hlmfmt: Cn, // ANSI C high limit format string
-    pub lo_spec: R4, // Low specification limit value
-    pub hi_spec: R4, // High specification limit value
+    pub units: Cn,      // Units of returned results
+    pub units_in: Cn,   // Input condition units
+    pub c_resfmt: Cn,   // ANSI C result format string
+    pub c_llmfmt: Cn,   // ANSI C low limit format string
+    pub c_hlmfmt: Cn,   // ANSI C high limit format string
+    pub lo_spec: R4,    // Low specification limit value
+    pub hi_spec: R4,    // High specification limit value
 }
 
 #[derive(SmartDefault, Debug)]
 pub struct FTR {
-    pub test_num: U4, // Test number
-    pub head_num: U1, // Test head number
-    pub site_num: U1, // Test site number
-    pub test_flg: B1, // Test flags (fail, alarm, etc.)
-    pub opt_flag: B1, // Optional data flag
-    pub cycl_cnt: U4, // Cycle count of vector
-    pub rel_vadr: U4, // Relative vector address
-    pub rept_cnt: U4, // Repeat count of vector
-    pub num_fail: U4, // Number of pins with 1 or more failures
-    pub xfail_ad: I4, // X logical device failure address
-    pub yfail_ad: I4, // Y logical device failure address
-    pub vect_off: I2, // Offset from vector of interest
-    pub rtn_icnt: U2, // Count j of return data PMR indexes
-    pub pgm_icnt: U2, // Count k of programmed state indexes
+    pub test_num: U4,   // Test number
+    pub head_num: U1,   // Test head number
+    pub site_num: U1,   // Test site number
+    pub test_flg: B1,   // Test flags (fail, alarm, etc.)
+    pub opt_flag: B1,   // Optional data flag
+    pub cycl_cnt: U4,   // Cycle count of vector
+    pub rel_vadr: U4,   // Relative vector address
+    pub rept_cnt: U4,   // Repeat count of vector
+    pub num_fail: U4,   // Number of pins with 1 or more failures
+    pub xfail_ad: I4,   // X logical device failure address
+    pub yfail_ad: I4,   // Y logical device failure address
+    pub vect_off: I2,   // Offset from vector of interest
+    pub rtn_icnt: U2,   // Count j of return data PMR indexes
+    pub pgm_icnt: U2,   // Count k of programmed state indexes
     pub rtn_indx: KxU2, // Array j of return data PMR indexes
     pub rtn_stat: KxN1, // Array j of returned states
     pub pgm_indx: KxU2, // Array k of programmed state indexes
     pub pgm_stat: KxN1, // Array k of programmed states
-    pub fail_pin: Dn, // Failing pin bitfield
-    pub vect_nam: Cn, // Vector module pattern name
-    pub time_set: Cn, // Time set name
-    pub op_code: Cn, // Vector Op Code
-    pub test_txt: Cn, // Descriptive text or label
-    pub alarm_id: Cn, // Name of alarm
-    pub prog_txt: Cn, // Additional programmed information
-    pub rslt_txt: Cn, // Additional result information
+    pub fail_pin: Dn,   // Failing pin bitfield
+    pub vect_nam: Cn,   // Vector module pattern name
+    pub time_set: Cn,   // Time set name
+    pub op_code: Cn,    // Vector Op Code
+    pub test_txt: Cn,   // Descriptive text or label
+    pub alarm_id: Cn,   // Name of alarm
+    pub prog_txt: Cn,   // Additional programmed information
+    pub rslt_txt: Cn,   // Additional result information
     #[default = 255]
     pub patg_num: U1, // Pattern generator number
-    pub spin_map: Dn, // Bit map of enabled comparators
+    pub spin_map: Dn,   // Bit map of enabled comparators
 }
 
 #[derive(SmartDefault, Debug)]
 pub struct STR {
-    pub cont_flg: B1, // Continuation STR follows if not 0
-    pub test_num: U4, // Test number
-    pub head_num: U1, // Test head number
-    pub site_num: U1, // Test site number
-    pub psr_ref: U2, // PSR Index (Pattern Sequence Record)
-    pub test_flg: B1, // Test flags (fail, alarm, etc.)
-    pub log_typ: Cn, // User defined description of datalog
-    pub test_txt: Cn, // Descriptive text or label
-    pub alarm_id: Cn, // Name of alarm
-    pub prog_txt: Cn, // Additional Programmed information
-    pub rslt_txt: Cn, // Additional result information
-    pub z_val: U1, // Z Handling Flag
-    pub fmu_flg: B1, // MASK_MAP & FAL_MAP field status & Pattern Changed flag
-    pub mask_map: Dn, // Bit map of Globally Masked Pins
-    pub fal_map: Dn, // Bit map of failures after buffer full
-    pub cyc_cnt_t: U8, // Total cycles executed in test
-    pub totf_cnt: U4, // Total failures (pin x cycle) detected in test execution
-    pub totl_cnt: U4, // Total fails logged across the complete STR data set
-    pub cyc_base: U8, // Cycle offset to apply for the values in the CYCL_NUM array
-    pub bit_base: U4, // Offset to apply for the values in the BIT_POS array
+    pub cont_flg: B1,   // Continuation STR follows if not 0
+    pub test_num: U4,   // Test number
+    pub head_num: U1,   // Test head number
+    pub site_num: U1,   // Test site number
+    pub psr_ref: U2,    // PSR Index (Pattern Sequence Record)
+    pub test_flg: B1,   // Test flags (fail, alarm, etc.)
+    pub log_typ: Cn,    // User defined description of datalog
+    pub test_txt: Cn,   // Descriptive text or label
+    pub alarm_id: Cn,   // Name of alarm
+    pub prog_txt: Cn,   // Additional Programmed information
+    pub rslt_txt: Cn,   // Additional result information
+    pub z_val: U1,      // Z Handling Flag
+    pub fmu_flg: B1,    // MASK_MAP & FAL_MAP field status & Pattern Changed flag
+    pub mask_map: Dn,   // Bit map of Globally Masked Pins
+    pub fal_map: Dn,    // Bit map of failures after buffer full
+    pub cyc_cnt_t: U8,  // Total cycles executed in test
+    pub totf_cnt: U4,   // Total failures (pin x cycle) detected in test execution
+    pub totl_cnt: U4,   // Total fails logged across the complete STR data set
+    pub cyc_base: U8,   // Cycle offset to apply for the values in the CYCL_NUM array
+    pub bit_base: U4,   // Offset to apply for the values in the BIT_POS array
     pub cond_cnt: U2, // Count (g) of Test Conditions and optional data specifications in present record
-    pub lim_cnt: U2, // Count (j) of LIM Arrays in present record, 1 for global specification
+    pub lim_cnt: U2,  // Count (j) of LIM Arrays in present record, 1 for global specification
     pub cyc_size: U1, // Size (f) of data (1,2,4, or 8 byes) in CYC_OFST field
     pub pmr_size: U1, // Size (f) of data (1 or 2 bytes) in PMR_INDX field
     pub chn_size: U1, // Size (f) of data (1, 2 or 4 bytes) in CHN_NUM field
     pub pat_size: U1, // Size (f) of data (1,2, or 4 bytes) in PAT_NUM field
     pub bit_size: U1, // Size (f) of data (1,2, or 4 bytes) in BIT_POS field
-    pub u1_size: U1, // Size (f) of data (1,2,4 or 8 bytes) in USR1 field
-    pub u2_size: U1, // Size (f) of data (1,2,4 or 8 bytes) in USR2 field
-    pub u3_size: U1, // Size (f) of data (1,2,4 or 8 bytes) in USR3 field
+    pub u1_size: U1,  // Size (f) of data (1,2,4 or 8 bytes) in USR1 field
+    pub u2_size: U1,  // Size (f) of data (1,2,4 or 8 bytes) in USR2 field
+    pub u3_size: U1,  // Size (f) of data (1,2,4 or 8 bytes) in USR3 field
     pub utx_size: U1, // Size (f) of each string entry in USER_TXT array
-    pub cap_bgn: U2, // Offset added to BIT_POS value to indicate capture cycles
+    pub cap_bgn: U2,  // Offset added to BIT_POS value to indicate capture cycles
     pub lim_indx: KxU2, // Array of PMR indexes that require unique limit specifications
     pub lim_spec: KxU4, // Array of fail datalogging limits for the PMRs listed in LIM_INDX
     pub cond_lst: KxCn, // Array of test condition (Name=value) pairs
-    pub cyc_cnt: U2, // Count (k) of entries in CYC_OFST array
+    pub cyc_cnt: U2,  // Count (k) of entries in CYC_OFST array
     pub cyc_ofst: KxUf, // Array of cycle numbers relative to CYC_BASE
-    pub pmr_cnt: U2, // Count (k) of entries in the PMR_INDX array
+    pub pmr_cnt: U2,  // Count (k) of entries in the PMR_INDX array
     pub pmr_indx: KxUf, // Array of PMR Indexes (All Formats)
-    pub chn_cnt: U2, // Count (k) of entries in the CHN_NUM array
+    pub chn_cnt: U2,  // Count (k) of entries in the CHN_NUM array
     pub chn_num: KxUf, // Array of Chain No for FF Name Mapping
-    pub exp_cnt: U2, // Count (k) of EXP_DATA array entries
+    pub exp_cnt: U2,  // Count (k) of EXP_DATA array entries
     pub exp_data: KxU1, // Array of expected vector data
-    pub cap_cnt: U2, // Count (k) of CAP_DATA array entries
+    pub cap_cnt: U2,  // Count (k) of CAP_DATA array entries
     pub cap_data: KxU1, // Array of captured data
-    pub new_cnt: U2, // Count (k) of NEW_DATA array entries
+    pub new_cnt: U2,  // Count (k) of NEW_DATA array entries
     pub new_data: KxU1, // Array of new vector data
-    pub pat_cnt: U2, // Count (k) of PAT_NUM array entries
+    pub pat_cnt: U2,  // Count (k) of PAT_NUM array entries
     pub pat_num: KxUf, // Array of pattern # (Ptn/Chn/Bit format)
     pub bpos_cnt: U2, // Count (k) of BIT_POS array entries
     pub bit_pos: KxUf, // Array of chain bit positions (Ptn/Chn/Bit format)
     pub usr1_cnt: U2, // Count (k) of USR1 array entries
-    pub usr1: KxUf, // Array of user defined data for each logged fail
+    pub usr1: KxUf,   // Array of user defined data for each logged fail
     pub usr2_cnt: U2, // Count (k) of USR2 array entries
-    pub usr2: KxUf, // Array of user defined data for each logged fail
+    pub usr2: KxUf,   // Array of user defined data for each logged fail
     pub usr3_cnt: U2, // Count (k) of USR3 array entries
-    pub usr3: KxUf, // Array of user defined data for each logged fail
-    pub txt_cnt: U2, // Count (k) of USER_TXT array entries
+    pub usr3: KxUf,   // Array of user defined data for each logged fail
+    pub txt_cnt: U2,  // Count (k) of USER_TXT array entries
     pub user_txt: KxCf, // Array of user defined fixed length strings for each logged fail
 }
 
@@ -706,7 +702,7 @@ pub struct EPS {}
 
 #[derive(SmartDefault, Debug)]
 pub struct GDR {
-    pub fld_cnt: U2, // Count of data fields in record
+    pub fld_cnt: U2,  // Count of data fields in record
     pub gen_data: Vn, // Data type code and data for one field(Repeat GEN_DATA for each data field)
 }
 
@@ -728,14 +724,14 @@ impl RecordHeader {
     }
 
     /// Construct a STDF record header from first 4 elements of given byte array.
-    /// 
+    ///
     /// If array size is less than 4, this function return a StdfError
     pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Result<Self, StdfError> {
         if raw_data.len() >= 4 {
             let len_bytes = [raw_data[0], raw_data[1]];
             self.len = match order {
                 ByteOrder::LittleEndian => u16::from_le_bytes(len_bytes),
-                ByteOrder::BigEndian => u16::from_be_bytes(len_bytes)
+                ByteOrder::BigEndian => u16::from_be_bytes(len_bytes),
             };
             self.typ = raw_data[2];
             self.sub = raw_data[3];
@@ -787,14 +783,20 @@ impl RecordHeader {
                 // not matched
                 (_, _) => stdf_record_type::REC_INVALID,
             };
-            
+
             if self.type_code == stdf_record_type::REC_INVALID {
-                Err(StdfError {code: 2, msg: format!("{:?}", self)})
+                Err(StdfError {
+                    code: 2,
+                    msg: format!("{:?}", self),
+                })
             } else {
                 Ok(self)
             }
         } else {
-            Err(StdfError {code: 1, msg: String::from("Not enough data to construct record header")})
+            Err(StdfError {
+                code: 1,
+                msg: String::from("Not enough data to construct record header"),
+            })
         }
     }
 }
@@ -847,18 +849,23 @@ impl MIR {
         self.setup_t = read_u4(raw_data, pos, order);
         self.start_t = read_u4(raw_data, pos, order);
         self.stat_num = read_uint8(raw_data, pos);
-        // if raw_data is completely parsed, 
+        // if raw_data is completely parsed,
         // don't overwrite fields with default data
         if *pos < raw_data.len() {
-            self.mode_cod = read_uint8(raw_data, pos) as char;}
+            self.mode_cod = read_uint8(raw_data, pos) as char;
+        }
         if *pos < raw_data.len() {
-            self.rtst_cod = read_uint8(raw_data, pos) as char;}
+            self.rtst_cod = read_uint8(raw_data, pos) as char;
+        }
         if *pos < raw_data.len() {
-            self.prot_cod = read_uint8(raw_data, pos) as char;}
+            self.prot_cod = read_uint8(raw_data, pos) as char;
+        }
         if *pos + 2 <= raw_data.len() {
-            self.burn_tim = read_u2(raw_data, pos, order);}
+            self.burn_tim = read_u2(raw_data, pos, order);
+        }
         if *pos < raw_data.len() {
-            self.cmod_cod = read_uint8(raw_data, pos) as char;}
+            self.cmod_cod = read_uint8(raw_data, pos) as char;
+        }
         self.lot_id = read_cn(raw_data, pos);
         self.part_typ = read_cn(raw_data, pos);
         self.node_nam = read_cn(raw_data, pos);
@@ -902,7 +909,8 @@ impl MRR {
         let pos = &mut 0;
         self.finish_t = read_u4(raw_data, pos, order);
         if *pos < raw_data.len() {
-            self.disp_cod = read_uint8(raw_data, pos) as char;}
+            self.disp_cod = read_uint8(raw_data, pos) as char;
+        }
         self.usr_desc = read_cn(raw_data, pos);
         self.exc_desc = read_cn(raw_data, pos);
         self
@@ -920,13 +928,17 @@ impl PCR {
         self.site_num = read_uint8(raw_data, pos);
         self.part_cnt = read_u4(raw_data, pos, order);
         if *pos + 4 <= raw_data.len() {
-            self.rtst_cnt = read_u4(raw_data, pos, order);}
+            self.rtst_cnt = read_u4(raw_data, pos, order);
+        }
         if *pos + 4 <= raw_data.len() {
-            self.abrt_cnt = read_u4(raw_data, pos, order);}
+            self.abrt_cnt = read_u4(raw_data, pos, order);
+        }
         if *pos + 4 <= raw_data.len() {
-            self.good_cnt = read_u4(raw_data, pos, order);}
+            self.good_cnt = read_u4(raw_data, pos, order);
+        }
         if *pos + 4 <= raw_data.len() {
-            self.func_cnt = read_u4(raw_data, pos, order);}
+            self.func_cnt = read_u4(raw_data, pos, order);
+        }
         self
     }
 }
@@ -943,10 +955,10 @@ impl HBR {
         self.hbin_num = read_u2(raw_data, pos, order);
         self.hbin_cnt = read_u4(raw_data, pos, order);
         if *pos < raw_data.len() {
-            self.hbin_pf = read_uint8(raw_data, pos) as char;}
+            self.hbin_pf = read_uint8(raw_data, pos) as char;
+        }
         self.hbin_nam = read_cn(raw_data, pos);
         self
-
     }
 }
 
@@ -962,7 +974,8 @@ impl SBR {
         self.sbin_num = read_u2(raw_data, pos, order);
         self.sbin_cnt = read_u4(raw_data, pos, order);
         if *pos < raw_data.len() {
-            self.sbin_pf = read_uint8(raw_data, pos) as char;}
+            self.sbin_pf = read_uint8(raw_data, pos) as char;
+        }
         self.sbin_nam = read_cn(raw_data, pos);
         self
     }
@@ -977,14 +990,17 @@ impl PMR {
         let pos = &mut 0;
         self.pmr_indx = read_u2(raw_data, pos, order);
         if *pos + 2 <= raw_data.len() {
-            self.chan_typ = read_u2(raw_data, pos, order);}
+            self.chan_typ = read_u2(raw_data, pos, order);
+        }
         self.chan_nam = read_cn(raw_data, pos);
         self.phy_nam = read_cn(raw_data, pos);
         self.log_nam = read_cn(raw_data, pos);
         if *pos < raw_data.len() {
-            self.head_num = read_uint8(raw_data, pos)};
+            self.head_num = read_uint8(raw_data, pos)
+        };
         if *pos < raw_data.len() {
-            self.site_num = read_uint8(raw_data, pos)};
+            self.site_num = read_uint8(raw_data, pos)
+        };
         self
     }
 }
@@ -999,8 +1015,8 @@ impl PGR {
         self.grp_indx = read_u2(raw_data, pos, order);
         self.grp_nam = read_cn(raw_data, pos);
         self.indx_cnt = read_u2(raw_data, pos, order);
-        self.pmr_indx = read_kx_u2(raw_data, pos, order, self.indx_cnt);      
-        self  
+        self.pmr_indx = read_kx_u2(raw_data, pos, order, self.indx_cnt);
+        self
     }
 }
 
@@ -1153,7 +1169,8 @@ impl CDR {
         self.slav_cnt = read_uint8(raw_data, pos);
         self.s_clks = read_kx_u2(raw_data, pos, order, self.slav_cnt as u16);
         if *pos < raw_data.len() {
-            self.inv_val = read_uint8(raw_data, pos);}
+            self.inv_val = read_uint8(raw_data, pos);
+        }
         self.lst_cnt = read_u2(raw_data, pos, order);
         self.cell_lst = read_kx_sn(raw_data, pos, order, self.lst_cnt);
         self
@@ -1169,7 +1186,8 @@ impl WIR {
         let pos = &mut 0;
         self.head_num = read_uint8(raw_data, pos);
         if *pos < raw_data.len() {
-            self.site_grp = read_uint8(raw_data, pos);}
+            self.site_grp = read_uint8(raw_data, pos);
+        }
         self.start_t = read_u4(raw_data, pos, order);
         self.wafer_id = read_cn(raw_data, pos);
         self
@@ -1185,17 +1203,22 @@ impl WRR {
         let pos = &mut 0;
         self.head_num = read_uint8(raw_data, pos);
         if *pos < raw_data.len() {
-            self.site_grp = read_uint8(raw_data, pos);}
+            self.site_grp = read_uint8(raw_data, pos);
+        }
         self.finish_t = read_u4(raw_data, pos, order);
         self.part_cnt = read_u4(raw_data, pos, order);
         if *pos + 4 <= raw_data.len() {
-            self.rtst_cnt = read_u4(raw_data, pos, order);}
+            self.rtst_cnt = read_u4(raw_data, pos, order);
+        }
         if *pos + 4 <= raw_data.len() {
-            self.abrt_cnt = read_u4(raw_data, pos, order);}
+            self.abrt_cnt = read_u4(raw_data, pos, order);
+        }
         if *pos + 4 <= raw_data.len() {
-            self.good_cnt = read_u4(raw_data, pos, order);}
+            self.good_cnt = read_u4(raw_data, pos, order);
+        }
         if *pos + 4 <= raw_data.len() {
-            self.func_cnt = read_u4(raw_data, pos, order);}
+            self.func_cnt = read_u4(raw_data, pos, order);
+        }
         self.wafer_id = read_cn(raw_data, pos);
         self.fabwf_id = read_cn(raw_data, pos);
         self.frame_id = read_cn(raw_data, pos);
@@ -1218,15 +1241,20 @@ impl WCR {
         self.die_wid = read_r4(raw_data, pos, order);
         self.wf_units = read_uint8(raw_data, pos);
         if *pos < raw_data.len() {
-            self.wf_flat = read_uint8(raw_data, pos) as char;}
+            self.wf_flat = read_uint8(raw_data, pos) as char;
+        }
         if *pos + 2 <= raw_data.len() {
-            self.center_x = read_i2(raw_data, pos, order);}
+            self.center_x = read_i2(raw_data, pos, order);
+        }
         if *pos + 2 <= raw_data.len() {
-            self.center_y = read_i2(raw_data, pos, order);}
+            self.center_y = read_i2(raw_data, pos, order);
+        }
         if *pos < raw_data.len() {
-            self.pos_x = read_uint8(raw_data, pos) as char;}
+            self.pos_x = read_uint8(raw_data, pos) as char;
+        }
         if *pos < raw_data.len() {
-            self.pos_y = read_uint8(raw_data, pos) as char;}
+            self.pos_y = read_uint8(raw_data, pos) as char;
+        }
         self
     }
 }
@@ -1257,13 +1285,17 @@ impl PRR {
         self.num_test = read_u2(raw_data, pos, order);
         self.hard_bin = read_u2(raw_data, pos, order);
         if *pos + 2 <= raw_data.len() {
-            self.soft_bin = read_u2(raw_data, pos, order);}
+            self.soft_bin = read_u2(raw_data, pos, order);
+        }
         if *pos + 2 <= raw_data.len() {
-            self.x_coord = read_i2(raw_data, pos, order);}
+            self.x_coord = read_i2(raw_data, pos, order);
+        }
         if *pos + 2 <= raw_data.len() {
-            self.y_coord = read_i2(raw_data, pos, order);}
+            self.y_coord = read_i2(raw_data, pos, order);
+        }
         if *pos + 4 <= raw_data.len() {
-            self.test_t = read_u4(raw_data, pos, order);}
+            self.test_t = read_u4(raw_data, pos, order);
+        }
         self.part_id = read_cn(raw_data, pos);
         self.part_txt = read_cn(raw_data, pos);
         self.part_fix = read_bn(raw_data, pos);
@@ -1281,14 +1313,18 @@ impl TSR {
         self.head_num = read_uint8(raw_data, pos);
         self.site_num = read_uint8(raw_data, pos);
         if *pos < raw_data.len() {
-            self.test_typ = read_uint8(raw_data, pos) as char;}
+            self.test_typ = read_uint8(raw_data, pos) as char;
+        }
         self.test_num = read_u4(raw_data, pos, order);
         if *pos + 4 <= raw_data.len() {
-            self.exec_cnt = read_u4(raw_data, pos, order);}
+            self.exec_cnt = read_u4(raw_data, pos, order);
+        }
         if *pos + 4 <= raw_data.len() {
-            self.fail_cnt = read_u4(raw_data, pos, order);}
+            self.fail_cnt = read_u4(raw_data, pos, order);
+        }
         if *pos + 4 <= raw_data.len() {
-            self.alrm_cnt = read_u4(raw_data, pos, order);}
+            self.alrm_cnt = read_u4(raw_data, pos, order);
+        }
         self.test_nam = read_cn(raw_data, pos);
         self.seq_name = read_cn(raw_data, pos);
         self.test_lbl = read_cn(raw_data, pos);
@@ -1405,7 +1441,8 @@ impl FTR {
         self.prog_txt = read_cn(raw_data, pos);
         self.rslt_txt = read_cn(raw_data, pos);
         if *pos < raw_data.len() {
-            self.patg_num = read_uint8(raw_data, pos);}
+            self.patg_num = read_uint8(raw_data, pos);
+        }
         self.spin_map = read_dn(raw_data, pos, order);
         self
     }
@@ -1554,7 +1591,6 @@ impl ReservedRec {
     }
 }
 
-
 impl StdfRecord {
     pub fn new(rec_type: u64) -> Self {
         match rec_type {
@@ -1624,7 +1660,7 @@ impl StdfRecord {
             StdfRecord::GDR(_) => stdf_record_type::REC_GDR,
             StdfRecord::DTR(_) => stdf_record_type::REC_DTR,
             // rec type 10
-            StdfRecord::TSR(_) => stdf_record_type::REC_TSR,            
+            StdfRecord::TSR(_) => stdf_record_type::REC_TSR,
             // rec type 1
             StdfRecord::MIR(_) => stdf_record_type::REC_MIR,
             StdfRecord::MRR(_) => stdf_record_type::REC_MRR,
@@ -1644,7 +1680,7 @@ impl StdfRecord {
             // rec type 0
             StdfRecord::FAR(_) => stdf_record_type::REC_FAR,
             StdfRecord::ATR(_) => stdf_record_type::REC_ATR,
-            StdfRecord::VUR(_) => stdf_record_type::REC_VUR,            
+            StdfRecord::VUR(_) => stdf_record_type::REC_VUR,
             // rec type 20
             StdfRecord::BPS(_) => stdf_record_type::REC_BPS,
             StdfRecord::EPS(_) => stdf_record_type::REC_EPS,
@@ -1655,7 +1691,7 @@ impl StdfRecord {
             StdfRecord::InvalidRec => stdf_record_type::REC_INVALID,
         }
     }
-    
+
     pub fn is_type(&self, rec_type: u64) -> bool {
         (self.get_type() & rec_type) != 0
     }
@@ -1678,7 +1714,7 @@ impl StdfRecord {
             StdfRecord::GDR(gdr_rec) => StdfRecord::GDR(gdr_rec.from_bytes(raw_data, order)),
             StdfRecord::DTR(dtr_rec) => StdfRecord::DTR(dtr_rec.from_bytes(raw_data, order)),
             // rec type 10
-            StdfRecord::TSR(tsr_rec) => StdfRecord::TSR(tsr_rec.from_bytes(raw_data, order)),            
+            StdfRecord::TSR(tsr_rec) => StdfRecord::TSR(tsr_rec.from_bytes(raw_data, order)),
             // rec type 1
             StdfRecord::MIR(mir_rec) => StdfRecord::MIR(mir_rec.from_bytes(raw_data, order)),
             StdfRecord::MRR(mrr_rec) => StdfRecord::MRR(mrr_rec.from_bytes(raw_data, order)),
@@ -1698,19 +1734,20 @@ impl StdfRecord {
             // rec type 0
             StdfRecord::FAR(far_rec) => StdfRecord::FAR(far_rec.from_bytes(raw_data, order)),
             StdfRecord::ATR(atr_rec) => StdfRecord::ATR(atr_rec.from_bytes(raw_data, order)),
-            StdfRecord::VUR(vur_rec) => StdfRecord::VUR(vur_rec.from_bytes(raw_data, order)),            
+            StdfRecord::VUR(vur_rec) => StdfRecord::VUR(vur_rec.from_bytes(raw_data, order)),
             // rec type 20
             StdfRecord::BPS(bps_rec) => StdfRecord::BPS(bps_rec.from_bytes(raw_data, order)),
             StdfRecord::EPS(eps_rec) => StdfRecord::EPS(eps_rec.from_bytes(raw_data, order)),
             // rec type 180: Reserved
             // rec type 181: Reserved
-            StdfRecord::ReservedRec(reserve_rec) => StdfRecord::ReservedRec(reserve_rec.from_bytes(raw_data, order)),
+            StdfRecord::ReservedRec(reserve_rec) => {
+                StdfRecord::ReservedRec(reserve_rec.from_bytes(raw_data, order))
+            }
             // not matched
             StdfRecord::InvalidRec => self,
         }
     }
 }
-
 
 // data type functions
 /// Read uint8 from byte array with offset "pos", compatible with B1, C1 and U1
@@ -1747,7 +1784,7 @@ pub(crate) fn read_u2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U2
 #[inline(always)]
 pub(crate) fn read_u4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U4 {
     let pos_after_read = *pos + 4;
-    
+
     if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 4];
         tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
@@ -1765,7 +1802,7 @@ pub(crate) fn read_u4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U4
 #[inline(always)]
 pub(crate) fn read_u8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> U8 {
     let pos_after_read = *pos + 8;
-    
+
     if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 8];
         tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
@@ -1795,7 +1832,7 @@ pub(crate) fn read_i1(raw_data: &[u8], pos: &mut usize) -> I1 {
 #[inline(always)]
 pub(crate) fn read_i2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I2 {
     let pos_after_read = *pos + 2;
-    
+
     if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 2];
         tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
@@ -1813,7 +1850,7 @@ pub(crate) fn read_i2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I2
 #[inline(always)]
 pub(crate) fn read_i4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I4 {
     let pos_after_read = *pos + 4;
-    
+
     if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 4];
         tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
@@ -1831,7 +1868,7 @@ pub(crate) fn read_i4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> I4
 #[inline(always)]
 pub(crate) fn read_r4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R4 {
     let pos_after_read = *pos + 4;
-    
+
     if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 4];
         tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
@@ -1849,7 +1886,7 @@ pub(crate) fn read_r4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R4
 #[inline(always)]
 pub(crate) fn read_r8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R8 {
     let pos_after_read = *pos + 8;
-    
+
     if pos_after_read <= raw_data.len() {
         let mut tmp = [0u8; 8];
         tmp.copy_from_slice(&raw_data[*pos..pos_after_read]);
@@ -1950,7 +1987,7 @@ pub(crate) fn read_bn(raw_data: &[u8], pos: &mut usize) -> Bn {
 #[inline(always)]
 pub(crate) fn read_dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn {
     let bitcount = read_u2(raw_data, pos, order) as usize;
-    let bytecount = bitcount/8 + bitcount%8;
+    let bytecount = bitcount / 8 + bitcount % 8;
     if bytecount != 0 {
         let pos_after_read = *pos + bytecount;
         let data_slice: &[u8];
@@ -1966,7 +2003,6 @@ pub(crate) fn read_dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn
         let mut value = vec![0u8; data_slice.len()];
         value.copy_from_slice(data_slice);
         value
-    
     } else {
         vec![0u8; 0]
     }
@@ -2072,7 +2108,13 @@ pub(crate) fn read_kx_u8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k:
 
 /// Read KxUf (Vec<u8|u16|u32|u64>) from byte array with offset "pos", vector size is provide by "k", size of number is "f"
 #[inline(always)]
-pub(crate) fn read_kx_uf(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16, f: u8) -> KxUf {
+pub(crate) fn read_kx_uf(
+    raw_data: &[u8],
+    pos: &mut usize,
+    order: &ByteOrder,
+    k: u16,
+    f: u8,
+) -> KxUf {
     if k != 0 {
         match f {
             1 => KxUf::F1(read_kx_u1(raw_data, pos, k)),
@@ -2101,12 +2143,12 @@ pub(crate) fn read_kx_r4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k:
 }
 
 /// Read KxN1 (Vec<u8>) from byte array with offset "pos", vector size is provide by "k"
-/// 
+///
 /// size of N1 = 4 bits, hence total bytes of k * N1 = k/2 + k%2
 #[inline(always)]
 pub(crate) fn read_kx_n1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxN1 {
     if k != 0 {
-        let bytecount = k/2 + k%2;   // k = nibble counts, 1 byte = 2 nibble
+        let bytecount = k / 2 + k % 2; // k = nibble counts, 1 byte = 2 nibble
         let mut value = Vec::with_capacity(k as usize);
         for i in 0..bytecount {
             let tmp = read_uint8(raw_data, pos);
@@ -2124,8 +2166,11 @@ pub(crate) fn read_kx_n1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxN1 {
 /// Read V1 (u8 + generic value) from byte array with offset "pos"
 #[inline(always)]
 pub(crate) fn read_v1(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> V1 {
-    let type_byte = if (*pos as usize) < raw_data.len() 
-    { read_uint8(raw_data, pos) } else { 0xF };
+    let type_byte = if (*pos as usize) < raw_data.len() {
+        read_uint8(raw_data, pos)
+    } else {
+        0xF
+    };
 
     match type_byte {
         0 => V1::B0,
