@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Wed Oct 05 2022
+// Last Modified: Thu Oct 06 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -110,7 +110,7 @@ impl StdfReader {
         let mut buf = [0u8; 4];
         self.stream.read_exact(&mut buf)?;
         // parse header assuming little endian
-        Ok(RecordHeader::new().from_bytes(&buf, &self.endianness)?)
+        RecordHeader::new().from_bytes(&buf, &self.endianness)
     }
 
     pub fn get_record_iter(&mut self) -> RecordIter {
@@ -152,7 +152,7 @@ impl Iterator for RecordIter<'_> {
         };
         // create a buffer to store record raw data
         let mut buffer = vec![0u8; header.len as usize];
-        if let Err(_) = self.inner.stream.read_exact(&mut buffer) {
+        if self.inner.stream.read_exact(&mut buffer).is_err() {
             return None;
         }
         Some(StdfRecord::new(header.type_code).from_bytes(&buffer, &self.inner.endianness))

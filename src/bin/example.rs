@@ -4,7 +4,7 @@ use std::time::Instant;
 
 fn main() {
     let stdf_path: String;
-    if let Some(fpath) = env::args().skip(1).next() { 
+    if let Some(fpath) = env::args().nth(1) { 
         stdf_path = fpath;
         println!("Input path: {}\n", stdf_path);
     } else {

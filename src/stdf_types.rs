@@ -30,11 +30,12 @@ pub enum CompressType {
     ZipCompressed,
 }
 
-#[derive(Debug)]
+#[derive(SmartDefault, Debug)]
 pub struct RecordHeader {
     pub len: u16,
     pub typ: u8,
     pub sub: u8,
+    #[default(stdf_record_type::REC_INVALID)]
     pub type_code: u64,
 }
 
@@ -723,12 +724,7 @@ pub struct ReservedRec {
 
 impl RecordHeader {
     pub fn new() -> Self {
-        RecordHeader { 
-            len: 0, 
-            typ: 0, 
-            sub: 0, 
-            type_code: stdf_record_type::REC_INVALID
-        }
+        RecordHeader::default()
     }
 
     /// Construct a STDF record header from first 4 elements of given byte array.
