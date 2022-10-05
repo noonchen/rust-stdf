@@ -30,11 +30,12 @@ pub enum CompressType {
     ZipCompressed,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct RecordHeader {
     pub len: u16,
     pub typ: u8,
     pub sub: u8,
+    pub code: StdfRecordType,
 }
 
 
@@ -109,6 +110,54 @@ pub type Vn = Vec<V1>;
 
 
 // Record Types
+#[derive(Debug, PartialEq)]
+pub enum StdfRecordType {
+    // rec type 0
+    RecFAR,
+    RecATR,
+    RecVUR,
+    // rec type 1
+    RecMIR,
+    RecMRR,
+    RecPCR,
+    RecHBR,
+    RecSBR,
+    RecPMR,
+    RecPGR,
+    RecPLR,
+    RecRDR,
+    RecSDR,
+    RecPSR,
+    RecNMR,
+    RecCNR,
+    RecSSR,
+    RecCDR,
+    // rec type 2
+    RecWIR,
+    RecWRR,
+    RecWCR,
+    // rec type 5
+    RecPIR,
+    RecPRR,
+    // rec type 10
+    RecTSR,
+    // rec type 15
+    RecPTR,
+    RecMPR,
+    RecFTR,
+    RecSTR,
+    // rec type 20
+    RecBPS,
+    RecEPS,
+    // rec type 50
+    RecGDR,
+    RecDTR,
+    // rec type 180: Reserved
+    // rec type 181: Reserved
+    RecReserved,
+    RecInvalid,    // for debug
+}
+
 #[derive(Debug)]
 pub enum StdfRecord {
     // rec type 0
@@ -154,7 +203,7 @@ pub enum StdfRecord {
     // rec type 180: Reserved
     // rec type 181: Reserved
     ReservedRec(ReservedRec),
-    InvalidRec(RecordHeader)    // for debug
+    InvalidRec,
 }
 
 #[derive(SmartDefault, Debug)]
@@ -632,7 +681,12 @@ pub struct ReservedRec {
 
 impl RecordHeader {
     pub fn new() -> Self {
-        RecordHeader { len: 0, typ: 0, sub: 0 }
+        RecordHeader { 
+            len: 0, 
+            typ: 0, 
+            sub: 0, 
+            code: StdfRecordType::RecInvalid
+        }
     }
 
     /// Construct a STDF record header from first 4 elements of given byte array.
@@ -647,7 +701,60 @@ impl RecordHeader {
             };
             self.typ = raw_data[2];
             self.sub = raw_data[3];
-            Ok(self)
+            // validate header
+            self.code = match (self.typ, self.sub) {
+                // rec type 15
+                (15, 10) => StdfRecordType::RecPTR,
+                (15, 15) => StdfRecordType::RecMPR,
+                (15, 20) => StdfRecordType::RecFTR,
+                (15, 30) => StdfRecordType::RecSTR,
+                // rec type 5
+                (5, 10) => StdfRecordType::RecPIR,
+                (5, 20) => StdfRecordType::RecPRR,
+                // rec type 2
+                (2, 10) => StdfRecordType::RecWIR,
+                (2, 20) => StdfRecordType::RecWRR,
+                (2, 30) => StdfRecordType::RecWCR,
+                // rec type 50
+                (50, 10) => StdfRecordType::RecGDR,
+                (50, 30) => StdfRecordType::RecDTR,
+                // rec type 0
+                (0, 10) => StdfRecordType::RecFAR,
+                (0, 20) => StdfRecordType::RecATR,
+                (0, 30) => StdfRecordType::RecVUR,
+                // rec type 1
+                (1, 10) => StdfRecordType::RecMIR,
+                (1, 20) => StdfRecordType::RecMRR,
+                (1, 30) => StdfRecordType::RecPCR,
+                (1, 40) => StdfRecordType::RecHBR,
+                (1, 50) => StdfRecordType::RecSBR,
+                (1, 60) => StdfRecordType::RecPMR,
+                (1, 62) => StdfRecordType::RecPGR,
+                (1, 63) => StdfRecordType::RecPLR,
+                (1, 70) => StdfRecordType::RecRDR,
+                (1, 80) => StdfRecordType::RecSDR,
+                (1, 90) => StdfRecordType::RecPSR,
+                (1, 91) => StdfRecordType::RecNMR,
+                (1, 92) => StdfRecordType::RecCNR,
+                (1, 93) => StdfRecordType::RecSSR,
+                (1, 94) => StdfRecordType::RecCDR,
+                // rec type 10
+                (10, 30) => StdfRecordType::RecTSR,
+                // rec type 20
+                (20, 10) => StdfRecordType::RecBPS,
+                (20, 20) => StdfRecordType::RecEPS,
+                // rec type 180: Reserved
+                // rec type 181: Reserved
+                (180 | 181, _) => StdfRecordType::RecReserved,
+                // not matched
+                (_, _) => StdfRecordType::RecInvalid,
+            };
+            
+            if self.code == StdfRecordType::RecInvalid {
+                Err(StdfError {code: 2, msg: format!("{:?}", self)})
+            } else {
+                Ok(self)
+            }
         } else {
             Err(StdfError {code: 1, msg: String::from("Not enough data to construct record header")})
         }
@@ -1376,54 +1483,108 @@ impl ReservedRec {
 
 
 impl StdfRecord {
-    pub fn new(rec_header: &RecordHeader) -> Self {
-        match (rec_header.typ, rec_header.sub) {
+    pub fn new(rec_type: &StdfRecordType) -> Self {
+        match rec_type {
             // rec type 15
-            (15, 10) => StdfRecord::PTR(PTR::new()),
-            (15, 15) => StdfRecord::MPR(MPR::new()),
-            (15, 20) => StdfRecord::FTR(FTR::new()),
-            (15, 30) => StdfRecord::STR(STR::new()),
+            StdfRecordType::RecPTR => StdfRecord::PTR(PTR::new()),
+            StdfRecordType::RecMPR => StdfRecord::MPR(MPR::new()),
+            StdfRecordType::RecFTR => StdfRecord::FTR(FTR::new()),
+            StdfRecordType::RecSTR => StdfRecord::STR(STR::new()),
             // rec type 5
-            (5, 10) => StdfRecord::PIR(PIR::new()),
-            (5, 20) => StdfRecord::PRR(PRR::new()),
+            StdfRecordType::RecPIR => StdfRecord::PIR(PIR::new()),
+            StdfRecordType::RecPRR => StdfRecord::PRR(PRR::new()),
             // rec type 2
-            (2, 10) => StdfRecord::WIR(WIR::new()),
-            (2, 20) => StdfRecord::WRR(WRR::new()),
-            (2, 30) => StdfRecord::WCR(WCR::new()),
+            StdfRecordType::RecWIR => StdfRecord::WIR(WIR::new()),
+            StdfRecordType::RecWRR => StdfRecord::WRR(WRR::new()),
+            StdfRecordType::RecWCR => StdfRecord::WCR(WCR::new()),
             // rec type 50
-            (50, 10) => StdfRecord::GDR(GDR::new()),
-            (50, 30) => StdfRecord::DTR(DTR::new()),
+            StdfRecordType::RecGDR => StdfRecord::GDR(GDR::new()),
+            StdfRecordType::RecDTR => StdfRecord::DTR(DTR::new()),
             // rec type 0
-            (0, 10) => StdfRecord::FAR(FAR::new()),
-            (0, 20) => StdfRecord::ATR(ATR::new()),
-            (0, 30) => StdfRecord::VUR(VUR::new()),
+            StdfRecordType::RecFAR => StdfRecord::FAR(FAR::new()),
+            StdfRecordType::RecATR => StdfRecord::ATR(ATR::new()),
+            StdfRecordType::RecVUR => StdfRecord::VUR(VUR::new()),
             // rec type 1
-            (1, 10) => StdfRecord::MIR(MIR::new()),
-            (1, 20) => StdfRecord::MRR(MRR::new()),
-            (1, 30) => StdfRecord::PCR(PCR::new()),
-            (1, 40) => StdfRecord::HBR(HBR::new()),
-            (1, 50) => StdfRecord::SBR(SBR::new()),
-            (1, 60) => StdfRecord::PMR(PMR::new()),
-            (1, 62) => StdfRecord::PGR(PGR::new()),
-            (1, 63) => StdfRecord::PLR(PLR::new()),
-            (1, 70) => StdfRecord::RDR(RDR::new()),
-            (1, 80) => StdfRecord::SDR(SDR::new()),
-            (1, 90) => StdfRecord::PSR(PSR::new()),
-            (1, 91) => StdfRecord::NMR(NMR::new()),
-            (1, 92) => StdfRecord::CNR(CNR::new()),
-            (1, 93) => StdfRecord::SSR(SSR::new()),
-            (1, 94) => StdfRecord::CDR(CDR::new()),
+            StdfRecordType::RecMIR => StdfRecord::MIR(MIR::new()),
+            StdfRecordType::RecMRR => StdfRecord::MRR(MRR::new()),
+            StdfRecordType::RecPCR => StdfRecord::PCR(PCR::new()),
+            StdfRecordType::RecHBR => StdfRecord::HBR(HBR::new()),
+            StdfRecordType::RecSBR => StdfRecord::SBR(SBR::new()),
+            StdfRecordType::RecPMR => StdfRecord::PMR(PMR::new()),
+            StdfRecordType::RecPGR => StdfRecord::PGR(PGR::new()),
+            StdfRecordType::RecPLR => StdfRecord::PLR(PLR::new()),
+            StdfRecordType::RecRDR => StdfRecord::RDR(RDR::new()),
+            StdfRecordType::RecSDR => StdfRecord::SDR(SDR::new()),
+            StdfRecordType::RecPSR => StdfRecord::PSR(PSR::new()),
+            StdfRecordType::RecNMR => StdfRecord::NMR(NMR::new()),
+            StdfRecordType::RecCNR => StdfRecord::CNR(CNR::new()),
+            StdfRecordType::RecSSR => StdfRecord::SSR(SSR::new()),
+            StdfRecordType::RecCDR => StdfRecord::CDR(CDR::new()),
             // rec type 10
-            (10, 30) => StdfRecord::TSR(TSR::new()),
+            StdfRecordType::RecTSR => StdfRecord::TSR(TSR::new()),
             // rec type 20
-            (20, 10) => StdfRecord::BPS(BPS::new()),
-            (20, 20) => StdfRecord::EPS(EPS::new()),
+            StdfRecordType::RecBPS => StdfRecord::BPS(BPS::new()),
+            StdfRecordType::RecEPS => StdfRecord::EPS(EPS::new()),
             // rec type 180: Reserved
             // rec type 181: Reserved
-            (180 | 181, _) => StdfRecord::ReservedRec(ReservedRec::new()),
+            StdfRecordType::RecReserved => StdfRecord::ReservedRec(ReservedRec::new()),
             // not matched
-            (_, _) => StdfRecord::InvalidRec(*rec_header)
+            StdfRecordType::RecInvalid => StdfRecord::InvalidRec,
         }
+    }
+
+    pub fn get_type(&self) -> StdfRecordType {
+        match &self {
+            // rec type 15
+            StdfRecord::PTR(_) => StdfRecordType::RecPTR,
+            StdfRecord::MPR(_) => StdfRecordType::RecMPR,
+            StdfRecord::FTR(_) => StdfRecordType::RecFTR,
+            StdfRecord::STR(_) => StdfRecordType::RecSTR,
+            // rec type 5
+            StdfRecord::PIR(_) => StdfRecordType::RecPIR,
+            StdfRecord::PRR(_) => StdfRecordType::RecPRR,
+            // rec type 2
+            StdfRecord::WIR(_) => StdfRecordType::RecWIR,
+            StdfRecord::WRR(_) => StdfRecordType::RecWRR,
+            StdfRecord::WCR(_) => StdfRecordType::RecWCR,
+            // rec type 50
+            StdfRecord::GDR(_) => StdfRecordType::RecGDR,
+            StdfRecord::DTR(_) => StdfRecordType::RecDTR,
+            // rec type 10
+            StdfRecord::TSR(_) => StdfRecordType::RecTSR,            
+            // rec type 1
+            StdfRecord::MIR(_) => StdfRecordType::RecMIR,
+            StdfRecord::MRR(_) => StdfRecordType::RecMRR,
+            StdfRecord::PCR(_) => StdfRecordType::RecPCR,
+            StdfRecord::HBR(_) => StdfRecordType::RecHBR,
+            StdfRecord::SBR(_) => StdfRecordType::RecSBR,
+            StdfRecord::PMR(_) => StdfRecordType::RecPMR,
+            StdfRecord::PGR(_) => StdfRecordType::RecPGR,
+            StdfRecord::PLR(_) => StdfRecordType::RecPLR,
+            StdfRecord::RDR(_) => StdfRecordType::RecRDR,
+            StdfRecord::SDR(_) => StdfRecordType::RecSDR,
+            StdfRecord::PSR(_) => StdfRecordType::RecPSR,
+            StdfRecord::NMR(_) => StdfRecordType::RecNMR,
+            StdfRecord::CNR(_) => StdfRecordType::RecCNR,
+            StdfRecord::SSR(_) => StdfRecordType::RecSSR,
+            StdfRecord::CDR(_) => StdfRecordType::RecCDR,
+            // rec type 0
+            StdfRecord::FAR(_) => StdfRecordType::RecFAR,
+            StdfRecord::ATR(_) => StdfRecordType::RecATR,
+            StdfRecord::VUR(_) => StdfRecordType::RecVUR,            
+            // rec type 20
+            StdfRecord::BPS(_) => StdfRecordType::RecBPS,
+            StdfRecord::EPS(_) => StdfRecordType::RecEPS,
+            // rec type 180: Reserved
+            // rec type 181: Reserved
+            StdfRecord::ReservedRec(_) => StdfRecordType::RecReserved,
+            // not matched
+            StdfRecord::InvalidRec => StdfRecordType::RecInvalid,
+        }
+    }
+    
+    pub fn is_type(&self, rec_type: StdfRecordType) -> bool {
+        (self.get_type()) == rec_type
     }
 
     pub fn from_bytes(self, raw_data: &[u8], order: &ByteOrder) -> Self {
@@ -1472,7 +1633,7 @@ impl StdfRecord {
             // rec type 181: Reserved
             StdfRecord::ReservedRec(reserve_rec) => StdfRecord::ReservedRec(reserve_rec.from_bytes(raw_data, order)),
             // not matched
-            StdfRecord::InvalidRec(_) => self,
+            StdfRecord::InvalidRec => self,
         }
     }
 }

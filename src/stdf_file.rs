@@ -25,12 +25,11 @@ pub enum StdfStream<R> {
     GzStream(GzDecoder<R>),
 }
 
-#[derive(Debug)]
 pub struct StdfReader {
-    pub file_path: String,
-    pub compress_type: CompressType,
-    pub endianness: ByteOrder,
-    pub stream: StdfStream<BufReader<fs::File>>,
+    file_path: String,
+    compress_type: CompressType,
+    endianness: ByteOrder,
+    stream: StdfStream<BufReader<fs::File>>,
 }
 
 pub struct RecordIter<'a> { 
@@ -149,6 +148,6 @@ impl Iterator for RecordIter<'_> {
         if let Err(_) = self.inner.stream.read_exact(&mut buffer) {
             return None;
         }
-        Some(StdfRecord::new(&header).from_bytes(&buffer, &self.inner.endianness))
+        Some(StdfRecord::new(&header.code).from_bytes(&buffer, &self.inner.endianness))
     }
 }
