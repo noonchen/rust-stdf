@@ -23,7 +23,7 @@ fn main() {
     let start_time = Instant::now();
     if let Ok(rec_list) = f.read_all_records() {
         let elapsed = start_time.elapsed().as_millis();
-        println!("Total records: {}, time elapsed {} ms", rec_list.len(), elapsed);
+        println!("Total records: {}, time elapsed {} ms\n", rec_list.len(), elapsed);
         for rec in rec_list.iter().take(5) {
             println!("{:?}", rec);
         }
