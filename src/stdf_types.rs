@@ -12,6 +12,7 @@
 
 use crate::stdf_error::StdfError;
 extern crate smart_default;
+extern crate chrono;
 use smart_default::SmartDefault;
 
 
@@ -22,7 +23,6 @@ pub enum ByteOrder {
     BigEndian,
 }
 
-#[derive(Debug)]
 pub enum CompressType {
     Uncompressed,
     GzipCompressed,
@@ -40,6 +40,8 @@ pub struct RecordHeader {
 
 
 // Data Types
+// Altough B1 can be treated as u8, but its representation
+// in ATDF is differ from U1, so I used a array of one u8 for B1
 pub type B1 = [u8;1];
 // Rust char is 4 bytes long, however STDF char is only 1 byte
 // we will read u8 from file stream and convert to Rust char during parse step

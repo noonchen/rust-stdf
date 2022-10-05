@@ -19,6 +19,8 @@ use flate2::{bufread::GzDecoder, };
 
 
 
+type StreamT = StdfStream<BufReader<fs::File>>;
+
 #[derive(Debug)]
 pub enum StdfStream<R> {
     BinaryStream(R),
@@ -26,10 +28,9 @@ pub enum StdfStream<R> {
 }
 
 pub struct StdfReader {
-    file_path: String,
-    compress_type: CompressType,
+    pub file_path: String,
     endianness: ByteOrder,
-    stream: StdfStream<BufReader<fs::File>>,
+    stream: StreamT,
 }
 
 pub struct RecordIter<'a> { 
@@ -75,23 +76,36 @@ impl StdfReader {
             return Err(StdfError {code: 1, msg: format!("FAR header (0, 10) expected, but {:?} is found", (far_header.typ, far_header.sub)) })
         }
         // restore file position
-        stream.seek(SeekFrom::Start(0))?;
-        // current flate2 does not support seek, we need to manually skip FAR data
-        match compress_type {
-            CompressType::Uncompressed => (),
-            _ => {
-                let mut far_data = [0u8; 2];
-                stream.read_exact(&mut far_data)?;
-            }
-        };
-        // return
+        // current flate2 does not support fseek, we need to consume
+        // old stream and create a new one.
+        // If seek is supported, this function can be replaced by:
+        // 
+        // stream.seek(SeekFrom::Start(0))?;
+        //        
+        stream = StdfReader::rewind_stream_position(stream)?;
+
         Ok(StdfReader{
-            file_path: String::from(path), 
-            compress_type,
+            file_path: String::from(path),
             endianness,
             stream})
     }
 
+    fn rewind_stream_position(old_stream: StreamT) -> Result<StreamT, StdfError> {
+        let new_stream = match old_stream {
+            StdfStream::BinaryStream(mut br) => { 
+                br.seek(SeekFrom::Start(0))?;
+                StdfStream::BinaryStream(br)
+            },
+            StdfStream::GzStream(gzr) => {
+                // get the inner handle and create a new stream after seek
+                let mut fp = gzr.into_inner();
+                fp.seek(SeekFrom::Start(0))?;
+                StdfStream::GzStream(GzDecoder::new(fp))
+            }
+        };
+        Ok(new_stream)
+    }
+    
     fn read_header(&mut self) -> Result<RecordHeader, StdfError> {
         let mut buf = [0u8; 4];
         self.stream.read_exact(&mut buf)?;
