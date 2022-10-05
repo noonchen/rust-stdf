@@ -9,11 +9,9 @@
 // Copyright (c) 2022 noonchen
 //
 
-
-
 use std::fmt;
 use std::io::{self, ErrorKind};
-    
+
 #[derive(Debug)]
 pub struct StdfError {
     pub code: u8,
@@ -37,8 +35,14 @@ impl fmt::Display for StdfError {
 impl From<io::Error> for StdfError {
     fn from(error: io::Error) -> Self {
         match error.kind() {
-            ErrorKind::UnexpectedEof => StdfError { code: 4, msg: String::from("End of file detected") },
-            _ => StdfError { code: 3, msg: format!("{}, {}", error.kind(), error) },    
+            ErrorKind::UnexpectedEof => StdfError {
+                code: 4,
+                msg: String::from("End of file detected"),
+            },
+            _ => StdfError {
+                code: 3,
+                msg: format!("{}, {}", error.kind(), error),
+            },
         }
     }
 }
