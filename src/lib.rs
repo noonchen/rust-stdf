@@ -16,7 +16,7 @@ pub mod stdf_file;
 pub mod stdf_error;
 pub mod stdf_types;
 pub use stdf_file::StdfReader;
-pub use stdf_types::{StdfRecord, stdf_record_type::*};
+pub use stdf_types::{StdfRecord, stdf_record_type::*, ByteOrder};
 
 
 
@@ -213,4 +213,61 @@ mod tests {
         }    
         
     }
+
+    #[test]
+    fn test_read_uint8() {
+        let raw_data = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8];
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(raw_data[pos], stdf_types::read_uint8(&raw_data, &mut pos));
+            assert_eq!(pos, i+1);
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_uint8(&raw_data, &mut pos));
+        assert_eq!(pos, raw_data.len());
+    }
+
+    #[test]
+    fn test_read_u2_le() {
+        let byte_len = 2;
+        let raw_data = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8];
+        let expect = [0x0201, 0x0302, 0x0403, 0x0504, 0x0605, 0x0706, 0x0807, 0u16];
+        let order = ByteOrder::LittleEndian;
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(expect[pos], stdf_types::read_u2(&raw_data, &mut pos, &order));
+            
+            if i <= raw_data.len()-byte_len {
+                assert_eq!(pos, i+byte_len);
+            } else {
+                assert_eq!(pos, i);
+            }
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_u2(&raw_data, &mut pos, &order));
+        assert_eq!(pos, raw_data.len());
+    }
+
+    #[test]
+    fn test_read_u2_be() {
+        let byte_len = 2;
+        let raw_data = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8];
+        let expect = [0x0102, 0x0203, 0x0304, 0x0405, 0x0506, 0x0607, 0x0708, 0u16];
+        let order = ByteOrder::BigEndian;
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(expect[pos], stdf_types::read_u2(&raw_data, &mut pos, &order));
+            
+            if i <= raw_data.len()-byte_len {
+                assert_eq!(pos, i+byte_len);
+            } else {
+                assert_eq!(pos, i);
+            }
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_u2(&raw_data, &mut pos, &order));
+        assert_eq!(pos, raw_data.len());
+    }
+
+
 }
