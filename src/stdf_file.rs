@@ -22,7 +22,7 @@ use flate2::{bufread::GzDecoder, };
 type StreamT = StdfStream<BufReader<fs::File>>;
 
 #[derive(Debug)]
-pub enum StdfStream<R> {
+enum StdfStream<R> {
     BinaryStream(R),
     GzStream(GzDecoder<R>),
 }
