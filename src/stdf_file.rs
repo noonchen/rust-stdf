@@ -116,13 +116,6 @@ impl StdfReader {
     pub fn get_record_iter(&mut self) -> RecordIter {
         RecordIter { inner: self }
     }
-
-    pub fn read_all_records(&mut self) -> Result<Vec<StdfRecord>, StdfError> {
-        // restore file position
-        self.stream.seek(SeekFrom::Start(0))?;
-        Ok(self.get_record_iter().collect())
-    }
-
 }
 
 
@@ -162,6 +155,6 @@ impl Iterator for RecordIter<'_> {
         if let Err(_) = self.inner.stream.read_exact(&mut buffer) {
             return None;
         }
-        Some(StdfRecord::new(&header.code).from_bytes(&buffer, &self.inner.endianness))
+        Some(StdfRecord::new(header.type_code).from_bytes(&buffer, &self.inner.endianness))
     }
 }
