@@ -40,7 +40,7 @@ pub struct RecordHeader {
 
 
 // Data Types
-pub type B1 = u8;
+pub type B1 = [u8;1];
 // Rust char is 4 bytes long, however STDF char is only 1 byte
 // we will read u8 from file stream and convert to Rust char during parse step
 pub type C1 = char;
@@ -102,7 +102,7 @@ pub enum V1 {
 	Cn(Cn),
 	Bn(Bn),
 	Dn(Dn),
-	N1(B1),
+	N1(U1),
     Invalid,
 }
 
@@ -1022,10 +1022,10 @@ impl PSR {
 
     pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
         let pos = &mut 0;
-        self.cont_flg = read_uint8(raw_data, pos);
+        self.cont_flg = [read_uint8(raw_data, pos)];
         self.psr_indx = read_u2(raw_data, pos, order);
         self.psr_nam = read_cn(raw_data, pos);
-        self.opt_flg = read_uint8(raw_data, pos);
+        self.opt_flg = [read_uint8(raw_data, pos)];
         self.totp_cnt = read_u2(raw_data, pos, order);
         self.locp_cnt = read_u2(raw_data, pos, order);
         self.pat_bgn = read_kx_u8(raw_data, pos, order, self.locp_cnt);
@@ -1046,7 +1046,7 @@ impl NMR {
 
     pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
         let pos = &mut 0;
-        self.cont_flg = read_uint8(raw_data, pos);
+        self.cont_flg = [read_uint8(raw_data, pos)];
         self.totm_cnt = read_u2(raw_data, pos, order);
         self.locm_cnt = read_u2(raw_data, pos, order);
         self.pmr_indx = read_kx_u2(raw_data, pos, order, self.locm_cnt);
@@ -1090,7 +1090,7 @@ impl CDR {
 
     pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
         let pos = &mut 0;
-        self.cont_flg = read_uint8(raw_data, pos);
+        self.cont_flg = [read_uint8(raw_data, pos)];
         self.cdr_indx = read_u2(raw_data, pos, order);
         self.chn_nam = read_cn(raw_data, pos);
         self.chn_len = read_u4(raw_data, pos, order);
@@ -1189,7 +1189,7 @@ impl PRR {
         let pos = &mut 0;
         self.head_num = read_uint8(raw_data, pos);
         self.site_num = read_uint8(raw_data, pos);
-        self.part_flg = read_uint8(raw_data, pos);
+        self.part_flg = [read_uint8(raw_data, pos)];
         self.num_test = read_u2(raw_data, pos, order);
         self.hard_bin = read_u2(raw_data, pos, order);
         self.soft_bin = read_u2(raw_data, pos, order);
@@ -1220,7 +1220,7 @@ impl TSR {
         self.test_nam = read_cn(raw_data, pos);
         self.seq_name = read_cn(raw_data, pos);
         self.test_lbl = read_cn(raw_data, pos);
-        self.opt_flag = read_uint8(raw_data, pos);
+        self.opt_flag = [read_uint8(raw_data, pos)];
         self.test_tim = read_r4(raw_data, pos, order);
         self.test_min = read_r4(raw_data, pos, order);
         self.test_max = read_r4(raw_data, pos, order);
@@ -1240,12 +1240,12 @@ impl PTR {
         self.test_num = read_u4(raw_data, pos, order);
         self.head_num = read_uint8(raw_data, pos);
         self.site_num = read_uint8(raw_data, pos);
-        self.test_flg = read_uint8(raw_data, pos);
-        self.parm_flg = read_uint8(raw_data, pos);
+        self.test_flg = [read_uint8(raw_data, pos)];
+        self.parm_flg = [read_uint8(raw_data, pos)];
         self.result = read_r4(raw_data, pos, order);
         self.test_txt = read_cn(raw_data, pos);
         self.alarm_id = read_cn(raw_data, pos);
-        self.opt_flag = read_uint8(raw_data, pos);
+        self.opt_flag = [read_uint8(raw_data, pos)];
         self.res_scal = read_i1(raw_data, pos);
         self.llm_scal = read_i1(raw_data, pos);
         self.hlm_scal = read_i1(raw_data, pos);
@@ -1271,15 +1271,15 @@ impl MPR {
         self.test_num = read_u4(raw_data, pos, order);
         self.head_num = read_uint8(raw_data, pos);
         self.site_num = read_uint8(raw_data, pos);
-        self.test_flg = read_uint8(raw_data, pos);
-        self.parm_flg = read_uint8(raw_data, pos);
+        self.test_flg = [read_uint8(raw_data, pos)];
+        self.parm_flg = [read_uint8(raw_data, pos)];
         self.rtn_icnt = read_u2(raw_data, pos, order);
         self.rslt_cnt = read_u2(raw_data, pos, order);
         self.rtn_stat = read_kx_n1(raw_data, pos, self.rtn_icnt);
         self.rtn_rslt = read_kx_r4(raw_data, pos, order, self.rslt_cnt);
         self.test_txt = read_cn(raw_data, pos);
         self.alarm_id = read_cn(raw_data, pos);
-        self.opt_flag = read_uint8(raw_data, pos);
+        self.opt_flag = [read_uint8(raw_data, pos)];
         self.res_scal = read_i1(raw_data, pos);
         self.llm_scal = read_i1(raw_data, pos);
         self.hlm_scal = read_i1(raw_data, pos);
@@ -1309,8 +1309,8 @@ impl FTR {
         self.test_num = read_u4(raw_data, pos, order);
         self.head_num = read_uint8(raw_data, pos);
         self.site_num = read_uint8(raw_data, pos);
-        self.test_flg = read_uint8(raw_data, pos);
-        self.opt_flag = read_uint8(raw_data, pos);
+        self.test_flg = [read_uint8(raw_data, pos)];
+        self.opt_flag = [read_uint8(raw_data, pos)];
         self.cycl_cnt = read_u4(raw_data, pos, order);
         self.rel_vadr = read_u4(raw_data, pos, order);
         self.rept_cnt = read_u4(raw_data, pos, order);
@@ -1345,19 +1345,19 @@ impl STR {
 
     pub fn from_bytes(mut self, raw_data: &[u8], order: &ByteOrder) -> Self {
         let pos = &mut 0;
-        self.cont_flg = read_uint8(raw_data, pos);
+        self.cont_flg = [read_uint8(raw_data, pos)];
         self.test_num = read_u4(raw_data, pos, order);
         self.head_num = read_uint8(raw_data, pos);
         self.site_num = read_uint8(raw_data, pos);
         self.psr_ref = read_u2(raw_data, pos, order);
-        self.test_flg = read_uint8(raw_data, pos);
+        self.test_flg = [read_uint8(raw_data, pos)];
         self.log_typ = read_cn(raw_data, pos);
         self.test_txt = read_cn(raw_data, pos);
         self.alarm_id = read_cn(raw_data, pos);
         self.prog_txt = read_cn(raw_data, pos);
         self.rslt_txt = read_cn(raw_data, pos);
         self.z_val = read_uint8(raw_data, pos);
-        self.fmu_flg = read_uint8(raw_data, pos);
+        self.fmu_flg = [read_uint8(raw_data, pos)];
         self.mask_map = read_dn(raw_data, pos, order);
         self.fal_map = read_dn(raw_data, pos, order);
         self.cyc_cnt_t = read_u8(raw_data, pos, order);
@@ -1852,7 +1852,7 @@ fn read_bn(raw_data: &[u8], pos: &mut usize) -> Bn {
             data_slice = &raw_data[*pos..];
             *pos = raw_data.len();
         }
-        let mut value = Vec::with_capacity(data_slice.len());
+        let mut value = vec![0u8; data_slice.len()];
         value.copy_from_slice(data_slice);
         value
     } else {
@@ -1876,7 +1876,7 @@ fn read_dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn {
             data_slice = &raw_data[*pos..];
             *pos = raw_data.len();
         }
-        let mut value = Vec::with_capacity(data_slice.len());
+        let mut value = vec![0u8; data_slice.len()];
         value.copy_from_slice(data_slice);
         value
     
