@@ -1,7 +1,4 @@
-mod stdf_file;
-mod stdf_error;
-mod stdf_types;
-use stdf_types::{StdfRecord, stdf_record_type::*};
+use rust_stdf::{StdfReader, StdfRecord, stdf_record_type::*};
 use std::env;
 use std::time::Instant;
 
@@ -14,7 +11,7 @@ fn main() {
         println!("no path\n");
         return;
     };
-    let mut reader = match stdf_file::StdfReader::new(&stdf_path) {
+    let mut reader = match StdfReader::new(&stdf_path) {
         Ok(r) => r,
         Err(e) => {
             println!("{}", e);

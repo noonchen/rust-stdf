@@ -16,7 +16,7 @@ pub mod stdf_file;
 pub mod stdf_error;
 pub mod stdf_types;
 pub use stdf_file::StdfReader;
-pub use stdf_types::{StdfRecord, stdf_record_type::*, ByteOrder};
+pub use stdf_types::{StdfRecord, stdf_record_type, ByteOrder};
 
 
 
@@ -24,6 +24,7 @@ pub use stdf_types::{StdfRecord, stdf_record_type::*, ByteOrder};
 mod tests {
     // use crate::StdfRecord;
     use crate::*;
+    use stdf_record_type::*;
 
     #[test]
     fn record_default_value_test() {
