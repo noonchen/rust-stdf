@@ -1,4 +1,4 @@
-use rust_stdf::{stdf_record_type::*, StdfReader, StdfRecord};
+use rust_stdf::{stdf_file::*, StdfRecord, stdf_record_type::*};
 use std::env;
 use std::time::Instant;
 
@@ -11,6 +11,8 @@ fn main() {
         println!("no path\n");
         return;
     };
+    let ptr_test_name = env::args().nth(2).unwrap_or("contiuity test".to_string());
+
     let mut reader = match StdfReader::new(&stdf_path) {
         Ok(r) => r,
         Err(e) => {
@@ -19,37 +21,38 @@ fn main() {
         }
     };
 
-    // let start_time = Instant::now();
-    // if let Ok(rec_list) = reader.read_all_records() {
-    //     let elapsed = start_time.elapsed().as_millis();
-    //     println!("Total records: {}, time elapsed {} ms\n", rec_list.len(), elapsed);
-    //     for rec in rec_list.iter().filter(|x| x.is_type(StdfRecordType::RecMIR)) {
-    //         println!("{:?}", rec);
-    //     }
-    // }
-
     let start_time = Instant::now();
-    let mut count = 0usize;
-    let rec_t = REC_PIR | REC_PRR;
-    for (ind, rec) in reader
+
+    // and put test result of PTR named 
+    // "continuity test" in a vector.
+    let mut dut_count: u64 = 0;
+    let mut continuity_rlt = vec![];
+
+    // use type filter to work on certain types,
+    // use `|` to combine multiple typs
+    let rec_types = REC_PIR | REC_PTR;
+    // iterator starts from current file position,
+    // if file hits EOF, it will NOT redirect to 0.
+    for rec in reader
         .get_record_iter()
-        .filter(|x| x.is_type(rec_t))
-        .enumerate()
+        .filter(|x| x.is_type(rec_types)) 
     {
-        count = ind + 1;
         match rec {
-            StdfRecord::PIR(pir_rec) => {
-                println!("x: {}, y: {}", pir_rec.head_num, pir_rec.site_num)
-            }
-            StdfRecord::PRR(prr_rec) => {
-                println!("x: {}, y: {}", prr_rec.x_coord, prr_rec.y_coord)
+            StdfRecord::PIR(_) => {dut_count += 1;}
+            StdfRecord::PTR(ref ptr_rec) => {
+                if ptr_rec.test_txt == ptr_test_name {
+                    continuity_rlt.push(ptr_rec.result);
+                }
             }
             _ => {}
-        };
+        }
     }
     let elapsed = start_time.elapsed().as_millis();
-    println!(
-        "Total {:?} records: {}, time elapsed {} ms\n",
-        rec_t, count, elapsed
-    );
+    println!("Total duts {} \n {} result {:?}\n elapsed time {} ms", 
+            dut_count, 
+            ptr_test_name,
+            continuity_rlt,
+            elapsed);
+
+
 }

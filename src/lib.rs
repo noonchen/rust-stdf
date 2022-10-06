@@ -11,16 +11,21 @@
 
 extern crate smart_default;
 
-pub mod stdf_error;
+mod stdf_error;
+mod stdf_types;
+pub use stdf_types::{*};
+
+/// This module contains STDF Reader 
+/// and record iterator
+/// 
+/// For more detailed example, click `StdfReader`
 pub mod stdf_file;
-pub mod stdf_types;
-pub use stdf_file::StdfReader;
-pub use stdf_types::{stdf_record_type, ByteOrder, StdfRecord};
+
 
 #[cfg(test)]
 mod tests {
-    // use crate::StdfRecord;
     use crate::*;
+    use stdf_types::ByteOrder;
     use stdf_record_type::*;
 
     #[test]
@@ -993,5 +998,20 @@ mod tests {
         );
         assert_eq!(pos, 3);
     }
+
+    #[test]
+    fn test_record_type() {
+        for rec_type in (0..=33).map(|x| 1 << x) {
+            assert!(StdfRecord::new(rec_type).is_type(rec_type), "match type incorrect");
+        }
+    }
+
+
+
+
+
+
+
+
 }
 

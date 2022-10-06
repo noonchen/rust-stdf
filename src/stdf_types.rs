@@ -21,7 +21,7 @@ pub enum ByteOrder {
     BigEndian,
 }
 
-pub enum CompressType {
+pub(crate) enum CompressType {
     Uncompressed,
     GzipCompressed,
     BzipCompressed,
@@ -29,7 +29,7 @@ pub enum CompressType {
 }
 
 #[derive(SmartDefault, Debug)]
-pub struct RecordHeader {
+pub(crate) struct RecordHeader {
     pub len: u16,
     pub typ: u8,
     pub sub: u8,
@@ -39,11 +39,11 @@ pub struct RecordHeader {
 
 // Data Types
 
-// Altough B1 can be treated as u8, but its representation
-// in ATDF is differ from U1, so I used a array of one u8 for B1
+/// Altough B1 can be treated as u8, but its representation
+/// in ATDF is differ from U1, so I used a array of one u8 for B1
 pub type B1 = [u8; 1];
-// Rust char is 4 bytes long, however STDF char is only 1 byte
-// we will read u8 from file stream and convert to Rust char during parse step
+/// Rust char is 4 bytes long, however STDF char is only 1 byte
+/// we will read u8 from file stream and convert to Rust char during parse step
 pub type C1 = char;
 pub type U1 = u8;
 pub type U2 = u16;
@@ -55,19 +55,19 @@ pub type I4 = i32;
 pub type R4 = f32;
 pub type R8 = f64;
 
-// Cn;	//first byte = unsigned count of bytes to follow (maximum of 255 bytes)
+/// Cn;	//first byte = unsigned count of bytes to follow (maximum of 255 bytes)
 pub type Cn = String;
 
-// Variable length character string, string length is stored in another field
+/// Variable length character string, string length is stored in another field
 pub type Cf = String;
 
-// first two bytes = unsigned count of bytes to follow (maximum of 65535 bytes)
+/// first two bytes = unsigned count of bytes to follow (maximum of 65535 bytes)
 pub type Sn = String;
 
-// Bn;	//First byte = unsigned count of bytes to follow (maximum of 255 bytes)
+/// Bn;	//First byte = unsigned count of bytes to follow (maximum of 255 bytes)
 pub type Bn = Vec<u8>;
 
-// Dn;	//First two bytes = unsigned count of bits to follow (maximum of 65,535 bits)
+/// Dn;	//First two bytes = unsigned count of bits to follow (maximum of 65,535 bits)
 pub type Dn = Vec<u8>;
 
 pub type KxCn = Vec<Cn>;
@@ -80,6 +80,11 @@ pub type KxU8 = Vec<U8>;
 pub type KxR4 = Vec<R4>;
 pub type KxN1 = Vec<U1>;
 
+/// This enum is for STR that 
+/// introduced in STDF V4-2007.
+/// 
+/// the nested data is a vector of Uf type, 
+/// where f = 1, 2, 4 or 8
 #[derive(SmartDefault, Debug, PartialEq)]
 pub enum KxUf {
     #[default]
@@ -89,6 +94,9 @@ pub enum KxUf {
     F8(KxU8),
 }
 
+/// This enum is for storing 
+/// generic data V1, the data type
+/// is the field name.
 #[derive(Clone, Debug, PartialEq)]
 pub enum V1 {
     B0,
@@ -110,6 +118,22 @@ pub enum V1 {
 pub type Vn = Vec<V1>;
 
 // Record Types
+
+/// This module contains constants
+/// for STDF Record type check
+/// 
+/// # Example
+/// 
+/// ```
+/// use rust_stdf::{StdfRecord, stdf_record_type::*};
+/// 
+/// // use constant for record initializing
+/// let mut rec = StdfRecord::new(REC_MIR);
+/// 
+/// // for type check
+/// let t = REC_MIR | REC_MRR | REC_PTR;
+/// let is_t = rec.is_type(t);      // true
+/// ```
 pub mod stdf_record_type {
     // rec type 0
     pub const REC_FAR: u64 = 1;
@@ -157,6 +181,25 @@ pub mod stdf_record_type {
     pub const REC_INVALID: u64 = 1 << 33;
 }
 
+
+/// `StdfRecord` is the data that returned from StdfReader iterator.
+/// 
+/// it contains the actually structs
+/// that contain STDF data.
+/// 
+/// use `match` structure to access the nested data. 
+/// 
+/// # Example
+/// 
+/// ```
+/// use rust_stdf::{StdfRecord, stdf_record_type::*};
+/// 
+/// let mut rec = StdfRecord::new(REC_PTR);
+/// if let StdfRecord::PTR(ref mut ptr_data) = rec {
+///     ptr_data.result = 100.0;
+/// }
+/// println!("{:?}", rec);
+/// ```
 #[derive(Debug)]
 pub enum StdfRecord {
     // rec type 0
