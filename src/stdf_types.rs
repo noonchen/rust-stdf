@@ -10,7 +10,7 @@
 //
 
 use crate::stdf_error::StdfError;
-extern crate chrono;
+// extern crate chrono;
 extern crate smart_default;
 use smart_default::SmartDefault;
 
