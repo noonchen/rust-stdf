@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Thu Oct 06 2022
+// Last Modified: Fri Oct 07 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -1950,7 +1950,7 @@ pub(crate) fn read_r8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R8
 #[inline(always)]
 pub(crate) fn read_cn(raw_data: &[u8], pos: &mut usize) -> Cn {
     let count = read_uint8(raw_data, pos) as usize;
-    let mut value = String::from("");
+    let mut value = String::with_capacity(count);
     if count != 0 {
         let pos_after_read = *pos + count;
         if pos_after_read <= raw_data.len() {
@@ -1970,7 +1970,7 @@ pub(crate) fn read_cn(raw_data: &[u8], pos: &mut usize) -> Cn {
 #[inline(always)]
 pub(crate) fn read_sn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Sn {
     let count = read_u2(raw_data, pos, order) as usize;
-    let mut value = String::from("");
+    let mut value = String::with_capacity(count);
     if count != 0 {
         let pos_after_read = *pos + count;
         if pos_after_read <= raw_data.len() {
@@ -1989,7 +1989,7 @@ pub(crate) fn read_sn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Sn
 /// Read Cf (String) from byte array with offset "pos", String length is provide by "f"
 #[inline(always)]
 pub(crate) fn read_cf(raw_data: &[u8], pos: &mut usize, f: u8) -> Cf {
-    let mut value = String::from("");
+    let mut value = String::with_capacity(f as usize);
     if f != 0 {
         let pos_after_read = *pos + (f as usize);
         if pos_after_read <= raw_data.len() {

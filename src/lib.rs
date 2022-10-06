@@ -33,6 +33,12 @@ pub use stdf_types::*;
 /// For more detailed example, click `StdfReader`
 pub mod stdf_file;
 
+/// This module contains ATDF Reader
+/// and record iterator
+///
+/// For more detailed example, click `AtdfReader`
+pub mod atdf_file;
+
 #[cfg(test)]
 mod tests {
     use crate::*;
