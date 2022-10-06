@@ -14,4 +14,5 @@ keywords = ["stdf", "atdf"]
 
 [dependencies]
 flate2 = "1.0.24"
+bzip2 = "0.4.3"
 smart-default = "0.6.0"
