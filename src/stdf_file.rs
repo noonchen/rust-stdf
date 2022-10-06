@@ -32,6 +32,7 @@ enum StdfStream<R> {
 /// Supported compression:
 ///  - Uncompressed
 ///  - Gzip (.gz)
+///  - Bzip (.bz2)
 ///
 /// # Example
 ///
