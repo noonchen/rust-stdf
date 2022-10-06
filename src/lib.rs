@@ -1,4 +1,15 @@
-//
+//! `rust-stdf` is a library for parsing
+//! Standard Test Data Format (STDF) files
+//! of version V4 and V4-2007.
+//!
+//! Current capability:
+//!  - Reading & parsing STDF files.
+//!
+//! In development:
+//!  - (dev) Dump `StdfRecord` to a new stdf file.
+//!  - (dev) Reading & parsing ATDF file (Text format).
+//!  - (dev) Functions for ATDF <-> STDF format.
+
 // lib.rs
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
