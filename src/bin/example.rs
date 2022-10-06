@@ -11,7 +11,9 @@ fn main() {
         println!("no path\n");
         return;
     };
-    let ptr_test_name = env::args().nth(2).unwrap_or("contiuity test".to_string());
+    let ptr_test_name = env::args()
+        .nth(2)
+        .unwrap_or_else(|| "contiuity test".to_string());
 
     let mut reader = match StdfReader::new(&stdf_path) {
         Ok(r) => r,
