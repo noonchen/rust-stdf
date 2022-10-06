@@ -3,6 +3,7 @@ name = "rust-stdf"
 authors = ["noonchen <chennoon233@foxmail.com>"]
 description = "A library for parsing Standard Test Data Format (STDF) files of version V4 and V4-2007."
 repository = "https://github.com/noonchen/rust-stdf"
+documentation = "https://docs.rs/rust-stdf/"
 readme = "README.md"
 license = "MIT"
 version = "0.1.0"
