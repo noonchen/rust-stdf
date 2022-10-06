@@ -760,6 +760,238 @@ mod tests {
     }
 
     // Vec
+    #[test]
+    fn test_read_kx_cn() {
+        let raw_data: [u8; 12] = [2, 84, 101, 2, 115, 116, 1, 32, 2, 79, 75, 0];
+        let mut pos = 0;
+        assert_eq!(
+            vec!["Te".to_string(), "st".to_string(), " ".to_string(), "OK".to_string()],
+            stdf_types::read_kx_cn(&raw_data, &mut pos, 4)
+        );
+        assert_eq!(pos, 11);
+        let mut pos = 3;
+        assert_eq!(
+            vec!["st".to_string(), " ".to_string(), "OK".to_string(), "".to_string()],
+            stdf_types::read_kx_cn(&raw_data, &mut pos, 4)
+        );
+        assert_eq!(pos, 12);
+        assert_eq!(
+            vec!["".to_string(); 0],
+            stdf_types::read_kx_cn(&raw_data, &mut pos, 0)
+        );
+    }
 
+    #[test]
+    fn test_read_kx_sn() {
+        let raw_data: [u8; 16] = [2, 0, 84, 101, 2, 0, 115, 116, 1, 0, 32, 2, 0, 79, 75, 0];
+        let mut pos = 0;
+        let order = ByteOrder::LittleEndian;
+        assert_eq!(
+            vec!["Te".to_string(), "st".to_string(), " ".to_string(), "OK".to_string()],
+            stdf_types::read_kx_sn(&raw_data, &mut pos, &order, 4)
+        );
+        assert_eq!(pos, 15);
+        let mut pos = 4;
+        assert_eq!(
+            vec!["st".to_string(), " ".to_string(), "OK".to_string(), "".to_string()],
+            stdf_types::read_kx_sn(&raw_data, &mut pos, &order, 4)
+        );
+        assert_eq!(pos, 15);
+        assert_eq!(
+            vec!["".to_string(); 0],
+            stdf_types::read_kx_sn(&raw_data, &mut pos, &order, 0)
+        );        
+    }
+
+    #[test]
+    fn test_read_kx_cf() {
+        let raw_data: [u8; 9] = [84, 101, 115, 116, 32, 32, 79, 75, 0];
+        let mut pos = 0;
+        assert_eq!(
+            vec!["Te".to_string(), "st".to_string(), "  ".to_string(), "OK".to_string()],
+            stdf_types::read_kx_cf(&raw_data, &mut pos, 4, 2)
+        );
+        assert_eq!(pos, 8);
+        let mut pos = 3;
+        assert_eq!(
+            vec!["".to_string(), "".to_string(), "".to_string(), "".to_string()],
+            stdf_types::read_kx_cf(&raw_data, &mut pos, 4, 0)
+        );
+        assert_eq!(pos, 3);
+    }
+
+    #[test]
+    fn test_read_kx_u1() {
+        let raw_data: [u8; 9] = [84, 101, 115, 116, 32, 32, 79, 75, 0];
+        let mut pos = 0;
+        assert_eq!(
+            vec![84, 101, 115, 116, 32, 32, 79, 75, 0],
+            stdf_types::read_kx_u1(&raw_data, &mut pos, 9)
+        );
+        assert_eq!(pos, 9);
+        let mut pos = 3;
+        assert_eq!(
+            vec![0u8; 0],
+            stdf_types::read_kx_u1(&raw_data, &mut pos, 0)
+        );
+        assert_eq!(pos, 3);
+    }
+
+    #[test]
+    fn test_read_kx_u2() {
+        let raw_data: [u8; 9] = [0x12, 0x23, 0x45, 0x78, 0x9A, 0xBC, 0xDE, 0xFF, 0];
+        let mut pos = 0;
+        let order = ByteOrder::LittleEndian;
+        assert_eq!(
+            vec![0x2312, 0x7845, 0xBC9A, 0xFFDE, 0],
+            stdf_types::read_kx_u2(&raw_data, &mut pos, &order, 5)
+        );
+        assert_eq!(pos, 8);
+        let mut pos = 3;
+        assert_eq!(
+            vec![0u16; 0],
+            stdf_types::read_kx_u2(&raw_data, &mut pos, &order, 0)
+        );
+        assert_eq!(pos, 3);
+    }
+
+    #[test]
+    fn test_read_kx_u4() {
+        let raw_data: [u8; 9] = [0x12, 0x23, 0x45, 0x78, 0x9A, 0xBC, 0xDE, 0xFF, 0];
+        let mut pos = 0;
+        let order = ByteOrder::LittleEndian;
+        assert_eq!(
+            vec![0x78452312, 0xFFDEBC9A, 0, 0, 0],
+            stdf_types::read_kx_u4(&raw_data, &mut pos, &order, 5)
+        );
+        assert_eq!(pos, 8);
+        let mut pos = 3;
+        assert_eq!(
+            vec![0u32; 0],
+            stdf_types::read_kx_u4(&raw_data, &mut pos, &order, 0)
+        );
+        assert_eq!(pos, 3);
+    }
+
+    #[test]
+    fn test_read_kx_u8() {
+        let raw_data: [u8; 9] = [0x12, 0x23, 0x45, 0x78, 0x9A, 0xBC, 0xDE, 0xFF, 0];
+        let mut pos = 0;
+        let order = ByteOrder::LittleEndian;
+        assert_eq!(
+            vec![0xFFDEBC9A78452312, 0, 0, 0, 0],
+            stdf_types::read_kx_u8(&raw_data, &mut pos, &order, 5)
+        );
+        assert_eq!(pos, 8);
+        let mut pos = 3;
+        assert_eq!(
+            vec![0u64; 0],
+            stdf_types::read_kx_u8(&raw_data, &mut pos, &order, 0)
+        );
+        assert_eq!(pos, 3);
+    }
+
+    #[test]
+    fn test_read_kx_uf() {
+        let raw_data: [u8; 9] = [0x12, 0x23, 0x45, 0x78, 0x9A, 0xBC, 0xDE, 0xFF, 0];
+        let mut pos = 0;
+        let order = ByteOrder::LittleEndian;
+        assert_eq!(
+            stdf_types::KxUf::F1(vec![0x12, 0x23, 0x45, 0x78, 0x9A]),
+            stdf_types::read_kx_uf(&raw_data, &mut pos, &order, 5, 1)
+        );
+        assert_eq!(pos, 5);
+        let mut pos = 0;
+        assert_eq!(
+            stdf_types::KxUf::F2(vec![0x2312, 0x7845, 0xBC9A, 0xFFDE, 0]),
+            stdf_types::read_kx_uf(&raw_data, &mut pos, &order, 5, 2)
+        );
+        assert_eq!(pos, 8);
+        let mut pos = 0;
+        assert_eq!(
+            stdf_types::KxUf::F4(vec![0x78452312, 0xFFDEBC9A, 0, 0, 0]),
+            stdf_types::read_kx_uf(&raw_data, &mut pos, &order, 5, 4)
+        );
+        assert_eq!(pos, 8);
+        let mut pos = 0;
+        assert_eq!(
+            stdf_types::KxUf::F8(vec![0xFFDEBC9A78452312, 0, 0, 0, 0]),
+            stdf_types::read_kx_uf(&raw_data, &mut pos, &order, 5, 8)
+        );
+        assert_eq!(pos, 8);
+        let mut pos = 3;
+        assert_eq!(
+            stdf_types::KxUf::F1(vec![0u8; 0]),
+            stdf_types::read_kx_uf(&raw_data, &mut pos, &order, 100, 0)
+        );
+        assert_eq!(pos, 3);
+    }
+
+    #[test]
+    fn test_read_kx_r4() {
+        let raw_data: [u8; 9] = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 0];
+        let mut pos = 0;
+        let order = ByteOrder::LittleEndian;
+        assert_eq!(
+            vec![1.5399896e-36, 4.063216e-34, 0.0, 0.0, 0.0],
+            stdf_types::read_kx_r4(&raw_data, &mut pos, &order, 5)
+        );
+        assert_eq!(pos, 8);
+        let mut pos = 3;
+        assert_eq!(
+            vec![0.0; 0],
+            stdf_types::read_kx_r4(&raw_data, &mut pos, &order, 0)
+        );
+        assert_eq!(pos, 3);
+    }
+
+    #[test]
+    fn test_read_kx_n1() {
+        let raw_data: [u8; 9] = [0x12, 0x23, 0x45, 0x78, 0x9A, 0xBC, 0xDE, 0xFF, 0];
+        let mut pos = 0;
+        assert_eq!(
+            vec![0x2, 0x1, 0x3, 0x2, 0x5],
+            stdf_types::read_kx_n1(&raw_data, &mut pos, 5)
+        );
+        assert_eq!(pos, 3);
+        let mut pos = 3;
+        assert_eq!(
+            vec![0u8; 0],
+            stdf_types::read_kx_n1(&raw_data, &mut pos, 0)
+        );
+        assert_eq!(pos, 3);
+    }
+    
+    // generic data
+    #[test]
+    fn test_read_vn() {
+        let raw_data: [u8; 14] = [
+            0x4, 0x0,
+            0xA, 0x2, 0x41, 0x42,
+            0x1, 0xFF,
+            0x0,
+            0x5, 0xFE, 0x1,
+            0xD, 0x45,
+        ];
+        let mut pos = 2;
+        let order = ByteOrder::LittleEndian;
+        assert_eq!(
+            vec![
+                stdf_types::V1::Cn("AB".to_string()),
+                stdf_types::V1::U1(0xFF),
+                stdf_types::V1::B0,
+                stdf_types::V1::I2(510),
+                stdf_types::V1::N1(0x5),
+                ],
+            stdf_types::read_vn(&raw_data, &mut pos, &order, 5)
+        );
+        assert_eq!(pos, 14);
+        let mut pos = 3;
+        assert_eq!(
+            vec![stdf_types::V1::Invalid; 0],
+            stdf_types::read_vn(&raw_data, &mut pos, &order, 0)
+        );
+        assert_eq!(pos, 3);
+    }
 }
 

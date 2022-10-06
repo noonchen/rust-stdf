@@ -80,7 +80,7 @@ pub type KxU8 = Vec<U8>;
 pub type KxR4 = Vec<R4>;
 pub type KxN1 = Vec<U1>;
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, PartialEq)]
 pub enum KxUf {
     #[default]
     F1(KxU1),
@@ -89,7 +89,7 @@ pub enum KxUf {
     F8(KxU8),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum V1 {
     B0,
     U1(U1),
@@ -2185,7 +2185,7 @@ pub(crate) fn read_v1(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> V1
         10 => V1::Cn(read_cn(raw_data, pos)),
         11 => V1::Bn(read_bn(raw_data, pos)),
         12 => V1::Dn(read_dn(raw_data, pos, order)),
-        13 => V1::N1(read_uint8(raw_data, pos)),
+        13 => V1::N1(read_uint8(raw_data, pos) & 0x0F),
         _ => V1::Invalid,
     }
 }
