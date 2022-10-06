@@ -250,6 +250,7 @@ mod tests {
         }
     }
 
+    // unsigned data type
     #[test]
     fn test_read_uint8() {
         let raw_data = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8];
@@ -310,4 +311,215 @@ mod tests {
         assert_eq!(0, stdf_types::read_u2(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
+
+    #[test]
+    fn test_read_u4_le() {
+        let byte_len = 4;
+        let raw_data = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8];
+        let expect = [0x4030201, 0x5040302, 0x6050403, 0x7060504, 0x8070605, 0, 0, 0u32];
+        let order = ByteOrder::LittleEndian;
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(
+                expect[pos],
+                stdf_types::read_u4(&raw_data, &mut pos, &order)
+            );
+    
+            if i <= raw_data.len() - byte_len {
+                assert_eq!(pos, i + byte_len);
+            } else {
+                assert_eq!(pos, i);
+            }
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_u4(&raw_data, &mut pos, &order));
+        assert_eq!(pos, raw_data.len());
+    }
+    
+    #[test]
+    fn test_read_u4_be() {
+        let byte_len = 4;
+        let raw_data = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8];
+        let expect = [0x1020304, 0x2030405, 0x3040506, 0x4050607, 0x5060708, 0, 0, 0u32];
+        let order = ByteOrder::BigEndian;
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(
+                expect[pos],
+                stdf_types::read_u4(&raw_data, &mut pos, &order)
+            );
+    
+            if i <= raw_data.len() - byte_len {
+                assert_eq!(pos, i + byte_len);
+            } else {
+                assert_eq!(pos, i);
+            }
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_u4(&raw_data, &mut pos, &order));
+        assert_eq!(pos, raw_data.len());
+    }
+    
+    #[test]
+    fn test_read_u8_le() {
+        let byte_len = 8;
+        let raw_data = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8];
+        let expect = [0x807060504030201, 0x908070605040302, 0, 0, 0, 0, 0, 0, 0u64];
+        let order = ByteOrder::LittleEndian;
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(
+                expect[pos],
+                stdf_types::read_u8(&raw_data, &mut pos, &order)
+            );
+    
+            if i <= raw_data.len() - byte_len {
+                assert_eq!(pos, i + byte_len);
+            } else {
+                assert_eq!(pos, i);
+            }
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_u8(&raw_data, &mut pos, &order));
+        assert_eq!(pos, raw_data.len());
+    }
+
+    #[test]
+    fn test_read_u8_be() {
+        let byte_len = 8;
+        let raw_data = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8];
+        let expect = [0x102030405060708, 0x203040506070809, 0, 0, 0, 0, 0, 0, 0u64];
+        let order = ByteOrder::BigEndian;
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(
+                expect[pos],
+                stdf_types::read_u8(&raw_data, &mut pos, &order)
+            );
+    
+            if i <= raw_data.len() - byte_len {
+                assert_eq!(pos, i + byte_len);
+            } else {
+                assert_eq!(pos, i);
+            }
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_u8(&raw_data, &mut pos, &order));
+        assert_eq!(pos, raw_data.len());
+    }
+
+    // signed data type
+    #[test]
+    fn test_read_i1() {
+        let raw_data: [u8; 8] = [0x00, 0x01, 0x7F, 0xFE, 0x80, 0x81, 0x8F, 0xFF];
+        let expected: [i8; 8] = [0, 1, 127, -2, -128, -127, -113, -1];
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(expected[pos], stdf_types::read_i1(&raw_data, &mut pos));
+            assert_eq!(pos, i + 1);
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_uint8(&raw_data, &mut pos));
+        assert_eq!(pos, raw_data.len());
+    }
+
+    #[test]
+    fn test_read_i2_le() {
+        let byte_len = 2;
+        let raw_data: [u8; 8] = [0x00, 0x01, 0x7F, 0xFE, 0x80, 0x81, 0x8F, 0xFF];
+        let expected: [i16; 8] = [0x100, 0x7F01, -385, -32514, -32384, -28799, -113, 0];
+        let order = ByteOrder::LittleEndian;
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(
+                expected[pos],
+                stdf_types::read_i2(&raw_data, &mut pos, &order)
+            );
+
+            if i <= raw_data.len() - byte_len {
+                assert_eq!(pos, i + byte_len);
+            } else {
+                assert_eq!(pos, i);
+            }
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_i2(&raw_data, &mut pos, &order));
+        assert_eq!(pos, raw_data.len());
+    }
+
+    #[test]
+    fn test_read_i2_be() {
+        let byte_len = 2;
+        let raw_data: [u8; 8] = [0x00, 0x01, 0x7F, 0xFE, 0x80, 0x81, 0x8F, 0xFF];
+        let expected: [i16; 8] = [0x1, 0x17F, 0x7FFE, -384, -32639, -32369, -28673, 0];
+        let order = ByteOrder::BigEndian;
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(
+                expected[pos],
+                stdf_types::read_i2(&raw_data, &mut pos, &order)
+            );
+
+            if i <= raw_data.len() - byte_len {
+                assert_eq!(pos, i + byte_len);
+            } else {
+                assert_eq!(pos, i);
+            }
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_i2(&raw_data, &mut pos, &order));
+        assert_eq!(pos, raw_data.len());
+    }
+
+    #[test]
+    fn test_read_i4_le() {
+        let byte_len = 4;
+        let raw_data: [u8; 8] = [0x00, 0x01, 0x7F, 0xFE, 0x80, 0x81, 0x8F, 0xFF];
+        let expected: [i32; 8] = [-25231104, -2130804991, -2122252673, -1887338242, -7372416, 0, 0, 0];
+        let order = ByteOrder::LittleEndian;
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(
+                expected[pos],
+                stdf_types::read_i4(&raw_data, &mut pos, &order)
+            );
+
+            if i <= raw_data.len() - byte_len {
+                assert_eq!(pos, i + byte_len);
+            } else {
+                assert_eq!(pos, i);
+            }
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_i4(&raw_data, &mut pos, &order));
+        assert_eq!(pos, raw_data.len());
+    }
+    
+    #[test]
+    fn test_read_i4_be() {
+        let byte_len = 4;
+        let raw_data: [u8; 8] = [0x00, 0x01, 0x7F, 0xFE, 0x80, 0x81, 0x8F, 0xFF];
+        let expected: [i32; 8] = [0x17FFE, 0x17FFE80, 0x7FFE8081, -25132657, -2138992641, 0, 0, 0];
+        let order = ByteOrder::BigEndian;
+        for i in 0..raw_data.len() {
+            let mut pos = i;
+            assert_eq!(
+                expected[pos],
+                stdf_types::read_i4(&raw_data, &mut pos, &order)
+            );
+
+            if i <= raw_data.len() - byte_len {
+                assert_eq!(pos, i + byte_len);
+            } else {
+                assert_eq!(pos, i);
+            }
+        }
+        let mut pos = raw_data.len();
+        assert_eq!(0, stdf_types::read_i4(&raw_data, &mut pos, &order));
+        assert_eq!(pos, raw_data.len());
+    }
+
+
+
 }
+
