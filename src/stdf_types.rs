@@ -80,10 +80,10 @@ pub type KxU8 = Vec<U8>;
 pub type KxR4 = Vec<R4>;
 pub type KxN1 = Vec<U1>;
 
-/// This enum is for STR that 
+/// This enum is for STR that
 /// introduced in STDF V4-2007.
-/// 
-/// the nested data is a vector of Uf type, 
+///
+/// the nested data is a vector of Uf type,
 /// where f = 1, 2, 4 or 8
 #[derive(SmartDefault, Debug, PartialEq)]
 pub enum KxUf {
@@ -94,7 +94,7 @@ pub enum KxUf {
     F8(KxU8),
 }
 
-/// This enum is for storing 
+/// This enum is for storing
 /// generic data V1, the data type
 /// is the field name.
 #[derive(Clone, Debug, PartialEq)]
@@ -121,15 +121,15 @@ pub type Vn = Vec<V1>;
 
 /// This module contains constants
 /// for STDF Record type check
-/// 
+///
 /// # Example
-/// 
+///
 /// ```
 /// use rust_stdf::{StdfRecord, stdf_record_type::*};
-/// 
+///
 /// // use constant for record initializing
 /// let mut rec = StdfRecord::new(REC_MIR);
-/// 
+///
 /// // for type check
 /// let t = REC_MIR | REC_MRR | REC_PTR;
 /// let is_t = rec.is_type(t);      // true
@@ -181,19 +181,18 @@ pub mod stdf_record_type {
     pub const REC_INVALID: u64 = 1 << 33;
 }
 
-
 /// `StdfRecord` is the data that returned from StdfReader iterator.
-/// 
+///
 /// it contains the actually structs
 /// that contain STDF data.
-/// 
-/// use `match` structure to access the nested data. 
-/// 
+///
+/// use `match` structure to access the nested data.
+///
 /// # Example
-/// 
+///
 /// ```
 /// use rust_stdf::{StdfRecord, stdf_record_type::*};
-/// 
+///
 /// let mut rec = StdfRecord::new(REC_PTR);
 /// if let StdfRecord::PTR(ref mut ptr_data) = rec {
 ///     ptr_data.result = 100.0;

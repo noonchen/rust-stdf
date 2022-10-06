@@ -1,4 +1,4 @@
-use rust_stdf::{stdf_file::*, StdfRecord, stdf_record_type::*};
+use rust_stdf::{stdf_file::*, stdf_record_type::*, StdfRecord};
 use std::env;
 use std::time::Instant;
 
@@ -23,7 +23,7 @@ fn main() {
 
     let start_time = Instant::now();
 
-    // and put test result of PTR named 
+    // and put test result of PTR named
     // "continuity test" in a vector.
     let mut dut_count: u64 = 0;
     let mut continuity_rlt = vec![];
@@ -33,12 +33,11 @@ fn main() {
     let rec_types = REC_PIR | REC_PTR;
     // iterator starts from current file position,
     // if file hits EOF, it will NOT redirect to 0.
-    for rec in reader
-        .get_record_iter()
-        .filter(|x| x.is_type(rec_types)) 
-    {
+    for rec in reader.get_record_iter().filter(|x| x.is_type(rec_types)) {
         match rec {
-            StdfRecord::PIR(_) => {dut_count += 1;}
+            StdfRecord::PIR(_) => {
+                dut_count += 1;
+            }
             StdfRecord::PTR(ref ptr_rec) => {
                 if ptr_rec.test_txt == ptr_test_name {
                     continuity_rlt.push(ptr_rec.result);
@@ -48,11 +47,8 @@ fn main() {
         }
     }
     let elapsed = start_time.elapsed().as_millis();
-    println!("Total duts {} \n {} result {:?}\n elapsed time {} ms", 
-            dut_count, 
-            ptr_test_name,
-            continuity_rlt,
-            elapsed);
-
-
+    println!(
+        "Total duts {} \n {} result {:?}\n elapsed time {} ms",
+        dut_count, ptr_test_name, continuity_rlt, elapsed
+    );
 }
