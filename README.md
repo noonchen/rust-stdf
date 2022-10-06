@@ -1,10 +1,13 @@
 # rust-stdf
+
+[Documentation](https://docs.rs/rust-stdf/)
  
 A Rust STDF library for process STDF datalogs of Version V4 and V4-2007.
 
 Supported compression:
  - Uncompressed
  - Gzip (.gz)
+ - Bzip (.bz2)
 
 ## Example
 
@@ -12,7 +15,7 @@ Supported compression:
 use rust_stdf::{stdf_file::*, stdf_record_type::*, StdfRecord};
 
 fn main() {
-    let stdf_path = "demo_file.stdf";
+    let stdf_path = "demo_file.stdf";   // "demo_file.stdf.gz" "demo_file.stdf.bz2"
     let mut reader = match StdfReader::new(&stdf_path) {
         Ok(r) => r,
         Err(e) => {

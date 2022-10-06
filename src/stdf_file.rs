@@ -11,6 +11,7 @@
 
 use crate::stdf_error::StdfError;
 use crate::stdf_types::*;
+use bzip2::bufread::BzDecoder;
 use flate2::bufread::GzDecoder;
 use std::fs;
 use std::io::{self, BufReader, SeekFrom}; // struct or enum
@@ -18,10 +19,10 @@ use std::io::{BufRead, Read, Seek}; // trait
 
 type StreamT = StdfStream<BufReader<fs::File>>;
 
-#[derive(Debug)]
 enum StdfStream<R> {
-    BinaryStream(R),
-    GzStream(GzDecoder<R>),
+    Binary(R),
+    Gz(GzDecoder<R>),
+    Bz(BzDecoder<R>),
 }
 
 /// STDF Reader
@@ -31,6 +32,7 @@ enum StdfStream<R> {
 /// Supported compression:
 ///  - Uncompressed
 ///  - Gzip (.gz)
+///  - Bzip (.bz2)
 ///
 /// # Example
 ///
@@ -104,8 +106,9 @@ impl StdfReader {
         let br = BufReader::with_capacity(2 << 20, fp);
 
         let mut stream = match compress_type {
-            CompressType::GzipCompressed => StdfStream::GzStream(GzDecoder::new(br)),
-            _ => StdfStream::BinaryStream(br),
+            CompressType::GzipCompressed => StdfStream::Gz(GzDecoder::new(br)),
+            CompressType::BzipCompressed => StdfStream::Bz(BzDecoder::new(br)),
+            _ => StdfStream::Binary(br),
         };
 
         // read FAR header from file
@@ -149,15 +152,21 @@ impl StdfReader {
 
     fn rewind_stream_position(old_stream: StreamT) -> Result<StreamT, StdfError> {
         let new_stream = match old_stream {
-            StdfStream::BinaryStream(mut br) => {
+            StdfStream::Binary(mut br) => {
                 br.seek(SeekFrom::Start(0))?;
-                StdfStream::BinaryStream(br)
+                StdfStream::Binary(br)
             }
-            StdfStream::GzStream(gzr) => {
+            StdfStream::Gz(gzr) => {
                 // get the inner handle and create a new stream after seek
                 let mut fp = gzr.into_inner();
                 fp.seek(SeekFrom::Start(0))?;
-                StdfStream::GzStream(GzDecoder::new(fp))
+                StdfStream::Gz(GzDecoder::new(fp))
+            }
+            StdfStream::Bz(bzr) => {
+                // get the inner handle and create a new stream after seek
+                let mut fp = bzr.into_inner();
+                fp.seek(SeekFrom::Start(0))?;
+                StdfStream::Bz(BzDecoder::new(fp))
             }
         };
         Ok(new_stream)
@@ -178,8 +187,9 @@ impl StdfReader {
 impl<R: BufRead> Read for StdfStream<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
-            StdfStream::GzStream(gzstream) => gzstream.read(buf),
-            StdfStream::BinaryStream(bstream) => bstream.read(buf),
+            StdfStream::Gz(gzstream) => gzstream.read(buf),
+            StdfStream::Bz(bzstream) => bzstream.read(buf),
+            StdfStream::Binary(bstream) => bstream.read(buf),
         }
     }
 }
@@ -187,9 +197,9 @@ impl<R: BufRead> Read for StdfStream<R> {
 impl<R: Seek> Seek for StdfStream<R> {
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         match self {
-            // flate2 does not support seek
-            StdfStream::GzStream(_gzstream) => Ok(0),
-            StdfStream::BinaryStream(bstream) => bstream.seek(pos),
+            StdfStream::Binary(bstream) => bstream.seek(pos),
+            // arm that does not support seek
+            _ => Ok(0),
         }
     }
 }

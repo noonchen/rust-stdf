@@ -4,6 +4,7 @@
 //!
 //! Current capability:
 //!  - Reading & parsing STDF files.
+//!  - Support gzip and bzip compressed files.
 //!
 //! In development:
 //!  - (dev) Dump `StdfRecord` to a new stdf file.
