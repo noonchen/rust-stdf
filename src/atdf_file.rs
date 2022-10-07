@@ -115,40 +115,53 @@ impl Iterator for AtdfRecordIter<'_> {
         // the previous rec is not completed yet
         loop {
             // read a line
-            let mut tmp_buf = Vec::with_capacity(255);
-            if let Err(e) = self.inner.stream.read_until(b'\n', &mut tmp_buf) {
-                println!("{}", e);
+            let mut tmp_buf = Vec::with_capacity(127);
+            let eof = match self.inner.stream.read_until(b'\n', &mut tmp_buf) {
+                Ok(n) => n == 0,
+                Err(e) => {
+                    println!("Error when reading ATDF file => {}", e);
+                    return None;
+                }
+            };
+
+            let tmp_line = match str::from_utf8(&tmp_buf) {
+                Ok(s) => s,
+                Err(_) => {
+                    println!("String error: ATDF should only contains ascii symbols, ");
+                    return None;
+                }
+            };
+
+            if tmp_line.len() > 0 && tmp_line.starts_with(" ") {
+                // starts with space, means it belongs to incomplete_rec
+                // remove prefix space and suffix \n
+                self.incomplete_rec.push_str(str_trim(tmp_line));
+                // directly goes to the next loop iteration
+                continue;
+            }
+
+            // not starts with space, trim \r\n first
+            let clean_line = str_trim(tmp_line);
+            // if current line is empty, but eof is not reach
+            // skip this empty line...
+            if !eof && clean_line.len() == 0 {
+                continue;
+            }
+
+            // a possible new rec found! or EOF reached
+            // clone the completed_rec for processing
+            let complete_rec = self.incomplete_rec.clone();
+            // store clean_line to incomplete_rec
+            self.incomplete_rec = String::from(clean_line);
+            // if previous incomplete_rec is empty && EOF, we should stop
+            if eof && complete_rec.len() == 0 {
                 return None;
             }
 
-            let data_len = tmp_buf.len();
-            if data_len > 0 && tmp_buf[0] == b' ' {
-                // starts with space, means it belongs to incomplete_rec
-                // remove prefix space and suffix \n
-                if let Ok(tmp_str) = str::from_utf8(&tmp_buf) {
-                    self.incomplete_rec.push_str(str_trim(tmp_str));
-                } else {
-                    println!("error: non ascii found");
-                    return None;
-                }
-            } else {
-                // possibly a new rec
-                // do some checks here
-                if data_len < 4 || tmp_buf[3] != b':' {
-                    println!("invalid line, {}, {:?}", str::from_utf8(&tmp_buf).unwrap(), tmp_buf);
-                    return None;
-                }
-                // get the completed rec
-                let complete = self.incomplete_rec.clone();
-                // save fresh data
-                if let Ok(tmp_str) = str::from_utf8(&tmp_buf) {
-                    self.incomplete_rec = String::from(str_trim(tmp_str));
-                    return Some(complete)
-                } else {
-                    println!("error: non ascii found");
-                    return None;
-                }
-            }
+            // do some ATDF syntax checking here, start parsing ATDF rec
+
+            // send...
+            return Some(complete_rec);
         }
     }
 }
