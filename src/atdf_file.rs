@@ -43,16 +43,16 @@ pub struct AtdfRecordIter<'a> {
 pub(crate) mod atdf_record_field {
     // ATDF fields may not map to STDF fields
     // (ATDF field name, is required? or must presented)
-    const FAR_FIELD: [(&str, bool); 4] = [
+    pub(crate) const FAR_FIELD: [(&str, bool); 4] = [
         ("FileType", true),
         ("STDF_VER", true),
         ("ATDFVer", true),
         ("ScaleFlag", false),
     ];
 
-    const ATR_FIELD: [(&str, bool); 2] = [("MOD_TIM", false), ("CMD_LINE", false)];
+    pub(crate) const ATR_FIELD: [(&str, bool); 2] = [("MOD_TIM", false), ("CMD_LINE", false)];
 
-    const MIR_FIELD: [(&str, bool); 38] = [
+    pub(crate) const MIR_FIELD: [(&str, bool); 38] = [
         ("LOT_ID", true),
         ("PART_TYP", true),
         ("JOB_NAM", true),
@@ -93,14 +93,14 @@ pub(crate) mod atdf_record_field {
         ("SUPR_NAM", false),
     ];
 
-    const MRR_FIELD: [(&str, bool); 4] = [
+    pub(crate) const MRR_FIELD: [(&str, bool); 4] = [
         ("FINISH_T", true),
         ("DISP_COD", false),
         ("USR_DESC", false),
         ("EXC_DESC", false),
     ];
 
-    const PCR_FIELD: [(&str, bool); 7] = [
+    pub(crate) const PCR_FIELD: [(&str, bool); 7] = [
         ("HEAD_NUM", true),
         ("SITE_NUM", true),
         ("PART_CNT", false),
@@ -110,7 +110,7 @@ pub(crate) mod atdf_record_field {
         ("FUNC_CNT", false),
     ];
 
-    const HBR_FIELD: [(&str, bool); 6] = [
+    pub(crate) const HBR_FIELD: [(&str, bool); 6] = [
         ("HEAD_NUM", true),
         ("SITE_NUM", true),
         ("HBIN_NUM", true),
@@ -119,7 +119,7 @@ pub(crate) mod atdf_record_field {
         ("HBIN_NAM", false),
     ];
 
-    const SBR_FIELD: [(&str, bool); 6] = [
+    pub(crate) const SBR_FIELD: [(&str, bool); 6] = [
         ("HEAD_NUM", true),
         ("SITE_NUM", true),
         ("SBIN_NUM", true),
@@ -128,30 +128,31 @@ pub(crate) mod atdf_record_field {
         ("SBIN_NAM", false),
     ];
 
-    const PMR_FIELD: [(&str, bool); 7] = [
+    pub(crate) const PMR_FIELD: [(&str, bool); 7] = [
         ("PMR_INDX", true),
         ("CHAN_TYP", false),
         ("CHAN_NAM", false),
         ("PHY_NAM", false),
         ("LOG_NAM", false),
         ("HEAD_NUM", false),
-        ("HEAD_NUM", false),
+        ("SITE_NUM", false),
     ];
 
-    const PGR_FIELD: [(&str, bool); 3] =
+    pub(crate) const PGR_FIELD: [(&str, bool); 3] =
         [("GRP_INDX", true), ("GRP_NAM", false), ("PMR_INDX", false)];
 
-    const PLR_FIELD: [(&str, bool); 5] = [
+    pub(crate) const PLR_FIELD: [(&str, bool); 5] = [
         ("GRP_INDX", true),
         ("GRP_MODE", false),
         ("GRP_RADX", false),
         ("PGM_CHAL,PGM_CHAR", false),
         ("RTN_CHAL,RTN_CHAR", false),
     ];
-    // can be required by spec, but it could be missing thou
-    const RDR_FIELD: [(&str, bool); 1] = [("RTST_BIN", false)];
 
-    const SDR_FIELD: [(&str, bool); 19] = [
+    //required by spec, but it could be missing thou
+    pub(crate) const RDR_FIELD: [(&str, bool); 1] = [("RTST_BIN", false)];
+
+    pub(crate) const SDR_FIELD: [(&str, bool); 19] = [
         ("HEAD_NUM", true),
         ("SITE_GRP", true),
         ("SITE_NUM", true),
@@ -173,14 +174,14 @@ pub(crate) mod atdf_record_field {
         ("EXTR_ID", false),
     ];
 
-    const WIR_FIELD: [(&str, bool); 4] = [
+    pub(crate) const WIR_FIELD: [(&str, bool); 4] = [
         ("HEAD_NUM", true),
         ("START_T", true),
         ("SITE_GRP", false),
         ("WAFER_ID", false),
     ];
 
-    const WRR_FIELD: [(&str, bool); 14] = [
+    pub(crate) const WRR_FIELD: [(&str, bool); 14] = [
         ("HEAD_NUM", true),
         ("FINISH_T", true),
         ("PART_CNT", true),
@@ -197,7 +198,7 @@ pub(crate) mod atdf_record_field {
         ("EXC_DESC", false),
     ];
 
-    const WCR_FIELD: [(&str, bool); 9] = [
+    pub(crate) const WCR_FIELD: [(&str, bool); 9] = [
         ("WF_FLAT", false),
         ("POS_X", false),
         ("POS_Y", false),
@@ -209,26 +210,26 @@ pub(crate) mod atdf_record_field {
         ("CENTER_Y", false),
     ];
 
-    const PIR_FIELD: [(&str, bool); 2] = [("HEAD_NUM", true), ("SITE_NUM", true)];
+    pub(crate) const PIR_FIELD: [(&str, bool); 2] = [("HEAD_NUM", true), ("SITE_NUM", true)];
 
-    const PRR_FIELD: [(&str, bool); 14] = [
+    pub(crate) const PRR_FIELD: [(&str, bool); 14] = [
         ("HEAD_NUM", true),
         ("SITE_NUM", true),
         ("PART_ID", true),
         ("NUM_TEST", true),
-        ("PART_FLG", true),
+        ("Pass/Fail", true),
         ("HARD_BIN", true),
         ("SOFT_BIN", false),
         ("X_COORD", false),
         ("Y_COORD", false),
-        ("PART_FLG", false),
-        ("PART_FLG", false),
+        ("RetestCode", false),
+        ("AbortCode", false),
         ("TEST_T", false),
         ("PART_TXT", false),
         ("PART_FIX", false),
     ];
 
-    const TSR_FIELD: [(&str, bool); 15] = [
+    pub(crate) const TSR_FIELD: [(&str, bool); 15] = [
         ("HEAD_NUM", true),
         ("SITE_NUM", true),
         ("TEST_NUM", true),
@@ -246,7 +247,7 @@ pub(crate) mod atdf_record_field {
         ("TST_SQRS", false),
     ];
 
-    const PTR_FIELD: [(&str, bool); 20] = [
+    pub(crate) const PTR_FIELD: [(&str, bool); 20] = [
         ("TEST_NUM", true),
         ("HEAD_NUM", true),
         ("SITE_NUM", true),
@@ -269,7 +270,7 @@ pub(crate) mod atdf_record_field {
         ("HLM_SCAL", false),
     ];
 
-    const MPR_FIELD: [(&str, bool); 25] = [
+    pub(crate) const MPR_FIELD: [(&str, bool); 25] = [
         ("TEST_NUM", true),
         ("HEAD_NUM", true),
         ("SITE_NUM", true),
@@ -297,7 +298,7 @@ pub(crate) mod atdf_record_field {
         ("HLM_SCAL", false),
     ];
 
-    const FTR_FIELD: [(&str, bool); 26] = [
+    pub(crate) const FTR_FIELD: [(&str, bool); 26] = [
         ("TEST_NUM", true),
         ("HEAD_NUM", true),
         ("SITE_NUM", true),
@@ -326,12 +327,12 @@ pub(crate) mod atdf_record_field {
         ("SPIN_MAP", false),
     ];
 
-    const BPS_FIELD: [(&str, bool); 1] = [("SEQ_NAME", false)];
-    const EPS_FIELD: [(&str, bool); 0] = [];
+    pub(crate) const BPS_FIELD: [(&str, bool); 1] = [("SEQ_NAME", false)];
+    pub(crate) const EPS_FIELD: [(&str, bool); 0] = [];
     // GDR is a special case, there is only GEN_DATA, however it's data is delimited by | symbol
-    const GDR_FIELD: [(&str, bool); 0] = [];
+    pub(crate) const GDR_FIELD: [(&str, bool); 0] = [];
 
-    const DTR_FIELD: [(&str, bool); 1] = [("TEST_DAT", false)];
+    pub(crate) const DTR_FIELD: [(&str, bool); 1] = [("TEST_DAT", false)];
 }
 
 // impl
@@ -420,11 +421,11 @@ fn get_rec_code(rec_name: &str) -> u64 {
         "PLR" => REC_PLR,
         "RDR" => REC_RDR,
         "SDR" => REC_SDR,
-        "PSR" => REC_PSR,
-        "NMR" => REC_NMR,
-        "CNR" => REC_CNR,
-        "SSR" => REC_SSR,
-        "CDR" => REC_CDR,
+        // "PSR" => REC_PSR,
+        // "NMR" => REC_NMR,
+        // "CNR" => REC_CNR,
+        // "SSR" => REC_SSR,
+        // "CDR" => REC_CDR,
         "WIR" => REC_WIR,
         "WRR" => REC_WRR,
         "WCR" => REC_WCR,
@@ -434,7 +435,7 @@ fn get_rec_code(rec_name: &str) -> u64 {
         "PTR" => REC_PTR,
         "MPR" => REC_MPR,
         "FTR" => REC_FTR,
-        "STR" => REC_STR,
+        // "STR" => REC_STR,
         "BPS" => REC_BPS,
         "EPS" => REC_EPS,
         "GDR" => REC_GDR,
