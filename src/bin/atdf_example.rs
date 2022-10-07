@@ -9,10 +9,9 @@
 // Copyright (c) 2022 noonchen
 //
 
-use rust_stdf::{atdf_file::*};
+use rust_stdf::atdf_file::*;
 use std::env;
 use std::time::Instant;
-
 
 fn main() {
     let stdf_path: String;
@@ -38,5 +37,4 @@ fn main() {
         println!("{:?}", rec);
     }
     let elapsed = start_time.elapsed().as_millis();
-
 }

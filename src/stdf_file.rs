@@ -184,7 +184,6 @@ impl StdfReader {
     }
 }
 
-
 fn general_read_until<T: Read>(r: &mut T, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
     let mut one_byte = [0u8; 1];
     let mut n: usize = 0;
@@ -202,14 +201,13 @@ fn general_read_until<T: Read>(r: &mut T, delim: u8, buf: &mut Vec<u8>) -> io::R
 }
 
 impl<R: BufRead> StdfStream<R> {
-    pub(crate) fn read_until(&mut self, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize>{
+    pub(crate) fn read_until(&mut self, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
         match self {
             StdfStream::Binary(bstream) => bstream.read_until(delim, buf),
             StdfStream::Gz(gzstream) => general_read_until(gzstream, delim, buf),
             StdfStream::Bz(bzstream) => general_read_until(bzstream, delim, buf),
         }
     }
-
 }
 
 impl<R: BufRead> Read for StdfStream<R> {
