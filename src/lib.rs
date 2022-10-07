@@ -1110,12 +1110,12 @@ mod tests {
         }
     }
 
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
     #[test]
     fn test_atdf_fields_duplicate() {
         let find_dup = |arr: &[(&str, bool)], name: &str| {
             arr.iter()
-                .copied()
+                // .copied()
                 .fold(HashMap::new(), |mut map, val| {
                     map.entry(val.0).and_modify(|frq| *frq += 1).or_insert(1);
                     map
@@ -1150,5 +1150,11 @@ mod tests {
         find_dup(&EPS_FIELD, "EPS");
         find_dup(&GDR_FIELD, "GDR");
         find_dup(&DTR_FIELD, "DTR");
+    }
+
+    #[test]
+    fn test_atdf_field_req_count() {
+        assert_eq!(3, atdf_file::count_reqired(&PTR_FIELD));
+        assert_eq!(0, atdf_file::count_reqired(&GDR_FIELD));
     }
 }

@@ -9,6 +9,7 @@
 // Copyright (c) 2022 noonchen
 //
 
+use self::atdf_record_field::*;
 use crate::stdf_error::StdfError;
 use crate::stdf_file::{rewind_stream_position, StdfStream, StreamT};
 use crate::stdf_record_type::*;
@@ -30,7 +31,7 @@ pub struct AtdfReader {
 pub struct AtdfRecord {
     rec_name: String,
     type_code: u64,
-    data_map: HashMap<usize, String>,
+    data_map: HashMap<String, String>,
 }
 
 pub struct AtdfRecordIter<'a> {
@@ -333,6 +334,8 @@ pub(crate) mod atdf_record_field {
     pub(crate) const GDR_FIELD: [(&str, bool); 0] = [];
 
     pub(crate) const DTR_FIELD: [(&str, bool); 1] = [("TEST_DAT", false)];
+
+    pub(crate) const INVALID_FIELD: [(&str, bool); 0] = [];
 }
 
 // impl
@@ -386,7 +389,7 @@ impl AtdfReader {
             file_path: String::from(path),
             delimiter,
             scale_flag,
-            stream: stream,
+            stream,
         })
     }
 
@@ -398,19 +401,19 @@ impl AtdfReader {
     }
 }
 
-fn str_trim(input: &str) -> &str {
-    let no_pre_space = input.strip_prefix(" ").unwrap_or(input);
+pub(crate) fn str_trim(input: &str) -> &str {
+    let no_pre_space = input.strip_prefix(' ').unwrap_or(input);
     no_pre_space
         .strip_suffix("\r\n")
-        .or(input.strip_suffix("\n"))
+        .or_else(|| input.strip_suffix('\n'))
         .unwrap_or(no_pre_space)
 }
 
-fn get_rec_code(rec_name: &str) -> u64 {
+pub(crate) fn get_code_from_rec_name(rec_name: &str) -> u64 {
     match rec_name {
         "FAR" => REC_FAR,
         "ATR" => REC_ATR,
-        "VUR" => REC_VUR,
+        // "VUR" => REC_VUR,
         "MIR" => REC_MIR,
         "MRR" => REC_MRR,
         "PCR" => REC_PCR,
@@ -444,6 +447,50 @@ fn get_rec_code(rec_name: &str) -> u64 {
     }
 }
 
+fn get_atdf_fields(rec_type: u64) -> &'static [(&'static str, bool)] {
+    match rec_type {
+        REC_FAR => &FAR_FIELD,
+        REC_ATR => &ATR_FIELD,
+        // REC_VUR => &VUR_FIELD,
+        REC_MIR => &MIR_FIELD,
+        REC_MRR => &MRR_FIELD,
+        REC_PCR => &PCR_FIELD,
+        REC_HBR => &HBR_FIELD,
+        REC_SBR => &SBR_FIELD,
+        REC_PMR => &PMR_FIELD,
+        REC_PGR => &PGR_FIELD,
+        REC_PLR => &PLR_FIELD,
+        REC_RDR => &RDR_FIELD,
+        REC_SDR => &SDR_FIELD,
+        // REC_PSR => &PSR,
+        // REC_NMR => &NMR,
+        // REC_CNR => &CNR,
+        // REC_SSR => &SSR,
+        // REC_CDR => &CDR,
+        REC_WIR => &WIR_FIELD,
+        REC_WRR => &WRR_FIELD,
+        REC_WCR => &WCR_FIELD,
+        REC_PIR => &PIR_FIELD,
+        REC_PRR => &PRR_FIELD,
+        REC_TSR => &TSR_FIELD,
+        REC_PTR => &PTR_FIELD,
+        REC_MPR => &MPR_FIELD,
+        REC_FTR => &FTR_FIELD,
+        // REC_STR => &STR_FIELD,
+        REC_BPS => &BPS_FIELD,
+        REC_EPS => &EPS_FIELD,
+        REC_GDR => &GDR_FIELD,
+        REC_DTR => &DTR_FIELD,
+        _ => &INVALID_FIELD,
+    }
+}
+
+pub(crate) fn count_reqired(p_arr: &[(&str, bool)]) -> usize {
+    p_arr
+        .iter()
+        .fold(0, |cnt: usize, (_, b)| cnt + (*b as usize))
+}
+
 impl Iterator for AtdfRecordIter<'_> {
     type Item = AtdfRecord;
 
@@ -469,7 +516,7 @@ impl Iterator for AtdfRecordIter<'_> {
                 }
             };
 
-            if tmp_line.len() > 0 && tmp_line.starts_with(" ") {
+            if !tmp_line.is_empty() && tmp_line.starts_with(' ') {
                 // starts with space, means it belongs to incomplete_rec
                 // remove prefix space and suffix \n
                 self.incomplete_rec.push_str(str_trim(tmp_line));
@@ -481,7 +528,7 @@ impl Iterator for AtdfRecordIter<'_> {
             let clean_line = str_trim(tmp_line);
             // if current line is empty, but eof is not reach
             // skip this empty line...
-            if !eof && clean_line.len() == 0 {
+            if !eof && clean_line.is_empty() {
                 continue;
             }
 
@@ -491,17 +538,17 @@ impl Iterator for AtdfRecordIter<'_> {
             // store clean_line to incomplete_rec
             self.incomplete_rec = String::from(clean_line);
             // if previous incomplete_rec is empty && EOF, we should stop
-            if eof && complete_rec.len() == 0 {
+            if eof && complete_rec.is_empty() {
                 return None;
-            } else if complete_rec.len() == 0 {
+            } else if complete_rec.is_empty() {
                 // not eof, but not content in complete_rec
                 // happens in the beginning
                 continue;
             }
 
             // do some ATDF syntax checking here, start parsing ATDF rec
-            let (rec_name, rec_data) = complete_rec.split_once(":").unwrap_or(("", &complete_rec));
-            let type_code = get_rec_code(rec_name);
+            let (rec_name, rec_data) = complete_rec.split_once(':').unwrap_or(("", &complete_rec));
+            let type_code = get_code_from_rec_name(rec_name);
             if type_code == REC_INVALID {
                 println!(
                     "Unrecognized record name {}, remaining data {}",
@@ -509,11 +556,38 @@ impl Iterator for AtdfRecordIter<'_> {
                 );
                 return None;
             }
-            let data_map: HashMap<usize, String> = rec_data
-                .split(self.inner.delimiter)
-                .enumerate()
-                .map(|(i, s)| (i, s.to_string()))
-                .collect();
+            // map data to each atdf fields, use empty string as default field data
+            let field_data: Vec<&str> = rec_data.split(self.inner.delimiter).collect();
+            let field_name = get_atdf_fields(type_code);
+            // check required fields exist
+            if field_data.len() < count_reqired(field_name) {
+                println!(
+                    "{} record has {} required fields, only {} found in {:?}",
+                    rec_name,
+                    count_reqired(field_name),
+                    field_data.len(),
+                    field_data
+                );
+                return None;
+            }
+            let data_map = if type_code == REC_GDR {
+                // GDR is a special case, data is split with delimiter
+                (0..field_data.len())
+                    .zip(field_data)
+                    .map(|(i, d)| (i.to_string(), d.to_string()))
+                    .collect()
+            } else {
+                field_name
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &(fname, _))| {
+                        (
+                            fname.to_string(),
+                            field_data.get(i).unwrap_or(&"").to_string(),
+                        )
+                    })
+                    .collect()
+            };
             // send...
             return Some(AtdfRecord {
                 rec_name: rec_name.to_string(),

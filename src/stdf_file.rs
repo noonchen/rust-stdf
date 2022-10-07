@@ -189,7 +189,15 @@ fn general_read_until<T: Read>(r: &mut T, delim: u8, buf: &mut Vec<u8>) -> io::R
     let mut n: usize = 0;
     loop {
         // read one byte at a time
-        r.read(&mut one_byte)?;
+        match r.read(&mut one_byte) {
+            Ok(num) => {
+                if num == 0 {
+                    // EOF reached
+                    break;
+                }
+            }
+            Err(e) => return Err(e),
+        };
         buf.extend_from_slice(&one_byte);
         n += 1;
         // break at delimiter

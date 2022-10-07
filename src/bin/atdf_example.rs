@@ -37,4 +37,5 @@ fn main() {
         println!("{:?}", rec);
     }
     let elapsed = start_time.elapsed().as_millis();
+    println!("elapsed time {:?} ms", elapsed);
 }
