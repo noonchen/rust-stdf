@@ -35,7 +35,7 @@ fn main() {
     let start_time = Instant::now();
 
     for rec in reader.get_record_iter() {
-        println!("{}", rec);
+        println!("{:?}", rec);
     }
     let elapsed = start_time.elapsed().as_millis();
 

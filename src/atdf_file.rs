@@ -11,13 +11,14 @@
 
 
 use crate::stdf_file::{StdfStream, StreamT, rewind_stream_position};
+use crate::stdf_record_type::*;
 use crate::stdf_types::{CompressType, StdfRecord};
 use crate::stdf_error::StdfError;
 use bzip2::bufread::BzDecoder;
 use flate2::bufread::GzDecoder;
+use std::collections::hash_map::HashMap;
 use std::{fs, str};
-use std::io::{self, BufReader, SeekFrom}; // struct or enum
-use std::io::{BufRead, Read, Seek}; // trait
+use std::io::BufReader;
 
 
 pub struct AtdfReader {
@@ -27,10 +28,17 @@ pub struct AtdfReader {
     stream: StreamT,
 }
 
+#[derive(Debug)]
+pub struct AtdfRecord {
+    rec_name: String,
+    type_code: u64,
+    data_map: HashMap<usize, String>,
+}
+
 pub struct AtdfRecordIter<'a> {
     inner: &'a mut AtdfReader,
     // ATDF record might be divided 
-    // into multiple line.
+    // into multiple lines.
     incomplete_rec: String,
 }
 
@@ -107,8 +115,46 @@ fn str_trim(input: &str) -> &str {
         .unwrap_or(no_pre_space)
 }
 
+fn get_rec_code(rec_name: &str) -> u64 {
+    match rec_name {
+        "FAR" => REC_FAR,
+        "ATR" => REC_ATR,
+        "VUR" => REC_VUR,
+        "MIR" => REC_MIR,
+        "MRR" => REC_MRR,
+        "PCR" => REC_PCR,
+        "HBR" => REC_HBR,
+        "SBR" => REC_SBR,
+        "PMR" => REC_PMR,
+        "PGR" => REC_PGR,
+        "PLR" => REC_PLR,
+        "RDR" => REC_RDR,
+        "SDR" => REC_SDR,
+        "PSR" => REC_PSR,
+        "NMR" => REC_NMR,
+        "CNR" => REC_CNR,
+        "SSR" => REC_SSR,
+        "CDR" => REC_CDR,
+        "WIR" => REC_WIR,
+        "WRR" => REC_WRR,
+        "WCR" => REC_WCR,
+        "PIR" => REC_PIR,
+        "PRR" => REC_PRR,
+        "TSR" => REC_TSR,
+        "PTR" => REC_PTR,
+        "MPR" => REC_MPR,
+        "FTR" => REC_FTR,
+        "STR" => REC_STR,
+        "BPS" => REC_BPS,
+        "EPS" => REC_EPS,
+        "GDR" => REC_GDR,
+        "DTR" => REC_DTR,
+        _ => REC_INVALID,
+    }
+}
+
 impl Iterator for AtdfRecordIter<'_> {
-    type Item = String;
+    type Item = AtdfRecord;
 
     fn next(&mut self) -> Option<Self::Item> {
         // if next_rec is empty, means 
@@ -156,12 +202,26 @@ impl Iterator for AtdfRecordIter<'_> {
             // if previous incomplete_rec is empty && EOF, we should stop
             if eof && complete_rec.len() == 0 {
                 return None;
+            } else if complete_rec.len() == 0 {
+                // not eof, but not content in complete_rec
+                // happens in the beginning
+                continue;
             }
 
             // do some ATDF syntax checking here, start parsing ATDF rec
-
+            let (rec_name, rec_data) = complete_rec.split_once(":").unwrap_or(("", &complete_rec));
+            let type_code = get_rec_code(rec_name);
+            if type_code == REC_INVALID {
+                println!("Unrecognized record name {}, remaining data {}", rec_name, rec_data);
+                return None;
+            }
+            let data_map: HashMap<usize, String> = rec_data.split(self.inner.delimiter).enumerate().map(|(i, s)| (i, s.to_string())).collect();
             // send...
-            return Some(complete_rec);
+            return Some(AtdfRecord { 
+                rec_name: rec_name.to_string(), 
+                type_code, 
+                data_map
+            });
         }
     }
 }
