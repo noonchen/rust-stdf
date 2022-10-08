@@ -29,7 +29,7 @@ pub struct AtdfReader {
 
 #[derive(Debug)]
 pub struct AtdfRecord {
-    pub rec_name: String,
+    rec_name: String,
     type_code: u64,
     data_map: HashMap<String, String>,
 }
@@ -399,8 +399,10 @@ impl AtdfReader {
             incomplete_rec: String::new(),
         }
     }
+}
 
-    pub fn from_string(atdf_str: &str, delim: char) -> Result<AtdfRecord, StdfError> {
+impl AtdfRecord {
+    pub fn from_atdf_string(atdf_str: &str, delim: char) -> Result<Self, StdfError> {
         // do some ATDF syntax checking here, start parsing ATDF rec
         let (rec_name, rec_data) = atdf_str.split_once(':').unwrap_or(("", atdf_str));
         let type_code = get_code_from_rec_name(rec_name);
@@ -453,6 +455,16 @@ impl AtdfReader {
             data_map,
         })
     }
+
+    pub fn to_atdf_string(&self) -> String {
+        let field_name = get_atdf_fields(self.type_code);
+        let rec_data = field_name
+            .iter()
+            .map(|&(nam, _b)| self.data_map.get(nam).unwrap_or(&String::from("")).clone())
+            .collect::<Vec<String>>()
+            .join("|");
+        format!("{}:{}", self.rec_name, rec_data)
+    }
 }
 
 // help functions
@@ -464,6 +476,10 @@ pub(crate) fn str_trim(input: &str) -> &str {
         .unwrap_or(no_pre_space)
 }
 
+/// This function convert record name string to
+/// record type constant during ATDF parsing
+///
+/// *currently not support V4-2007*
 pub(crate) fn get_code_from_rec_name(rec_name: &str) -> u64 {
     match rec_name {
         "FAR" => REC_FAR,
@@ -501,6 +517,60 @@ pub(crate) fn get_code_from_rec_name(rec_name: &str) -> u64 {
         _ => REC_INVALID,
     }
 }
+
+/// This function convert record type constant to
+/// record name string during ATDF convertion
+///
+/// *currently not support V4-2007*
+// pub(crate) fn get_rec_name_from_code(rec_type: u64) -> &'static str {
+//     match rec_type {
+//         // rec type 15
+//         REC_PTR => "PTR",
+//         REC_MPR => "MPR",
+//         REC_FTR => "FTR",
+//         // REC_STR => "STR",
+//         // rec type 5
+//         REC_PIR => "PIR",
+//         REC_PRR => "PRR",
+//         // rec type 2
+//         REC_WIR => "WIR",
+//         REC_WRR => "WRR",
+//         REC_WCR => "WCR",
+//         // rec type 50
+//         REC_GDR => "GDR",
+//         REC_DTR => "DTR",
+//         // rec type 0
+//         REC_FAR => "FAR",
+//         REC_ATR => "ATR",
+//         // REC_VUR => "VUR",
+//         // rec type 1
+//         REC_MIR => "MIR",
+//         REC_MRR => "MRR",
+//         REC_PCR => "PCR",
+//         REC_HBR => "HBR",
+//         REC_SBR => "SBR",
+//         REC_PMR => "PMR",
+//         REC_PGR => "PGR",
+//         REC_PLR => "PLR",
+//         REC_RDR => "RDR",
+//         REC_SDR => "SDR",
+//         // REC_PSR => "PSR",
+//         // REC_NMR => "NMR",
+//         // REC_CNR => "CNR",
+//         // REC_SSR => "SSR",
+//         // REC_CDR => "CDR",
+//         // rec type 10
+//         REC_TSR => "TSR",
+//         // rec type 20
+//         REC_BPS => "BPS",
+//         REC_EPS => "EPS",
+//         // rec type 180: Reserved
+//         // rec type 181: Reserved
+//         // REC_RESERVE => "ReservedRec",
+//         // not matched
+//         _ => "InvalidRec",
+//     }
+// }
 
 fn get_atdf_fields(rec_type: u64) -> &'static [(&'static str, bool)] {
     match rec_type {
@@ -604,7 +674,7 @@ impl Iterator for AtdfRecordIter<'_> {
             }
 
             // send...
-            return match AtdfReader::from_string(&complete_rec, self.inner.delimiter) {
+            return match AtdfRecord::from_atdf_string(&complete_rec, self.inner.delimiter) {
                 Ok(atdf_rec) => Some(atdf_rec),
                 Err(e) => {
                     println!("{}", e);
