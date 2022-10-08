@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 6th 2022
 // -----
-// Last Modified: Fri Oct 07 2022
+// Last Modified: Sat Oct 08 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -29,7 +29,7 @@ pub struct AtdfReader {
 
 #[derive(Debug)]
 pub struct AtdfRecord {
-    rec_name: String,
+    pub rec_name: String,
     type_code: u64,
     data_map: HashMap<String, String>,
 }
@@ -399,8 +399,63 @@ impl AtdfReader {
             incomplete_rec: String::new(),
         }
     }
+
+    pub fn from_string(atdf_str: &str, delim: char) -> Result<AtdfRecord, StdfError> {
+        // do some ATDF syntax checking here, start parsing ATDF rec
+        let (rec_name, rec_data) = atdf_str.split_once(':').unwrap_or(("", atdf_str));
+        let type_code = get_code_from_rec_name(rec_name);
+        if type_code == REC_INVALID {
+            return Err(StdfError {
+                code: 2,
+                msg: format!(
+                    "Unrecognized record name {}, remaining data {}",
+                    rec_name, rec_data
+                ),
+            });
+        }
+        // map data to each atdf fields, use empty string as default field data
+        let field_data: Vec<&str> = rec_data.split(delim).collect();
+        let field_name = get_atdf_fields(type_code);
+        // check required fields exist
+        if field_data.len() < count_reqired(field_name) {
+            return Err(StdfError {
+                code: 2,
+                msg: format!(
+                    "{} record has {} required fields, only {} found in {:?}",
+                    rec_name,
+                    count_reqired(field_name),
+                    field_data.len(),
+                    field_data
+                ),
+            });
+        }
+        let data_map = if type_code == REC_GDR {
+            // GDR is a special case, data is split with delimiter
+            (0..field_data.len())
+                .zip(field_data)
+                .map(|(i, d)| (i.to_string(), d.to_string()))
+                .collect()
+        } else {
+            field_name
+                .iter()
+                .enumerate()
+                .map(|(i, &(fname, _))| {
+                    (
+                        fname.to_string(),
+                        field_data.get(i).unwrap_or(&"").to_string(),
+                    )
+                })
+                .collect()
+        };
+        Ok(AtdfRecord {
+            rec_name: rec_name.to_string(),
+            type_code,
+            data_map,
+        })
+    }
 }
 
+// help functions
 pub(crate) fn str_trim(input: &str) -> &str {
     let no_pre_space = input.strip_prefix(' ').unwrap_or(input);
     no_pre_space
@@ -491,6 +546,8 @@ pub(crate) fn count_reqired(p_arr: &[(&str, bool)]) -> usize {
         .fold(0, |cnt: usize, (_, b)| cnt + (*b as usize))
 }
 
+// implement of ATDF iterator
+
 impl Iterator for AtdfRecordIter<'_> {
     type Item = AtdfRecord;
 
@@ -546,54 +603,14 @@ impl Iterator for AtdfRecordIter<'_> {
                 continue;
             }
 
-            // do some ATDF syntax checking here, start parsing ATDF rec
-            let (rec_name, rec_data) = complete_rec.split_once(':').unwrap_or(("", &complete_rec));
-            let type_code = get_code_from_rec_name(rec_name);
-            if type_code == REC_INVALID {
-                println!(
-                    "Unrecognized record name {}, remaining data {}",
-                    rec_name, rec_data
-                );
-                return None;
-            }
-            // map data to each atdf fields, use empty string as default field data
-            let field_data: Vec<&str> = rec_data.split(self.inner.delimiter).collect();
-            let field_name = get_atdf_fields(type_code);
-            // check required fields exist
-            if field_data.len() < count_reqired(field_name) {
-                println!(
-                    "{} record has {} required fields, only {} found in {:?}",
-                    rec_name,
-                    count_reqired(field_name),
-                    field_data.len(),
-                    field_data
-                );
-                return None;
-            }
-            let data_map = if type_code == REC_GDR {
-                // GDR is a special case, data is split with delimiter
-                (0..field_data.len())
-                    .zip(field_data)
-                    .map(|(i, d)| (i.to_string(), d.to_string()))
-                    .collect()
-            } else {
-                field_name
-                    .iter()
-                    .enumerate()
-                    .map(|(i, &(fname, _))| {
-                        (
-                            fname.to_string(),
-                            field_data.get(i).unwrap_or(&"").to_string(),
-                        )
-                    })
-                    .collect()
-            };
             // send...
-            return Some(AtdfRecord {
-                rec_name: rec_name.to_string(),
-                type_code,
-                data_map,
-            });
+            return match AtdfReader::from_string(&complete_rec, self.inner.delimiter) {
+                Ok(atdf_rec) => Some(atdf_rec),
+                Err(e) => {
+                    println!("{}", e);
+                    None
+                }
+            };
         }
     }
 }
