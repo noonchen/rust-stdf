@@ -3,16 +3,15 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Sat Oct 08 2022
+// Last Modified: Sun Oct 09 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
 //
 
-use self::atdf_record_field::*;
+use self::{atdf_record_field::*, stdf_record_type::*};
 use crate::stdf_error::StdfError;
-use crate::stdf_record_type::*;
-// extern crate chrono;
+use chrono::NaiveDateTime;
 extern crate smart_default;
 use smart_default::SmartDefault;
 use std::{collections::hash_map::HashMap, convert::From};
@@ -2103,6 +2102,14 @@ impl StdfRecord {
     }
 }
 
+impl From<&AtdfRecord> for StdfRecord {
+    fn from(atdf_rec: &AtdfRecord) -> Self {
+        let mut stdf_rec = StdfRecord::new(atdf_rec.type_code);
+
+        stdf_rec
+    }
+}
+
 impl AtdfRecord {
     pub fn from_atdf_string(
         atdf_str: &str,
@@ -2171,6 +2178,240 @@ impl AtdfRecord {
             .collect::<Vec<String>>()
             .join("|");
         format!("{}:{}", self.rec_name, rec_data)
+    }
+}
+
+impl From<&StdfRecord> for AtdfRecord {
+    /// Records introduced in V4-2007 **CANNOT**
+    /// be converted to ATDF.
+    ///
+    /// If you have ATDF spec for V4-2007, it would
+    /// be most helpful for me to dev the full feature.
+    fn from(stdf_rec: &StdfRecord) -> Self {
+        let type_code;
+        let rec_name;
+        let atdf_fields: &[(&str, bool)];
+        let data_list;
+
+        match stdf_rec {
+            // rec type 15
+            StdfRecord::PTR(rec) => {
+                type_code = REC_PTR;
+                rec_name = "PTR".to_string();
+                atdf_fields = &PTR_FIELD;
+                data_list = atdf_data_from_ptr(rec);
+            }
+            StdfRecord::MPR(rec) => {
+                type_code = REC_MPR;
+                rec_name = "MPR".to_string();
+                atdf_fields = &MPR_FIELD;
+                data_list = atdf_data_from_mpr(rec);
+            }
+            StdfRecord::FTR(rec) => {
+                type_code = REC_FTR;
+                rec_name = "FTR".to_string();
+                atdf_fields = &FTR_FIELD;
+                data_list = atdf_data_from_ftr(rec);
+            }
+            // StdfRecord::STR(rec) => {
+            //     type_code = REC_STR;
+            //     rec_name = "STR".to_string();
+            //     atdf_fields = &STR_FIELD;
+            //     data_list = atdf_data_from_str_rec(rec);
+            // }
+            // rec type 5
+            StdfRecord::PIR(rec) => {
+                type_code = REC_PIR;
+                rec_name = "PIR".to_string();
+                atdf_fields = &PIR_FIELD;
+                data_list = atdf_data_from_pir(rec);
+            }
+
+            StdfRecord::PRR(rec) => {
+                type_code = REC_PRR;
+                rec_name = "PRR".to_string();
+                atdf_fields = &PRR_FIELD;
+                data_list = atdf_data_from_prr(rec);
+            }
+            // rec type 2
+            StdfRecord::WIR(rec) => {
+                type_code = REC_WIR;
+                rec_name = "WIR".to_string();
+                atdf_fields = &WIR_FIELD;
+                data_list = atdf_data_from_wir(rec);
+            }
+            StdfRecord::WRR(rec) => {
+                type_code = REC_WRR;
+                rec_name = "WRR".to_string();
+                atdf_fields = &WRR_FIELD;
+                data_list = atdf_data_from_wrr(rec);
+            }
+            StdfRecord::WCR(rec) => {
+                type_code = REC_WCR;
+                rec_name = "WCR".to_string();
+                atdf_fields = &WCR_FIELD;
+                data_list = atdf_data_from_wcr(rec);
+            }
+            // rec type 50
+            StdfRecord::GDR(rec) => {
+                type_code = REC_GDR;
+                rec_name = "GDR".to_string();
+                atdf_fields = &GDR_FIELD;
+                data_list = atdf_data_from_gdr(rec);
+            }
+            StdfRecord::DTR(rec) => {
+                type_code = REC_DTR;
+                rec_name = "DTR".to_string();
+                atdf_fields = &DTR_FIELD;
+                data_list = atdf_data_from_dtr(rec);
+            }
+            // rec type 10
+            StdfRecord::TSR(rec) => {
+                type_code = REC_TSR;
+                rec_name = "TSR".to_string();
+                atdf_fields = &TSR_FIELD;
+                data_list = atdf_data_from_tsr(rec);
+            }
+            // rec type 1
+            StdfRecord::MIR(rec) => {
+                type_code = REC_MIR;
+                rec_name = "MIR".to_string();
+                atdf_fields = &MIR_FIELD;
+                data_list = atdf_data_from_mir(rec);
+            }
+            StdfRecord::MRR(rec) => {
+                type_code = REC_MRR;
+                rec_name = "MRR".to_string();
+                atdf_fields = &MRR_FIELD;
+                data_list = atdf_data_from_mrr(rec);
+            }
+            StdfRecord::PCR(rec) => {
+                type_code = REC_PCR;
+                rec_name = "PCR".to_string();
+                atdf_fields = &PCR_FIELD;
+                data_list = atdf_data_from_pcr(rec);
+            }
+            StdfRecord::HBR(rec) => {
+                type_code = REC_HBR;
+                rec_name = "HBR".to_string();
+                atdf_fields = &HBR_FIELD;
+                data_list = atdf_data_from_hbr(rec);
+            }
+            StdfRecord::SBR(rec) => {
+                type_code = REC_SBR;
+                rec_name = "SBR".to_string();
+                atdf_fields = &SBR_FIELD;
+                data_list = atdf_data_from_sbr(rec);
+            }
+            StdfRecord::PMR(rec) => {
+                type_code = REC_PMR;
+                rec_name = "PMR".to_string();
+                atdf_fields = &PMR_FIELD;
+                data_list = atdf_data_from_pmr(rec);
+            }
+            StdfRecord::PGR(rec) => {
+                type_code = REC_PGR;
+                rec_name = "PGR".to_string();
+                atdf_fields = &PGR_FIELD;
+                data_list = atdf_data_from_pgr(rec);
+            }
+            StdfRecord::PLR(rec) => {
+                type_code = REC_PLR;
+                rec_name = "PLR".to_string();
+                atdf_fields = &PLR_FIELD;
+                data_list = atdf_data_from_plr(rec);
+            }
+            StdfRecord::RDR(rec) => {
+                type_code = REC_RDR;
+                rec_name = "RDR".to_string();
+                atdf_fields = &RDR_FIELD;
+                data_list = atdf_data_from_rdr(rec);
+            }
+            StdfRecord::SDR(rec) => {
+                type_code = REC_SDR;
+                rec_name = "SDR".to_string();
+                atdf_fields = &SDR_FIELD;
+                data_list = atdf_data_from_sdr(rec);
+            }
+            // StdfRecord::PSR(rec) => {
+            //     type_code = REC_PSR;
+            //     rec_name = "PSR".to_string();
+            //     atdf_fields = &PSR_FIELD;
+            //     data_list = atdf_data_from_psr(rec);
+            // }
+            // StdfRecord::NMR(rec) => {
+            //     type_code = REC_NMR;
+            //     rec_name = "NMR".to_string();
+            //     atdf_fields = &NMR_FIELD;
+            //     data_list = atdf_data_from_nmr(rec);
+            // }
+            // StdfRecord::CNR(rec) => {
+            //     type_code = REC_CNR;
+            //     rec_name = "CNR".to_string();
+            //     atdf_fields = &CNR_FIELD;
+            //     data_list = atdf_data_from_cnr(rec);
+            // }
+            // StdfRecord::SSR(rec) => {
+            //     type_code = REC_SSR;
+            //     rec_name = "SSR".to_string();
+            //     atdf_fields = &SSR_FIELD;
+            //     data_list = atdf_data_from_ssr(rec);
+            // }
+            // StdfRecord::CDR(rec) => {
+            //     type_code = REC_CDR;
+            //     rec_name = "CDR".to_string();
+            //     atdf_fields = &CDR_FIELD;
+            //     data_list = atdf_data_from_cdr(rec);
+            // }
+            // rec type 0
+            StdfRecord::FAR(rec) => {
+                type_code = REC_FAR;
+                rec_name = "FAR".to_string();
+                atdf_fields = &FAR_FIELD;
+                data_list = atdf_data_from_far(rec);
+            }
+            StdfRecord::ATR(rec) => {
+                type_code = REC_ATR;
+                rec_name = "ATR".to_string();
+                atdf_fields = &ATR_FIELD;
+                data_list = atdf_data_from_atr(rec);
+            }
+            // StdfRecord::VUR(rec) => {
+            //     type_code = REC_VUR;
+            //     rec_name = "VUR".to_string();
+            //     atdf_fields = &VUR_FIELD;
+            //     data_list = atdf_data_from_vur(rec);
+            // }
+            // rec type 20
+            StdfRecord::BPS(rec) => {
+                type_code = REC_BPS;
+                rec_name = "BPS".to_string();
+                atdf_fields = &BPS_FIELD;
+                data_list = atdf_data_from_bps(rec);
+            }
+            StdfRecord::EPS(rec) => {
+                type_code = REC_EPS;
+                rec_name = "EPS".to_string();
+                atdf_fields = &EPS_FIELD;
+                data_list = atdf_data_from_eps(rec);
+            }
+            // rec type 180: Reserved
+            // rec type 181: Reserved
+            // not matched
+            _ => {
+                type_code = REC_INVALID;
+                rec_name = "INVALID".to_string();
+                atdf_fields = &INVALID_FIELD;
+                data_list = vec![];
+            }
+        };
+
+        AtdfRecord {
+            rec_name,
+            type_code,
+            scale_flag: false, // default Unscale
+            data_map: create_atdf_map_from_fields_and_data(atdf_fields, data_list),
+        }
     }
 }
 
@@ -2768,4 +3009,121 @@ pub(crate) fn count_reqired(p_arr: &[(&str, bool)]) -> usize {
     p_arr
         .iter()
         .fold(0, |cnt: usize, (_, b)| cnt + (*b as usize))
+}
+
+// STDF -> ATDF convertion help functions
+
+pub(crate) fn atdf_data_from_ptr(rec: &PTR) -> Vec<String> {
+    vec![]
+}
+
+pub(crate) fn atdf_data_from_mpr(rec: &MPR) -> Vec<String> {
+    vec![]
+}
+
+pub(crate) fn atdf_data_from_ftr(rec: &FTR) -> Vec<String> {
+    vec![]
+}
+
+/// ignored because I do not know ATDF structure in V4-2007
+// pub(crate) fn atdf_data_from_str_rec(rec: &STR) -> Vec<String>  {
+//     vec![]}
+
+pub(crate) fn atdf_data_from_pir(rec: &PIR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_prr(rec: &PRR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_wir(rec: &WIR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_wrr(rec: &WRR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_wcr(rec: &WCR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_gdr(rec: &GDR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_dtr(rec: &DTR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_tsr(rec: &TSR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_mir(rec: &MIR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_mrr(rec: &MRR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_pcr(rec: &PCR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_hbr(rec: &HBR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_sbr(rec: &SBR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_pmr(rec: &PMR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_pgr(rec: &PGR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_plr(rec: &PLR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_rdr(rec: &RDR) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_sdr(rec: &SDR) -> Vec<String> {
+    vec![]
+}
+
+// pub(crate) fn atdf_data_from_psr(_rec: &PSR) -> Vec<String>  {vec![]}
+// pub(crate) fn atdf_data_from_nmr(_rec: &NMR) -> Vec<String>  {vec![]}
+// pub(crate) fn atdf_data_from_cnr(_rec: &CNR) -> Vec<String>  {vec![]}
+// pub(crate) fn atdf_data_from_ssr(_rec: &SSR) -> Vec<String>  {vec![]}
+// pub(crate) fn atdf_data_from_cdr(_rec: &CDR) -> Vec<String>  {vec![]}
+
+pub(crate) fn atdf_data_from_far(rec: &FAR) -> Vec<String> {
+    vec![
+        "A".to_string(),          // File type, ATDF
+        rec.stdf_ver.to_string(), // STDF Version
+        "2".to_string(),          // ATDF Version
+        "U".to_string(),          // Unscale
+    ]
+}
+
+pub(crate) fn atdf_data_from_atr(rec: &ATR) -> Vec<String> {
+    vec![
+        NaiveDateTime::from_timestamp(rec.mod_tim as i64, 0)
+            .format("%H:%M:%S %d-%b-%Y")
+            .to_string(), // MOD_TIM
+        rec.cmd_line.to_string(), // CMD_LINE
+    ]
+}
+
+// pub(crate) fn atdf_data_from_vur(_rec: &VUR) -> Vec<String>  {vec![]}
+
+pub(crate) fn atdf_data_from_bps(rec: &BPS) -> Vec<String> {
+    vec![]
+}
+pub(crate) fn atdf_data_from_eps(_rec: &EPS) -> Vec<String> {
+    vec![]
+}
+
+fn create_atdf_map_from_fields_and_data(
+    fields: &[(&str, bool)],
+    data_list: Vec<String>,
+) -> HashMap<String, String> {
+    fields
+        .iter()
+        .zip(data_list)
+        .map(|(&(fname, _), d)| (fname.to_string(), d))
+        .collect::<HashMap<String, String>>()
 }
