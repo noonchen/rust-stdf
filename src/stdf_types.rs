@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Sun Oct 09 2022
+// Last Modified: Mon Oct 10 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -12,6 +12,7 @@
 use self::{atdf_record_field::*, stdf_record_type::*};
 use crate::stdf_error::StdfError;
 use chrono::NaiveDateTime;
+use hex;
 extern crate smart_default;
 use smart_default::SmartDefault;
 use std::{collections::hash_map::HashMap, convert::From};
@@ -2172,11 +2173,24 @@ impl AtdfRecord {
 
     pub fn to_atdf_string(&self) -> String {
         let field_name = get_atdf_fields(self.type_code);
-        let rec_data = field_name
-            .iter()
-            .map(|&(nam, _b)| self.data_map.get(nam).unwrap_or(&String::from("")).clone())
-            .collect::<Vec<String>>()
-            .join("|");
+        let rec_data = if self.type_code == REC_GDR {
+            (0..self.data_map.len())
+                .map(|num| num.to_string())
+                .map(|num_str| {
+                    self.data_map
+                        .get(&num_str)
+                        .unwrap_or(&String::from(""))
+                        .clone()
+                })
+                .collect::<Vec<String>>()
+                .join("|")
+        } else {
+            field_name
+                .iter()
+                .map(|&(nam, _b)| self.data_map.get(nam).unwrap_or(&String::from("")).clone())
+                .collect::<Vec<String>>()
+                .join("|")
+        };
         format!("{}:{}", self.rec_name, rec_data)
     }
 }
@@ -2410,7 +2424,11 @@ impl From<&StdfRecord> for AtdfRecord {
             rec_name,
             type_code,
             scale_flag: false, // default Unscale
-            data_map: create_atdf_map_from_fields_and_data(atdf_fields, data_list),
+            data_map: if type_code == REC_GDR {
+                create_atdf_gdr_map(data_list)
+            } else {
+                create_atdf_map_from_fields_and_data(atdf_fields, data_list)
+            },
         }
     }
 }
@@ -3044,38 +3062,182 @@ pub(crate) fn atdf_data_from_wrr(rec: &WRR) -> Vec<String> {
 pub(crate) fn atdf_data_from_wcr(rec: &WCR) -> Vec<String> {
     vec![]
 }
+
 pub(crate) fn atdf_data_from_gdr(rec: &GDR) -> Vec<String> {
-    vec![]
+    let mut gen_data_list = vec![];
+    for v1_data in &rec.gen_data {
+        match v1_data {
+            V1::U1(u1) => gen_data_list.push(format!("U{}", u1)),
+            V1::U2(u2) => gen_data_list.push(format!("M{}", u2)),
+            V1::U4(u4) => gen_data_list.push(format!("B{}", u4)),
+            V1::I1(i1) => gen_data_list.push(format!("I{}", i1)),
+            V1::I2(i2) => gen_data_list.push(format!("S{}", i2)),
+            V1::I4(i4) => gen_data_list.push(format!("L{}", i4)),
+            V1::R4(r4) => gen_data_list.push(format!("F{}", r4)),
+            V1::R8(r8) => gen_data_list.push(format!("D{}", r8)),
+            V1::Cn(cn) => gen_data_list.push(format!("T{}", cn)),
+            V1::Bn(bn) => gen_data_list.push(format!("X{}", hex::encode_upper(bn))),
+            V1::Dn(dn) => gen_data_list.push(format!("Y{}", hex::encode_upper(dn))),
+            V1::N1(n1) => gen_data_list.push(format!("N{}", n1)),
+            // No pad bytes in ATDF
+            _ => {
+                continue;
+            }
+        }
+    }
+    gen_data_list
 }
+
 pub(crate) fn atdf_data_from_dtr(rec: &DTR) -> Vec<String> {
-    vec![]
+    vec![
+        rec.text_dat.clone(), // TEST_DAT
+    ]
 }
+
 pub(crate) fn atdf_data_from_tsr(rec: &TSR) -> Vec<String> {
     vec![]
 }
 pub(crate) fn atdf_data_from_mir(rec: &MIR) -> Vec<String> {
-    vec![]
+    vec![
+        rec.lot_id.clone(),   //LOT_ID
+        rec.part_typ.clone(), //PART_TYP
+        rec.job_nam.clone(),  //JOB_NAM
+        rec.node_nam.clone(), //NODE_NAM
+        rec.tstr_typ.clone(), //TSTR_TYP
+        NaiveDateTime::from_timestamp(rec.setup_t as i64, 0)
+            .format("%H:%M:%S %d-%b-%Y")
+            .to_string(), //SETUP_T
+        NaiveDateTime::from_timestamp(rec.start_t as i64, 0)
+            .format("%H:%M:%S %d-%b-%Y")
+            .to_string(), //START_T
+        rec.oper_nam.clone(), //OPER_NAM
+        rec.mode_cod.to_string(), //MODE_COD
+        rec.stat_num.to_string(), //STAT_NUM
+        rec.sblot_id.clone(), //SBLOT_ID
+        rec.test_cod.clone(), //TEST_COD
+        rec.rtst_cod.to_string(), //RTST_COD
+        rec.job_rev.clone(),  //JOB_REV
+        rec.exec_typ.clone(), //EXEC_TYP
+        rec.exec_ver.clone(), //EXEC_VER
+        rec.prot_cod.to_string(), //PROT_COD
+        rec.cmod_cod.to_string(), //CMOD_COD
+        rec.burn_tim.to_string(), //BURN_TIM
+        rec.tst_temp.clone(), //TST_TEMP
+        rec.user_txt.clone(), //USER_TXT
+        rec.aux_file.clone(), //AUX_FILE
+        rec.pkg_typ.clone(),  //PKG_TYP
+        rec.famly_id.clone(), //FAMLY_ID
+        rec.date_cod.clone(), //DATE_COD
+        rec.facil_id.clone(), //FACIL_ID
+        rec.floor_id.clone(), //FLOOR_ID
+        rec.proc_id.clone(),  //PROC_ID
+        rec.oper_frq.clone(), //OPER_FRQ
+        rec.spec_nam.clone(), //SPEC_NAM
+        rec.spec_ver.clone(), //SPEC_VER
+        rec.flow_id.clone(),  //FLOW_ID
+        rec.setup_id.clone(), //SETUP_ID
+        rec.dsgn_rev.clone(), //DSGN_REV
+        rec.eng_id.clone(),   //ENG_ID
+        rec.rom_cod.clone(),  //ROM_COD
+        rec.serl_num.clone(), //SERL_NUM
+        rec.supr_nam.clone(), //SUPR_NAM
+    ]
 }
+
 pub(crate) fn atdf_data_from_mrr(rec: &MRR) -> Vec<String> {
-    vec![]
+    vec![
+        NaiveDateTime::from_timestamp(rec.finish_t as i64, 0)
+            .format("%H:%M:%S %d-%b-%Y")
+            .to_string(), //FINISH_T
+        rec.disp_cod.to_string(), //DISP_COD
+        rec.usr_desc.clone(),     //USR_DESC
+        rec.exc_desc.clone(),     //EXC_DESC
+    ]
 }
+
 pub(crate) fn atdf_data_from_pcr(rec: &PCR) -> Vec<String> {
-    vec![]
+    vec![
+        if rec.head_num == 255 {
+            "".to_string()
+        } else {
+            rec.head_num.to_string()
+        }, //HEAD_NUM
+        if rec.site_num == 255 {
+            "".to_string()
+        } else {
+            rec.site_num.to_string()
+        }, //SITE_NUM
+        rec.part_cnt.to_string(), //PART_CNT
+        rec.rtst_cnt.to_string(), //RTST_CNT
+        rec.abrt_cnt.to_string(), //ABRT_CNT
+        rec.good_cnt.to_string(), //GOOD_CNT
+        rec.func_cnt.to_string(), //FUNC_CNT
+    ]
 }
+
 pub(crate) fn atdf_data_from_hbr(rec: &HBR) -> Vec<String> {
-    vec![]
+    vec![
+        if rec.head_num == 255 {
+            "".to_string()
+        } else {
+            rec.head_num.to_string()
+        }, //HEAD_NUM
+        if rec.site_num == 255 {
+            "".to_string()
+        } else {
+            rec.site_num.to_string()
+        }, //SITE_NUM
+        rec.hbin_num.to_string(), //HBIN_NUM
+        rec.hbin_cnt.to_string(), //HBIN_CNT
+        rec.hbin_pf.to_string(),  //HBIN_PF
+        rec.hbin_nam.clone(),     //HBIN_NAM
+    ]
 }
+
 pub(crate) fn atdf_data_from_sbr(rec: &SBR) -> Vec<String> {
-    vec![]
+    vec![
+        if rec.head_num == 255 {
+            "".to_string()
+        } else {
+            rec.head_num.to_string()
+        }, //HEAD_NUM
+        if rec.site_num == 255 {
+            "".to_string()
+        } else {
+            rec.site_num.to_string()
+        }, //SITE_NUM
+        rec.sbin_num.to_string(), //SBIN_NUM
+        rec.sbin_cnt.to_string(), //SBIN_CNT
+        rec.sbin_pf.to_string(),  //SBIN_PF
+        rec.sbin_nam.clone(),     //SBIN_NAM
+    ]
 }
+
 pub(crate) fn atdf_data_from_pmr(rec: &PMR) -> Vec<String> {
-    vec![]
+    vec![
+        rec.pmr_indx.to_string(), //PMR_INDX
+        rec.chan_typ.to_string(), //CHAN_TYP
+        rec.chan_nam.clone(),     //CHAN_NAM
+        rec.phy_nam.clone(),      //PHY_NAM
+        rec.log_nam.clone(),      //LOG_NAM
+        rec.head_num.to_string(), //HEAD_NUM
+        rec.site_num.to_string(), //SITE_NUM
+    ]
 }
+
 pub(crate) fn atdf_data_from_pgr(rec: &PGR) -> Vec<String> {
-    vec![]
+    vec![
+        rec.grp_indx.to_string(),        //GRP_INDX
+        rec.grp_nam.clone(),             //GRP_NAM
+        ser_stdf_kx_data(&rec.pmr_indx), //PMR_INDX
+    ]
 }
+
 pub(crate) fn atdf_data_from_plr(rec: &PLR) -> Vec<String> {
-    vec![]
+    vec![
+        ser_stdf_kx_data(&rec.grp_indx), //
+                                         //TODO
+    ]
 }
 pub(crate) fn atdf_data_from_rdr(rec: &RDR) -> Vec<String> {
     vec![]
@@ -3104,14 +3266,16 @@ pub(crate) fn atdf_data_from_atr(rec: &ATR) -> Vec<String> {
         NaiveDateTime::from_timestamp(rec.mod_tim as i64, 0)
             .format("%H:%M:%S %d-%b-%Y")
             .to_string(), // MOD_TIM
-        rec.cmd_line.to_string(), // CMD_LINE
+        rec.cmd_line.clone(), // CMD_LINE
     ]
 }
 
 // pub(crate) fn atdf_data_from_vur(_rec: &VUR) -> Vec<String>  {vec![]}
 
 pub(crate) fn atdf_data_from_bps(rec: &BPS) -> Vec<String> {
-    vec![]
+    vec![
+        rec.seq_name.clone(), // SEQ_NAME
+    ]
 }
 pub(crate) fn atdf_data_from_eps(_rec: &EPS) -> Vec<String> {
     vec![]
@@ -3126,4 +3290,18 @@ fn create_atdf_map_from_fields_and_data(
         .zip(data_list)
         .map(|(&(fname, _), d)| (fname.to_string(), d))
         .collect::<HashMap<String, String>>()
+}
+
+fn create_atdf_gdr_map(data_list: Vec<String>) -> HashMap<String, String> {
+    (0..data_list.len())
+        .zip(data_list)
+        .map(|(num, d)| (num.to_string(), d))
+        .collect::<HashMap<String, String>>()
+}
+
+fn ser_stdf_kx_data<T: ToString>(kx: &[T]) -> String {
+    kx.iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<String>>()
+        .join(",")
 }
