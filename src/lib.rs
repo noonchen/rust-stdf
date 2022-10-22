@@ -732,6 +732,13 @@ mod tests {
         let mut pos = 8;
         assert_eq!("".to_string(), stdf_types::read_cn(&raw_data, &mut pos));
         assert_eq!(pos, expect_pos(8));
+        // latin1 check
+        let raw_data_latin: [u8; 7] = [6, 52, 50, 176, 67, 191, 255];
+        assert_eq!(
+            "42°C¿ÿ".to_string(),
+            stdf_types::read_cn(&raw_data_latin, &mut 0)
+        );
+
     }
 
     #[test]

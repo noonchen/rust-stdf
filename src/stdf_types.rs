@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Mon Oct 10 2022
+// Last Modified: Sun Oct 23 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -12,7 +12,6 @@
 use self::{atdf_record_field::*, stdf_record_type::*};
 use crate::stdf_error::StdfError;
 use chrono::NaiveDateTime;
-use hex;
 extern crate smart_default;
 use smart_default::SmartDefault;
 use std::{collections::hash_map::HashMap, convert::From};
@@ -2588,16 +2587,16 @@ pub(crate) fn read_r8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> R8
 #[inline(always)]
 pub(crate) fn read_cn(raw_data: &[u8], pos: &mut usize) -> Cn {
     let count = read_uint8(raw_data, pos) as usize;
-    let mut value = String::with_capacity(count);
+    let mut value = String::default();
     if count != 0 {
         let pos_after_read = *pos + count;
         if pos_after_read <= raw_data.len() {
             // read count
-            value.push_str(std::str::from_utf8(&raw_data[*pos..pos_after_read]).unwrap());
+            value = bytes_to_string(&raw_data[*pos..pos_after_read]);
             *pos = pos_after_read;
         } else {
             // read all
-            value.push_str(std::str::from_utf8(&raw_data[*pos..]).unwrap());
+            value = bytes_to_string(&raw_data[*pos..]);
             *pos = raw_data.len();
         }
     }
@@ -2608,16 +2607,16 @@ pub(crate) fn read_cn(raw_data: &[u8], pos: &mut usize) -> Cn {
 #[inline(always)]
 pub(crate) fn read_sn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Sn {
     let count = read_u2(raw_data, pos, order) as usize;
-    let mut value = String::with_capacity(count);
+    let mut value = String::default();
     if count != 0 {
         let pos_after_read = *pos + count;
         if pos_after_read <= raw_data.len() {
             // read count
-            value.push_str(std::str::from_utf8(&raw_data[*pos..pos_after_read]).unwrap());
+            value = bytes_to_string(&raw_data[*pos..pos_after_read]);
             *pos = pos_after_read;
         } else {
             // read all
-            value.push_str(std::str::from_utf8(&raw_data[*pos..]).unwrap());
+            value = bytes_to_string(&raw_data[*pos..]);
             *pos = raw_data.len();
         }
     }
@@ -2627,16 +2626,16 @@ pub(crate) fn read_sn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Sn
 /// Read Cf (String) from byte array with offset "pos", String length is provide by "f"
 #[inline(always)]
 pub(crate) fn read_cf(raw_data: &[u8], pos: &mut usize, f: u8) -> Cf {
-    let mut value = String::with_capacity(f as usize);
+    let mut value = String::default();
     if f != 0 {
         let pos_after_read = *pos + (f as usize);
         if pos_after_read <= raw_data.len() {
             // read count
-            value.push_str(std::str::from_utf8(&raw_data[*pos..pos_after_read]).unwrap());
+            value = bytes_to_string(&raw_data[*pos..pos_after_read]);
             *pos = pos_after_read;
         } else {
             // read all
-            value.push_str(std::str::from_utf8(&raw_data[*pos..]).unwrap());
+            value = bytes_to_string(&raw_data[*pos..]);
             *pos = raw_data.len();
         }
     }
@@ -2929,6 +2928,11 @@ pub(crate) fn get_code_from_rec_name(rec_name: &str) -> u64 {
         "DTR" => REC_DTR,
         _ => REC_INVALID,
     }
+}
+
+#[inline(always)]
+pub(crate) fn bytes_to_string(data: &[u8]) -> String {
+    data.iter().map(|&x| x as char).collect()
 }
 
 /// This function convert record type constant to
