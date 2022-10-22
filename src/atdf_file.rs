@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 6th 2022
 // -----
-// Last Modified: Sat Oct 08 2022
+// Last Modified: Sun Oct 23 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -15,7 +15,7 @@ use crate::stdf_types::{AtdfRecord, CompressType};
 use bzip2::bufread::BzDecoder;
 use flate2::bufread::GzDecoder;
 use std::io::BufReader;
-use std::{fs, str};
+use std::{fs, str, mem};
 
 pub struct AtdfReader {
     pub file_path: String,
@@ -138,10 +138,9 @@ impl Iterator for AtdfRecordIter<'_> {
             }
 
             // a possible new rec found! or EOF reached
-            // clone the completed_rec for processing
-            let complete_rec = self.incomplete_rec.clone();
-            // store clean_line to incomplete_rec
-            self.incomplete_rec = String::from(clean_line);
+            // store clean_line to the completed_rec then swap with incomplete_rec
+            let mut complete_rec = String::from(clean_line);
+            mem::swap(&mut self.incomplete_rec, &mut complete_rec);
             // if previous incomplete_rec is empty && EOF, we should stop
             if eof && complete_rec.is_empty() {
                 return None;
