@@ -23,6 +23,7 @@
 
 extern crate smart_default;
 
+mod atdf_types;
 mod stdf_error;
 mod stdf_types;
 pub use stdf_types::*;
@@ -42,8 +43,8 @@ pub mod atdf_file;
 #[cfg(test)]
 mod tests {
     use crate::*;
+    use atdf_types::atdf_record_field::*;
     use stdf_record_type::*;
-    use stdf_types::atdf_record_field::*;
     use stdf_types::ByteOrder;
 
     #[test]
@@ -1160,7 +1161,7 @@ mod tests {
 
     #[test]
     fn test_atdf_field_req_count() {
-        assert_eq!(3, stdf_types::count_reqired(&PTR_FIELD));
-        assert_eq!(0, stdf_types::count_reqired(&GDR_FIELD));
+        assert_eq!(3, atdf_types::count_reqired(&PTR_FIELD));
+        assert_eq!(0, atdf_types::count_reqired(&GDR_FIELD));
     }
 }

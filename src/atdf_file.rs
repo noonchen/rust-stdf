@@ -3,15 +3,16 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 6th 2022
 // -----
-// Last Modified: Tue Oct 25 2022
+// Last Modified: Wed Oct 26 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
 //
 
+use crate::atdf_types::AtdfRecord;
 use crate::stdf_error::StdfError;
 use crate::stdf_file::{rewind_stream_position, StdfStream, StreamT};
-use crate::stdf_types::{AtdfRecord, CompressType};
+use crate::stdf_types::CompressType;
 use bzip2::bufread::BzDecoder;
 use flate2::bufread::GzDecoder;
 use std::io::BufReader;
