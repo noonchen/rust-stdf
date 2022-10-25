@@ -33,10 +33,17 @@ pub use stdf_types::*;
 /// For more detailed example, click `StdfReader`
 pub mod stdf_file;
 
+/// This module contains ATDF Reader
+/// and record iterator
+///
+/// For more detailed example, click `AtdfReader`
+pub mod atdf_file;
+
 #[cfg(test)]
 mod tests {
     use crate::*;
     use stdf_record_type::*;
+    use stdf_types::atdf_record_field::*;
     use stdf_types::ByteOrder;
 
     #[test]
@@ -725,6 +732,12 @@ mod tests {
         let mut pos = 8;
         assert_eq!("".to_string(), stdf_types::read_cn(&raw_data, &mut pos));
         assert_eq!(pos, expect_pos(8));
+        // latin1 check
+        let raw_data_latin: [u8; 7] = [6, 52, 50, 176, 67, 191, 255];
+        assert_eq!(
+            "42°C¿ÿ".to_string(),
+            stdf_types::read_cn(&raw_data_latin, &mut 0)
+        );
     }
 
     #[test]
@@ -1101,5 +1114,53 @@ mod tests {
                 "match type incorrect"
             );
         }
+    }
+
+    use std::collections::HashMap;
+    #[test]
+    fn test_atdf_fields_duplicate() {
+        let find_dup = |arr: &[(&str, bool)], name: &str| {
+            arr.iter()
+                // .copied()
+                .fold(HashMap::new(), |mut map, val| {
+                    map.entry(val.0).and_modify(|frq| *frq += 1).or_insert(1);
+                    map
+                })
+                .iter()
+                .map(|(s, &n)| assert_eq!(n, 1, "dup field {} in {}", s, name))
+                .count()
+        };
+
+        find_dup(&FAR_FIELD, "FAR");
+        find_dup(&ATR_FIELD, "ATR");
+        find_dup(&MIR_FIELD, "MIR");
+        find_dup(&MRR_FIELD, "MRR");
+        find_dup(&PCR_FIELD, "PCR");
+        find_dup(&HBR_FIELD, "HBR");
+        find_dup(&SBR_FIELD, "SBR");
+        find_dup(&PMR_FIELD, "PMR");
+        find_dup(&PGR_FIELD, "PGR");
+        find_dup(&PLR_FIELD, "PLR");
+        find_dup(&RDR_FIELD, "RDR");
+        find_dup(&SDR_FIELD, "SDR");
+        find_dup(&WIR_FIELD, "WIR");
+        find_dup(&WRR_FIELD, "WRR");
+        find_dup(&WCR_FIELD, "WCR");
+        find_dup(&PIR_FIELD, "PIR");
+        find_dup(&PRR_FIELD, "PRR");
+        find_dup(&TSR_FIELD, "TSR");
+        find_dup(&PTR_FIELD, "PTR");
+        find_dup(&MPR_FIELD, "MPR");
+        find_dup(&FTR_FIELD, "FTR");
+        find_dup(&BPS_FIELD, "BPS");
+        find_dup(&EPS_FIELD, "EPS");
+        find_dup(&GDR_FIELD, "GDR");
+        find_dup(&DTR_FIELD, "DTR");
+    }
+
+    #[test]
+    fn test_atdf_field_req_count() {
+        assert_eq!(3, stdf_types::count_reqired(&PTR_FIELD));
+        assert_eq!(0, stdf_types::count_reqired(&GDR_FIELD));
     }
 }

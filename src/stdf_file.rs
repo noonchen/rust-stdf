@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Thu Oct 06 2022
+// Last Modified: Fri Oct 07 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -17,9 +17,9 @@ use std::fs;
 use std::io::{self, BufReader, SeekFrom}; // struct or enum
 use std::io::{BufRead, Read, Seek}; // trait
 
-type StreamT = StdfStream<BufReader<fs::File>>;
+pub(crate) type StreamT = StdfStream<BufReader<fs::File>>;
 
-enum StdfStream<R> {
+pub(crate) enum StdfStream<R> {
     Binary(R),
     Gz(GzDecoder<R>),
     Bz(BzDecoder<R>),
@@ -89,6 +89,28 @@ pub struct RecordIter<'a> {
 
 // implementations
 
+pub(crate) fn rewind_stream_position(old_stream: StreamT) -> Result<StreamT, StdfError> {
+    let new_stream = match old_stream {
+        StdfStream::Binary(mut br) => {
+            br.seek(SeekFrom::Start(0))?;
+            StdfStream::Binary(br)
+        }
+        StdfStream::Gz(gzr) => {
+            // get the inner handle and create a new stream after seek
+            let mut fp = gzr.into_inner();
+            fp.seek(SeekFrom::Start(0))?;
+            StdfStream::Gz(GzDecoder::new(fp))
+        }
+        StdfStream::Bz(bzr) => {
+            // get the inner handle and create a new stream after seek
+            let mut fp = bzr.into_inner();
+            fp.seek(SeekFrom::Start(0))?;
+            StdfStream::Bz(BzDecoder::new(fp))
+        }
+    };
+    Ok(new_stream)
+}
+
 impl StdfReader {
     pub fn new(path: &str) -> Result<Self, StdfError> {
         // determine the compress type by file extension
@@ -141,35 +163,13 @@ impl StdfReader {
         //
         // stream.seek(SeekFrom::Start(0))?;
         //
-        stream = StdfReader::rewind_stream_position(stream)?;
+        stream = rewind_stream_position(stream)?;
 
         Ok(StdfReader {
             file_path: String::from(path),
             endianness,
             stream,
         })
-    }
-
-    fn rewind_stream_position(old_stream: StreamT) -> Result<StreamT, StdfError> {
-        let new_stream = match old_stream {
-            StdfStream::Binary(mut br) => {
-                br.seek(SeekFrom::Start(0))?;
-                StdfStream::Binary(br)
-            }
-            StdfStream::Gz(gzr) => {
-                // get the inner handle and create a new stream after seek
-                let mut fp = gzr.into_inner();
-                fp.seek(SeekFrom::Start(0))?;
-                StdfStream::Gz(GzDecoder::new(fp))
-            }
-            StdfStream::Bz(bzr) => {
-                // get the inner handle and create a new stream after seek
-                let mut fp = bzr.into_inner();
-                fp.seek(SeekFrom::Start(0))?;
-                StdfStream::Bz(BzDecoder::new(fp))
-            }
-        };
-        Ok(new_stream)
     }
 
     fn read_header(&mut self) -> Result<RecordHeader, StdfError> {
@@ -181,6 +181,40 @@ impl StdfReader {
 
     pub fn get_record_iter(&mut self) -> RecordIter {
         RecordIter { inner: self }
+    }
+}
+
+fn general_read_until<T: Read>(r: &mut T, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
+    let mut one_byte = [0u8; 1];
+    let mut n: usize = 0;
+    loop {
+        // read one byte at a time
+        match r.read(&mut one_byte) {
+            Ok(num) => {
+                if num == 0 {
+                    // EOF reached
+                    break;
+                }
+            }
+            Err(e) => return Err(e),
+        };
+        buf.extend_from_slice(&one_byte);
+        n += 1;
+        // break at delimiter
+        if delim == one_byte[0] {
+            break;
+        }
+    }
+    Ok(n)
+}
+
+impl<R: BufRead> StdfStream<R> {
+    pub(crate) fn read_until(&mut self, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
+        match self {
+            StdfStream::Binary(bstream) => bstream.read_until(delim, buf),
+            StdfStream::Gz(gzstream) => general_read_until(gzstream, delim, buf),
+            StdfStream::Bz(bzstream) => general_read_until(bzstream, delim, buf),
+        }
     }
 }
 
