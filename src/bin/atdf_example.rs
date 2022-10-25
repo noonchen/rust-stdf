@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 7th 2022
 // -----
-// Last Modified: Sat Oct 08 2022
+// Last Modified: Wed Oct 26 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -35,7 +35,7 @@ fn main() {
 
     for rec in reader.get_record_iter() {
         // println!("{:?}", rec);
-        // println!("{}", rec.to_atdf_string());
+        println!("{}", rec.to_atdf_string());
     }
     let elapsed = start_time.elapsed().as_millis();
     println!("elapsed time {:?} ms", elapsed);

@@ -738,7 +738,6 @@ mod tests {
             "42°C¿ÿ".to_string(),
             stdf_types::read_cn(&raw_data_latin, &mut 0)
         );
-
     }
 
     #[test]

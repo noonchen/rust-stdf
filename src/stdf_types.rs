@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Tue Oct 25 2022
+// Last Modified: Wed Oct 26 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -550,7 +550,7 @@ pub enum StdfRecord {
 pub struct AtdfRecord {
     rec_name: String,
     type_code: u64,
-    scale_flag: bool,
+    scale_flag: bool, // currently not used... maybe in the future
     data_map: HashMap<String, String>,
 }
 
@@ -2104,9 +2104,9 @@ impl StdfRecord {
 
 impl From<&AtdfRecord> for StdfRecord {
     fn from(atdf_rec: &AtdfRecord) -> Self {
-        let mut stdf_rec = StdfRecord::new(atdf_rec.type_code);
-
-        stdf_rec
+        //TODO
+        if atdf_rec.scale_flag {}
+        StdfRecord::new(atdf_rec.type_code)
     }
 }
 
@@ -3034,13 +3034,161 @@ pub(crate) fn count_reqired(p_arr: &[(&str, bool)]) -> usize {
 }
 
 // STDF -> ATDF convertion help functions
+// parameter test value will be scaled by default
 
 pub(crate) fn atdf_data_from_ptr(rec: &PTR) -> Vec<String> {
-    vec![]
+    let test_bits = flag_to_array(&rec.test_flg);
+    let parm_bits = flag_to_array(&rec.parm_flg);
+    let mut alarm_flags = "".to_string();
+    if test_bits[0] == 1 {
+        alarm_flags.push('A')
+    }
+    if test_bits[2] == 1 {
+        alarm_flags.push('U')
+    }
+    if test_bits[3] == 1 {
+        alarm_flags.push('T')
+    }
+    if test_bits[4] == 1 {
+        alarm_flags.push('N')
+    }
+    if test_bits[5] == 1 {
+        alarm_flags.push('X')
+    }
+    if parm_bits[0] == 1 {
+        alarm_flags.push('S')
+    }
+    if parm_bits[1] == 1 {
+        alarm_flags.push('D')
+    }
+    if parm_bits[2] == 1 {
+        alarm_flags.push('O')
+    }
+    if parm_bits[3] == 1 {
+        alarm_flags.push('H')
+    }
+    if parm_bits[4] == 1 {
+        alarm_flags.push('L')
+    }
+
+    vec![
+        rec.test_num.to_string(), //TEST_NUM
+        rec.head_num.to_string(), //HEAD_NUM
+        rec.site_num.to_string(), //SITE_NUM
+        rec.result.to_string(),   //RESULT
+        //Pass/Fail, TEST_FLG bits 6 & 7, PARM_FLG bit 5
+        if parm_bits[5] == 1 {
+            "A".to_string()
+        } else if test_bits[6] | test_bits[7] == 0 {
+            "P".to_string()
+        } else if test_bits[6] == 1 {
+            "".to_string()
+        } else {
+            "F".to_string()
+        },
+        alarm_flags,          //AlarmFlags
+        rec.test_txt.clone(), //TEST_TXT
+        rec.alarm_id.clone(), //ALARM_ID
+        //LimitCompare
+        if parm_bits[6] | parm_bits[7] == 0 {
+            "".to_string()
+        } else if parm_bits[6] == 1 {
+            ">=".to_string()
+        } else {
+            "<=".to_string()
+        },
+        rec.units.clone(),        //UNITS
+        rec.lo_limit.to_string(), //LO_LIMIT
+        rec.hi_limit.to_string(), //HI_LIMIT
+        rec.c_resfmt.clone(),     //C_RESFMT
+        rec.c_llmfmt.clone(),     //C_LLMFMT
+        rec.c_hlmfmt.clone(),     //C_HLMFMT
+        rec.lo_spec.to_string(),  //LO_SPEC
+        rec.hi_spec.to_string(),  //HI_SPEC
+        rec.res_scal.to_string(), //RES_SCAL
+        rec.llm_scal.to_string(), //LLM_SCAL
+        rec.hlm_scal.to_string(), //HLM_SCAL
+    ]
 }
 
 pub(crate) fn atdf_data_from_mpr(rec: &MPR) -> Vec<String> {
-    vec![]
+    let test_bits = flag_to_array(&rec.test_flg);
+    let parm_bits = flag_to_array(&rec.parm_flg);
+    let mut alarm_flags = "".to_string();
+    if test_bits[0] == 1 {
+        alarm_flags.push('A')
+    }
+    if test_bits[2] == 1 {
+        alarm_flags.push('U')
+    }
+    if test_bits[3] == 1 {
+        alarm_flags.push('T')
+    }
+    if test_bits[4] == 1 {
+        alarm_flags.push('N')
+    }
+    if test_bits[5] == 1 {
+        alarm_flags.push('X')
+    }
+    if parm_bits[0] == 1 {
+        alarm_flags.push('S')
+    }
+    if parm_bits[1] == 1 {
+        alarm_flags.push('D')
+    }
+    if parm_bits[2] == 1 {
+        alarm_flags.push('O')
+    }
+    if parm_bits[3] == 1 {
+        alarm_flags.push('H')
+    }
+    if parm_bits[4] == 1 {
+        alarm_flags.push('L')
+    }
+
+    vec![
+        rec.test_num.to_string(),        //TEST_NUM
+        rec.head_num.to_string(),        //HEAD_NUM
+        rec.site_num.to_string(),        //SITE_NUM
+        ser_kx_digit_hex(&rec.rtn_stat), //RTN_STAT
+        ser_stdf_kx_data(&rec.rtn_rslt), //RTN_RSLT
+        //Pass/Fail, TEST_FLG bits 6 & 7, PARM_FLG bit 5
+        if parm_bits[5] == 1 {
+            "A".to_string()
+        } else if test_bits[6] | test_bits[7] == 0 {
+            "P".to_string()
+        } else if test_bits[6] == 1 {
+            "".to_string()
+        } else {
+            "F".to_string()
+        },
+        alarm_flags,          //AlarmFlags
+        rec.test_txt.clone(), //TEST_TXT
+        rec.alarm_id.clone(), //ALARM_ID
+        //LimitCompare
+        if parm_bits[6] | parm_bits[7] == 0 {
+            "".to_string()
+        } else if parm_bits[6] == 1 {
+            ">=".to_string()
+        } else {
+            "<=".to_string()
+        },
+        rec.units.clone(),               //UNITS
+        rec.lo_limit.to_string(),        //LO_LIMIT
+        rec.hi_limit.to_string(),        //HI_LIMIT
+        rec.start_in.to_string(),        //START_IN
+        rec.incr_in.to_string(),         //INCR_IN
+        rec.units_in.clone(),            //UNITS_IN
+        ser_stdf_kx_data(&rec.rtn_indx), //RTN_INDX
+        rec.c_resfmt.clone(),            //C_RESFMT
+        rec.c_llmfmt.clone(),            //C_LLMFMT
+        rec.c_hlmfmt.clone(),            //C_HLMFMT
+        rec.lo_spec.to_string(),         //LO_SPEC
+        rec.hi_spec.to_string(),         //HI_SPEC
+        rec.res_scal.to_string(),        //RES_SCAL
+        rec.llm_scal.to_string(),        //LLM_SCAL
+        rec.hlm_scal.to_string(),        //HLM_SCAL
+    ]
 }
 
 pub(crate) fn atdf_data_from_ftr(rec: &FTR) -> Vec<String> {
@@ -3389,9 +3537,81 @@ pub(crate) fn atdf_data_from_pgr(rec: &PGR) -> Vec<String> {
 }
 
 pub(crate) fn atdf_data_from_plr(rec: &PLR) -> Vec<String> {
+    // convert radx to ASCII symbol
+    let radx_func = |x: u8| match x {
+        2 => "B",
+        8 => "O",
+        10 => "D",
+        16 => "H",
+        20 => "S",
+        _ => "",
+    };
+    let grp_mode = rec
+        .grp_mode
+        .iter()
+        .map(|&x| format!("{:X}", x))
+        .collect::<Vec<String>>()
+        .join(",");
+    let grp_radx = rec
+        .grp_radx
+        .iter()
+        .map(|&x| radx_func(x).to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+
+    // check if string length is > 0
+    fn not_empty(v: &[String]) -> bool {
+        v.iter().map(|s| s.len()).fold(0, std::cmp::max) > 0
+    }
+
+    fn combine_l_r(cha_l: &[String], cha_r: &[String]) -> String {
+        let chal_not_empty = not_empty(cha_l);
+        let char_not_empty = not_empty(cha_r);
+
+        if chal_not_empty | char_not_empty {
+            let mut state_list = vec![];
+            // if cha_l is not empty, two characters will be in `state`
+            if chal_not_empty {
+                // e.g. l = ["1111", "2222"], r = ["3333", "4444"]
+                for (string_l, string_r) in cha_l.iter().zip(cha_r.iter()) {
+                    // e.g. "1111", "2222"
+                    let mut tmp_pin_state = "".to_string();
+                    for (ind, (c_l, c_r)) in string_l.chars().zip(string_r.chars()).enumerate() {
+                        // e.g. '1', '2'
+                        if ind != 0 {
+                            tmp_pin_state.push(',');
+                        }
+                        tmp_pin_state.push(c_l);
+                        tmp_pin_state.push(c_r);
+                    }
+                    // e.g. "12,12,12,12"
+                    state_list.push(tmp_pin_state);
+                }
+            } else {
+                // only cha_r
+                cha_r
+                    .iter()
+                    .map(|s| {
+                        s.chars()
+                            .map(|c| c.to_string())
+                            .collect::<Vec<String>>()
+                            .join(",")
+                    })
+                    .map(|pin_state| state_list.push(pin_state))
+                    .count();
+            }
+            state_list.join("/")
+        } else {
+            "".to_string()
+        }
+    }
+
     vec![
-        ser_stdf_kx_data(&rec.grp_indx), //
-                                         //TODO
+        ser_stdf_kx_data(&rec.grp_indx),           // ("GRP_INDX", true),
+        grp_mode,                                  // ("GRP_MODE", false),
+        grp_radx,                                  // ("GRP_RADX", false),
+        combine_l_r(&rec.pgm_chal, &rec.pgm_char), // ("PGM_CHAL,PGM_CHAR", false),
+        combine_l_r(&rec.rtn_chal, &rec.rtn_char), // ("RTN_CHAL,RTN_CHAR", false),
     ]
 }
 pub(crate) fn atdf_data_from_rdr(rec: &RDR) -> Vec<String> {
