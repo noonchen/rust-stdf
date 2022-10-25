@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Sun Oct 23 2022
+// Last Modified: Tue Oct 25 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -3044,7 +3044,59 @@ pub(crate) fn atdf_data_from_mpr(rec: &MPR) -> Vec<String> {
 }
 
 pub(crate) fn atdf_data_from_ftr(rec: &FTR) -> Vec<String> {
-    vec![]
+    let test_bits = flag_to_array(&rec.test_flg);
+    let mut alarm_flags = "".to_string();
+    if test_bits[0] == 1 {
+        alarm_flags.push('A')
+    }
+    if test_bits[2] == 1 {
+        alarm_flags.push('N')
+    }
+    if test_bits[3] == 1 {
+        alarm_flags.push('T')
+    }
+    if test_bits[4] == 1 {
+        alarm_flags.push('U')
+    }
+    if test_bits[5] == 1 {
+        alarm_flags.push('X')
+    }
+
+    vec![
+        rec.test_num.to_string(), //TEST_NUM
+        rec.head_num.to_string(), //HEAD_NUM
+        rec.site_num.to_string(), //SITE_NUM
+        //Pass/Fail
+        if test_bits[6] | test_bits[7] == 0 {
+            "P".to_string()
+        } else if test_bits[6] == 1 {
+            "".to_string()
+        } else {
+            "F".to_string()
+        },
+        alarm_flags,                     //AlarmFlags
+        rec.vect_nam.clone(),            //VECT_NAM
+        rec.time_set.clone(),            //TIME_SET
+        rec.cycl_cnt.to_string(),        //CYCL_CNT
+        rec.rel_vadr.to_string(),        //REL_VADR
+        rec.rept_cnt.to_string(),        //REPT_CNT
+        rec.num_fail.to_string(),        //NUM_FAIL
+        rec.xfail_ad.to_string(),        //XFAIL_AD
+        rec.yfail_ad.to_string(),        //YFAIL_AD
+        rec.vect_off.to_string(),        //VECT_OFF
+        ser_stdf_kx_data(&rec.rtn_indx), //RTN_INDX
+        ser_kx_digit_hex(&rec.rtn_stat), //RTN_STAT
+        ser_stdf_kx_data(&rec.pgm_indx), //PGM_INDX
+        ser_kx_digit_hex(&rec.pgm_stat), //PGM_STAT
+        ser_stdf_kx_data(&rec.fail_pin), //FAIL_PIN
+        rec.op_code.clone(),             //OP_CODE
+        rec.test_txt.clone(),            //TEST_TXT
+        rec.alarm_id.clone(),            //ALARM_ID
+        rec.prog_txt.clone(),            //PROG_TXT
+        rec.rslt_txt.clone(),            //RSLT_TXT
+        rec.patg_num.to_string(),        //PATG_NUM
+        ser_stdf_kx_data(&rec.spin_map), //SPIN_MAP
+    ]
 }
 
 /// ignored because I do not know ATDF structure in V4-2007
@@ -3052,19 +3104,91 @@ pub(crate) fn atdf_data_from_ftr(rec: &FTR) -> Vec<String> {
 //     vec![]}
 
 pub(crate) fn atdf_data_from_pir(rec: &PIR) -> Vec<String> {
-    vec![]
+    vec![
+        rec.head_num.to_string(), //HEAD_NUM
+        rec.site_num.to_string(), //SITE_NUM
+    ]
 }
+
 pub(crate) fn atdf_data_from_prr(rec: &PRR) -> Vec<String> {
-    vec![]
+    let flg_bits = flag_to_array(&rec.part_flg);
+    vec![
+        rec.head_num.to_string(), //HEAD_NUM
+        rec.site_num.to_string(), //SITE_NUM
+        rec.part_id.clone(),      //PART_ID
+        rec.num_test.to_string(), //NUM_TEST
+        //Pass/Fail, bits 3 & 4
+        if flg_bits[3] | flg_bits[4] == 0 {
+            "P".to_string()
+        } else {
+            "F".to_string()
+        },
+        rec.hard_bin.to_string(), //HARD_BIN
+        rec.soft_bin.to_string(), //SOFT_BIN
+        rec.x_coord.to_string(),  //X_COORD
+        rec.y_coord.to_string(),  //Y_COORD
+        //RetestCode, bit 0 or 1
+        if flg_bits[0] | flg_bits[1] != 0 {
+            if flg_bits[0] != 0 {
+                "I".to_string()
+            } else {
+                "C".to_string()
+            }
+        } else {
+            "".to_string()
+        },
+        //AbortCode
+        if flg_bits[2] == 0 {
+            "".to_string()
+        } else {
+            "Y".to_string()
+        },
+        rec.test_t.to_string(),   //TEST_T
+        rec.part_txt.clone(),     //PART_TXT
+        ser_bn_dn(&rec.part_fix), //PART_FIX
+    ]
 }
+
 pub(crate) fn atdf_data_from_wir(rec: &WIR) -> Vec<String> {
-    vec![]
+    vec![
+        rec.head_num.to_string(), //HEAD_NUM
+        rec.start_t.to_string(),  //START_T
+        rec.site_grp.to_string(), //SITE_GRP
+        rec.wafer_id.clone(),     //WAFER_ID
+    ]
 }
+
 pub(crate) fn atdf_data_from_wrr(rec: &WRR) -> Vec<String> {
-    vec![]
+    vec![
+        rec.head_num.to_string(), //HEAD_NUM
+        rec.finish_t.to_string(), //FINISH_T
+        rec.part_cnt.to_string(), //PART_CNT
+        rec.wafer_id.clone(),     //WAFER_ID
+        rec.site_grp.to_string(), //SITE_GRP
+        rec.rtst_cnt.to_string(), //RTST_CNT
+        rec.abrt_cnt.to_string(), //ABRT_CNT
+        rec.good_cnt.to_string(), //GOOD_CNT
+        rec.func_cnt.to_string(), //FUNC_CNT
+        rec.fabwf_id.clone(),     //FABWF_ID
+        rec.frame_id.clone(),     //FRAME_ID
+        rec.mask_id.clone(),      //MASK_ID
+        rec.usr_desc.clone(),     //USR_DESC
+        rec.exc_desc.clone(),     //EXC_DESC
+    ]
 }
+
 pub(crate) fn atdf_data_from_wcr(rec: &WCR) -> Vec<String> {
-    vec![]
+    vec![
+        rec.wf_flat.to_string(),  //WF_FLAT
+        rec.pos_x.to_string(),    //POS_X
+        rec.pos_y.to_string(),    //POS_Y
+        rec.wafr_siz.to_string(), //WAFR_SIZ
+        rec.die_ht.to_string(),   //DIE_HT
+        rec.die_wid.to_string(),  //DIE_WID
+        rec.wf_units.to_string(), //WF_UNITS
+        rec.center_x.to_string(), //CENTER_X
+        rec.center_y.to_string(), //CENTER_Y
+    ]
 }
 
 pub(crate) fn atdf_data_from_gdr(rec: &GDR) -> Vec<String> {
@@ -3080,8 +3204,8 @@ pub(crate) fn atdf_data_from_gdr(rec: &GDR) -> Vec<String> {
             V1::R4(r4) => gen_data_list.push(format!("F{}", r4)),
             V1::R8(r8) => gen_data_list.push(format!("D{}", r8)),
             V1::Cn(cn) => gen_data_list.push(format!("T{}", cn)),
-            V1::Bn(bn) => gen_data_list.push(format!("X{}", hex::encode_upper(bn))),
-            V1::Dn(dn) => gen_data_list.push(format!("Y{}", hex::encode_upper(dn))),
+            V1::Bn(bn) => gen_data_list.push(format!("X{}", ser_bn_dn(bn))),
+            V1::Dn(dn) => gen_data_list.push(format!("Y{}", ser_bn_dn(dn))),
             V1::N1(n1) => gen_data_list.push(format!("N{}", n1)),
             // No pad bytes in ATDF
             _ => {
@@ -3099,8 +3223,35 @@ pub(crate) fn atdf_data_from_dtr(rec: &DTR) -> Vec<String> {
 }
 
 pub(crate) fn atdf_data_from_tsr(rec: &TSR) -> Vec<String> {
-    vec![]
+    vec![
+        //HEAD_NUM
+        if rec.head_num == 255 {
+            "".to_string()
+        } else {
+            rec.head_num.to_string()
+        },
+        //SITE_NUM
+        if rec.site_num == 255 {
+            "".to_string()
+        } else {
+            rec.site_num.to_string()
+        },
+        rec.test_num.to_string(), //TEST_NUM
+        rec.test_nam.clone(),     //TEST_NAM
+        rec.test_typ.to_string(), //TEST_TYP
+        rec.exec_cnt.to_string(), //EXEC_CNT
+        rec.fail_cnt.to_string(), //FAIL_CNT
+        rec.alrm_cnt.to_string(), //ALRM_CNT
+        rec.seq_name.clone(),     //SEQ_NAME
+        rec.test_lbl.clone(),     //TEST_LBL
+        rec.test_tim.to_string(), //TEST_TIM
+        rec.test_min.to_string(), //TEST_MIN
+        rec.test_max.to_string(), //TEST_MAX
+        rec.tst_sums.to_string(), //TST_SUMS
+        rec.tst_sqrs.to_string(), //TST_SQRS
+    ]
 }
+
 pub(crate) fn atdf_data_from_mir(rec: &MIR) -> Vec<String> {
     vec![
         rec.lot_id.clone(),   //LOT_ID
@@ -3244,10 +3395,33 @@ pub(crate) fn atdf_data_from_plr(rec: &PLR) -> Vec<String> {
     ]
 }
 pub(crate) fn atdf_data_from_rdr(rec: &RDR) -> Vec<String> {
-    vec![]
+    vec![
+        ser_stdf_kx_data(&rec.rtst_bin), //RTST_BIN
+    ]
 }
+
 pub(crate) fn atdf_data_from_sdr(rec: &SDR) -> Vec<String> {
-    vec![]
+    vec![
+        rec.head_num.to_string(),        //HEAD_NUM
+        rec.site_grp.to_string(),        //SITE_GRP
+        ser_stdf_kx_data(&rec.site_num), //SITE_NUM
+        rec.hand_typ.clone(),            //HAND_TYP
+        rec.hand_id.clone(),             //HAND_ID
+        rec.card_typ.clone(),            //CARD_TYP
+        rec.card_id.clone(),             //CARD_ID
+        rec.load_typ.clone(),            //LOAD_TYP
+        rec.load_id.clone(),             //LOAD_ID
+        rec.dib_typ.clone(),             //DIB_TYP
+        rec.dib_id.clone(),              //DIB_ID
+        rec.cabl_typ.clone(),            //CABL_TYP
+        rec.cabl_id.clone(),             //CABL_ID
+        rec.cont_typ.clone(),            //CONT_TYP
+        rec.cont_id.clone(),             //CONT_ID
+        rec.lasr_typ.clone(),            //LASR_TYP
+        rec.lasr_id.clone(),             //LASR_ID
+        rec.extr_typ.clone(),            //EXTR_TYP
+        rec.extr_id.clone(),             //EXTR_ID
+    ]
 }
 
 // pub(crate) fn atdf_data_from_psr(_rec: &PSR) -> Vec<String>  {vec![]}
@@ -3281,10 +3455,12 @@ pub(crate) fn atdf_data_from_bps(rec: &BPS) -> Vec<String> {
         rec.seq_name.clone(), // SEQ_NAME
     ]
 }
+
 pub(crate) fn atdf_data_from_eps(_rec: &EPS) -> Vec<String> {
     vec![]
 }
 
+/// generate ATDF hashmap for records ***other than GDR***
 fn create_atdf_map_from_fields_and_data(
     fields: &[(&str, bool)],
     data_list: Vec<String>,
@@ -3296,6 +3472,7 @@ fn create_atdf_map_from_fields_and_data(
         .collect::<HashMap<String, String>>()
 }
 
+/// generate ATDF hashmap for GDR record
 fn create_atdf_gdr_map(data_list: Vec<String>) -> HashMap<String, String> {
     (0..data_list.len())
         .zip(data_list)
@@ -3303,9 +3480,34 @@ fn create_atdf_gdr_map(data_list: Vec<String>) -> HashMap<String, String> {
         .collect::<HashMap<String, String>>()
 }
 
+/// serialize STDF kx type data to String
 fn ser_stdf_kx_data<T: ToString>(kx: &[T]) -> String {
     kx.iter()
         .map(|x| x.to_string())
         .collect::<Vec<String>>()
         .join(",")
+}
+
+/// serialize vector of u8 to hex digit String
+fn ser_kx_digit_hex(kx: &[u8]) -> String {
+    kx.iter()
+        .map(|&x| format!("{:X}", x))
+        .collect::<Vec<String>>()
+        .join(",")
+}
+
+/// convert a 1 byte STDF flag to vector of u8
+fn flag_to_array(flag: &[u8; 1]) -> Vec<u8> {
+    let mut flag = flag[0];
+    let mut bits = Vec::with_capacity(8);
+    for _ in 0..8 {
+        bits.push(flag & 1u8);
+        flag >>= 1;
+    }
+    bits
+}
+
+/// serialize bit data
+fn ser_bn_dn(d: &[u8]) -> String {
+    hex::encode_upper(d)
 }
