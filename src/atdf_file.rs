@@ -11,22 +11,21 @@
 
 use crate::atdf_types::AtdfRecord;
 use crate::stdf_error::StdfError;
-use crate::stdf_file::{rewind_stream_position, StdfStream, StreamT};
+use crate::stdf_file::{rewind_stream_position, StdfStream};
 use crate::stdf_types::CompressType;
 use bzip2::bufread::BzDecoder;
 use flate2::bufread::GzDecoder;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader, Seek};
 use std::{fs, mem, str};
 
-pub struct AtdfReader {
-    pub file_path: String,
+pub struct AtdfReader<R> {
     delimiter: char,
     scale_flag: bool,
-    stream: StreamT,
+    stream: StdfStream<R>,
 }
 
-pub struct AtdfRecordIter<'a> {
-    inner: &'a mut AtdfReader,
+pub struct AtdfRecordIter<'a, R> {
+    inner: &'a mut AtdfReader<R>,
     // ATDF record might be divided
     // into multiple lines.
     incomplete_rec: String,
@@ -34,7 +33,7 @@ pub struct AtdfRecordIter<'a> {
 
 // impl
 
-impl AtdfReader {
+impl AtdfReader<BufReader<fs::File>> {
     pub fn new(path: &str) -> Result<Self, StdfError> {
         // determine the compress type by file extension
         let compress_type = if path.ends_with(".gz") {
@@ -49,11 +48,16 @@ impl AtdfReader {
 
         let fp = fs::OpenOptions::new().read(true).open(path)?;
         let br = BufReader::with_capacity(2 << 20, fp);
+        AtdfReader::from(br, &compress_type)
+    }
+}
 
+impl<R: BufRead + Seek> AtdfReader<R> {
+    pub fn from(in_stream: R, compress_type: &CompressType) -> Result<Self, StdfError> {
         let mut stream = match compress_type {
-            CompressType::GzipCompressed => StdfStream::Gz(GzDecoder::new(br)),
-            CompressType::BzipCompressed => StdfStream::Bz(BzDecoder::new(br)),
-            _ => StdfStream::Binary(br),
+            CompressType::GzipCompressed => StdfStream::Gz(GzDecoder::new(in_stream)),
+            CompressType::BzipCompressed => StdfStream::Bz(BzDecoder::new(in_stream)),
+            _ => StdfStream::Binary(in_stream),
         };
 
         let mut far_bytes = vec![];
@@ -80,14 +84,13 @@ impl AtdfReader {
         stream = rewind_stream_position(stream)?;
 
         Ok(AtdfReader {
-            file_path: String::from(path),
             delimiter,
             scale_flag,
             stream,
         })
     }
 
-    pub fn get_record_iter(&mut self) -> AtdfRecordIter {
+    pub fn get_record_iter(&mut self) -> AtdfRecordIter<R> {
         AtdfRecordIter {
             inner: self,
             incomplete_rec: String::new(),
@@ -97,7 +100,7 @@ impl AtdfReader {
 
 // implement of ATDF iterator
 
-impl Iterator for AtdfRecordIter<'_> {
+impl<R: BufRead + Seek> Iterator for AtdfRecordIter<'_, R> {
     type Item = AtdfRecord;
 
     fn next(&mut self) -> Option<Self::Item> {

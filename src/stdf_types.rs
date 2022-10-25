@@ -21,7 +21,7 @@ pub enum ByteOrder {
     BigEndian,
 }
 
-pub(crate) enum CompressType {
+pub enum CompressType {
     Uncompressed,
     GzipCompressed,
     BzipCompressed,
