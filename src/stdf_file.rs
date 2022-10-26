@@ -84,6 +84,33 @@ pub struct RecordIter<'a, R> {
     inner: &'a mut StdfReader<R>,
 }
 
+pub struct RawDataIter<'a, R> {
+    offset: u64,
+    inner: &'a mut StdfReader<R>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RawDataElement {
+    /// file offset of `raw_data` in file, 
+    /// after header.len and before raw_data
+    /// 
+    /// |-typ-|-sub-|--len--⬇️--raw..data--|
+    /// 
+    /// note that the offset is relative to the 
+    /// file position that runs `get_rawdata_iter`, 
+    /// 
+    /// it can be treated as file position **only if** 
+    /// the iteration starts from beginning of the file.
+    pub offset: u64,
+
+    /// used for filtering and creating StdfRecord
+    pub type_code: u64,
+
+    /// STDF data fields in bytes
+    pub raw_data: Vec<u8>,
+    pub byte_order: ByteOrder,
+}
+
 // implementations
 
 impl StdfReader<BufReader<fs::File>> {
@@ -156,8 +183,23 @@ impl<R: BufRead + Seek> StdfReader<R> {
         RecordHeader::new().read_from_bytes(&buf, &self.endianness)
     }
 
+    /// return an iterator for StdfRecord
+    ///
+    /// Only the records after the current file position
+    /// can be read.
     pub fn get_record_iter(&mut self) -> RecordIter<R> {
         RecordIter { inner: self }
+    }
+
+    /// return an iterator for unprocessed STDF bytes
+    ///
+    /// beware that internal `offset` counter is starting
+    /// from the current position.
+    pub fn get_rawdata_iter(&mut self) -> RawDataIter<R> {
+        RawDataIter {
+            offset: 0,
+            inner: self,
+        }
     }
 }
 
@@ -207,6 +249,47 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
             return None;
         }
         Some(StdfRecord::new(header.type_code).read_from_bytes(&buffer, &self.inner.endianness))
+    }
+}
+
+impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
+    type Item = RawDataElement;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let header = match self.inner.read_header() {
+            Ok(h) => h,
+            Err(_) => {
+                return None;
+            }
+        };
+        // advance position by 4 after reading a header successfully
+        self.offset += 4;
+        let data_offset = self.offset;
+        // create a buffer to store record raw data
+        let mut buffer = vec![0u8; header.len as usize];
+        if self.inner.stream.read_exact(&mut buffer).is_err() {
+            return None;
+        }
+        self.offset += header.len as u64;
+        Some(RawDataElement {
+            offset: data_offset,
+            type_code: header.type_code,
+            raw_data: buffer,
+            byte_order: self.inner.endianness.clone(),
+        })
+    }
+}
+
+impl RawDataElement {
+    pub fn is_type(&self, rec_type: u64) -> bool {
+        (self.type_code & rec_type) != 0
+    }
+}
+
+impl From<&RawDataElement> for StdfRecord {
+    fn from(raw_element: &RawDataElement) -> Self {
+        StdfRecord::new(raw_element.type_code)
+            .read_from_bytes(&raw_element.raw_data, &raw_element.byte_order)
     }
 }
 

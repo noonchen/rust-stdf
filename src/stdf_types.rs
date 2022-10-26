@@ -46,7 +46,7 @@ macro_rules! read_optional {
 }
 
 // Common Type
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ByteOrder {
     LittleEndian,
     BigEndian,
