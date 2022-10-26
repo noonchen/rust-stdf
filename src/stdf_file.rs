@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Wed Oct 26 2022
+// Last Modified: Thu Oct 27 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -13,7 +13,7 @@ use crate::stdf_error::StdfError;
 use crate::stdf_types::*;
 use bzip2::bufread::BzDecoder;
 use flate2::bufread::GzDecoder;
-use std::fs;
+use std::{fs, path::Path};
 use std::io::{self, BufReader, SeekFrom}; // struct or enum
 use std::io::{BufRead, Read, Seek}; // trait
 
@@ -93,13 +93,16 @@ pub struct RawDataIter<'a, R> {
 
 impl StdfReader<BufReader<fs::File>> {
     /// Open the given file and return a StdfReader, if successful
-    pub fn new(path: &str) -> Result<Self, StdfError> {
+    pub fn new<P>(path: P) -> Result<Self, StdfError> 
+    where P: AsRef<Path>
+    {
         // determine the compress type by file extension
-        let compress_type = if path.ends_with(".gz") {
+        let path_string = path.as_ref().display().to_string();
+        let compress_type = if path_string.ends_with(".gz") {
             CompressType::GzipCompressed
-        } else if path.ends_with(".bz2") {
+        } else if path_string.ends_with(".bz2") {
             CompressType::BzipCompressed
-        } else if path.ends_with(".zip") {
+        } else if path_string.ends_with(".zip") {
             CompressType::ZipCompressed
         } else {
             CompressType::Uncompressed
