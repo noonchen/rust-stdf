@@ -89,28 +89,6 @@ pub struct RawDataIter<'a, R> {
     inner: &'a mut StdfReader<R>,
 }
 
-#[derive(Debug, Clone)]
-pub struct RawDataElement {
-    /// file offset of `raw_data` in file, 
-    /// after header.len and before raw_data
-    /// 
-    /// |-typ-|-sub-|--len--⬇️--raw..data--|
-    /// 
-    /// note that the offset is relative to the 
-    /// file position that runs `get_rawdata_iter`, 
-    /// 
-    /// it can be treated as file position **only if** 
-    /// the iteration starts from beginning of the file.
-    pub offset: u64,
-
-    /// used for filtering and creating StdfRecord
-    pub type_code: u64,
-
-    /// STDF data fields in bytes
-    pub raw_data: Vec<u8>,
-    pub byte_order: ByteOrder,
-}
-
 // implementations
 
 impl StdfReader<BufReader<fs::File>> {
@@ -277,19 +255,6 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
             raw_data: buffer,
             byte_order: self.inner.endianness.clone(),
         })
-    }
-}
-
-impl RawDataElement {
-    pub fn is_type(&self, rec_type: u64) -> bool {
-        (self.type_code & rec_type) != 0
-    }
-}
-
-impl From<&RawDataElement> for StdfRecord {
-    fn from(raw_element: &RawDataElement) -> Self {
-        StdfRecord::new(raw_element.type_code)
-            .read_from_bytes(&raw_element.raw_data, &raw_element.byte_order)
     }
 }
 

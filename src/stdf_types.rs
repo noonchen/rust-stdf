@@ -151,7 +151,8 @@ pub type Vn = Vec<V1>;
 // Record Types
 
 /// This module contains constants
-/// for STDF Record type check
+/// for STDF Record type check and
+/// some help functions
 ///
 /// # Example
 ///
@@ -166,6 +167,8 @@ pub type Vn = Vec<V1>;
 /// let is_t = rec.is_type(t);      // true
 /// ```
 pub mod stdf_record_type {
+    use crate::stdf_error::StdfError;
+
     // rec type 0
     pub const REC_FAR: u64 = 1;
     pub const REC_ATR: u64 = 1 << 1;
@@ -210,6 +213,210 @@ pub mod stdf_record_type {
     // rec type 181: Reserved
     pub const REC_RESERVE: u64 = 1 << 32;
     pub const REC_INVALID: u64 = 1 << 33;
+
+    /// This function convert record type constant to
+    /// STDF record (typ, sub)
+    #[inline(always)]
+    pub fn get_typ_sub_from_code(code: u64) -> Result<(u8, u8), StdfError> {
+        match code {
+            // rec type 15
+            REC_PTR => Ok((15, 10)),
+            REC_MPR => Ok((15, 15)),
+            REC_FTR => Ok((15, 20)),
+            REC_STR => Ok((15, 30)),
+            // rec type 5
+            REC_PIR => Ok((5, 10)),
+            REC_PRR => Ok((5, 20)),
+            // rec type 2
+            REC_WIR => Ok((2, 10)),
+            REC_WRR => Ok((2, 20)),
+            REC_WCR => Ok((2, 30)),
+            // rec type 50
+            REC_GDR => Ok((50, 10)),
+            REC_DTR => Ok((50, 30)),
+            // rec type 0
+            REC_FAR => Ok((0, 10)),
+            REC_ATR => Ok((0, 20)),
+            REC_VUR => Ok((0, 30)),
+            // rec type 1
+            REC_MIR => Ok((1, 10)),
+            REC_MRR => Ok((1, 20)),
+            REC_PCR => Ok((1, 30)),
+            REC_HBR => Ok((1, 40)),
+            REC_SBR => Ok((1, 50)),
+            REC_PMR => Ok((1, 60)),
+            REC_PGR => Ok((1, 62)),
+            REC_PLR => Ok((1, 63)),
+            REC_RDR => Ok((1, 70)),
+            REC_SDR => Ok((1, 80)),
+            REC_PSR => Ok((1, 90)),
+            REC_NMR => Ok((1, 91)),
+            REC_CNR => Ok((1, 92)),
+            REC_SSR => Ok((1, 93)),
+            REC_CDR => Ok((1, 94)),
+            // rec type 10
+            REC_TSR => Ok((10, 30)),
+            // rec type 20
+            REC_BPS => Ok((20, 10)),
+            REC_EPS => Ok((20, 20)),
+            // rec type 180: Reserved
+            // rec type 181: Reserved
+            // REC_RESERVE,(180 | 181, _)
+            // not matched
+            // REC_INVALID,(_, _)
+            _ => Err(StdfError {
+                code: 2,
+                msg: "unknown type constant".to_string(),
+            }),
+        }
+    }
+
+    /// This function convert (typ, sub) to
+    /// STDF record type constant
+    #[inline(always)]
+    pub fn get_code_from_typ_sub(typ: u8, sub: u8) -> u64 {
+        match (typ, sub) {
+            // rec type 15
+            (15, 10) => REC_PTR,
+            (15, 15) => REC_MPR,
+            (15, 20) => REC_FTR,
+            (15, 30) => REC_STR,
+            // rec type 5
+            (5, 10) => REC_PIR,
+            (5, 20) => REC_PRR,
+            // rec type 2
+            (2, 10) => REC_WIR,
+            (2, 20) => REC_WRR,
+            (2, 30) => REC_WCR,
+            // rec type 50
+            (50, 10) => REC_GDR,
+            (50, 30) => REC_DTR,
+            // rec type 0
+            (0, 10) => REC_FAR,
+            (0, 20) => REC_ATR,
+            (0, 30) => REC_VUR,
+            // rec type 1
+            (1, 10) => REC_MIR,
+            (1, 20) => REC_MRR,
+            (1, 30) => REC_PCR,
+            (1, 40) => REC_HBR,
+            (1, 50) => REC_SBR,
+            (1, 60) => REC_PMR,
+            (1, 62) => REC_PGR,
+            (1, 63) => REC_PLR,
+            (1, 70) => REC_RDR,
+            (1, 80) => REC_SDR,
+            (1, 90) => REC_PSR,
+            (1, 91) => REC_NMR,
+            (1, 92) => REC_CNR,
+            (1, 93) => REC_SSR,
+            (1, 94) => REC_CDR,
+            // rec type 10
+            (10, 30) => REC_TSR,
+            // rec type 20
+            (20, 10) => REC_BPS,
+            (20, 20) => REC_EPS,
+            // rec type 180: Reserved
+            // rec type 181: Reserved
+            (180 | 181, _) => REC_RESERVE,
+            // not matched
+            (_, _) => REC_INVALID,
+        }
+    }
+
+    /// This function convert record type constant to
+    /// STDF record name string
+    #[inline(always)]
+    pub fn get_rec_name_from_code(rec_type: u64) -> &'static str {
+        match rec_type {
+            // rec type 15
+            REC_PTR => "PTR",
+            REC_MPR => "MPR",
+            REC_FTR => "FTR",
+            REC_STR => "STR",
+            // rec type 5
+            REC_PIR => "PIR",
+            REC_PRR => "PRR",
+            // rec type 2
+            REC_WIR => "WIR",
+            REC_WRR => "WRR",
+            REC_WCR => "WCR",
+            // rec type 50
+            REC_GDR => "GDR",
+            REC_DTR => "DTR",
+            // rec type 0
+            REC_FAR => "FAR",
+            REC_ATR => "ATR",
+            REC_VUR => "VUR",
+            // rec type 1
+            REC_MIR => "MIR",
+            REC_MRR => "MRR",
+            REC_PCR => "PCR",
+            REC_HBR => "HBR",
+            REC_SBR => "SBR",
+            REC_PMR => "PMR",
+            REC_PGR => "PGR",
+            REC_PLR => "PLR",
+            REC_RDR => "RDR",
+            REC_SDR => "SDR",
+            REC_PSR => "PSR",
+            REC_NMR => "NMR",
+            REC_CNR => "CNR",
+            REC_SSR => "SSR",
+            REC_CDR => "CDR",
+            // rec type 10
+            REC_TSR => "TSR",
+            // rec type 20
+            REC_BPS => "BPS",
+            REC_EPS => "EPS",
+            // rec type 180: Reserved
+            // rec type 181: Reserved
+            REC_RESERVE => "ReservedRec",
+            // not matched
+            _ => "InvalidRec",
+        }
+    }
+
+    /// This function convert record name string to
+    /// STDF record type constant
+    #[inline(always)]
+    pub fn get_code_from_rec_name(rec_name: &str) -> u64 {
+        match rec_name {
+            "FAR" => REC_FAR,
+            "ATR" => REC_ATR,
+            "VUR" => REC_VUR,
+            "MIR" => REC_MIR,
+            "MRR" => REC_MRR,
+            "PCR" => REC_PCR,
+            "HBR" => REC_HBR,
+            "SBR" => REC_SBR,
+            "PMR" => REC_PMR,
+            "PGR" => REC_PGR,
+            "PLR" => REC_PLR,
+            "RDR" => REC_RDR,
+            "SDR" => REC_SDR,
+            "PSR" => REC_PSR,
+            "NMR" => REC_NMR,
+            "CNR" => REC_CNR,
+            "SSR" => REC_SSR,
+            "CDR" => REC_CDR,
+            "WIR" => REC_WIR,
+            "WRR" => REC_WRR,
+            "WCR" => REC_WCR,
+            "PIR" => REC_PIR,
+            "PRR" => REC_PRR,
+            "TSR" => REC_TSR,
+            "PTR" => REC_PTR,
+            "MPR" => REC_MPR,
+            "FTR" => REC_FTR,
+            "STR" => REC_STR,
+            "BPS" => REC_BPS,
+            "EPS" => REC_EPS,
+            "GDR" => REC_GDR,
+            "DTR" => REC_DTR,
+            _ => REC_INVALID,
+        }
+    }
 }
 
 /// `StdfRecord` is the data that returned from StdfReader iterator.
@@ -276,6 +483,49 @@ pub enum StdfRecord {
     // rec type 181: Reserved
     ReservedRec(ReservedRec),
     InvalidRec,
+}
+
+#[derive(Debug, Clone)]
+/// unprocessed STDF record data, contains:
+///  - offset
+///  - type_code
+///  - raw_data
+///  - byte_order
+///
+/// it can be converted back to `StdfRecord`
+/// ```
+/// use rust_stdf::{RawDataElement, ByteOrder, StdfRecord, stdf_record_type::REC_FAR};
+///
+/// let rde = RawDataElement {
+///     offset: 0,
+///     type_code: 1,
+///     raw_data: vec![0u8; 0],
+///     byte_order: ByteOrder::LittleEndian
+/// };
+/// let rec: StdfRecord = (&rde).into();    // not consume
+/// let rec: StdfRecord = rde.into();       // consume
+/// println!("{:?}", rec);
+/// assert!(rec.is_type(REC_FAR));
+/// ```
+pub struct RawDataElement {
+    /// file offset of `raw_data` in file,
+    /// after header.len and before raw_data
+    ///
+    /// |-typ-|-sub-|--len--⬇️--raw..data--|
+    ///
+    /// note that the offset is relative to the
+    /// file position that runs `get_rawdata_iter`,
+    ///
+    /// it can be treated as file position **only if**
+    /// the iteration starts from beginning of the file.
+    pub offset: u64,
+
+    /// used for filtering and creating StdfRecord
+    pub type_code: u64,
+
+    /// field data of current STDF Record
+    pub raw_data: Vec<u8>,
+    pub byte_order: ByteOrder,
 }
 
 #[derive(SmartDefault, Debug)]
@@ -813,54 +1063,7 @@ impl RecordHeader {
             self.typ = raw_data[2];
             self.sub = raw_data[3];
             // validate header
-            self.type_code = match (self.typ, self.sub) {
-                // rec type 15
-                (15, 10) => stdf_record_type::REC_PTR,
-                (15, 15) => stdf_record_type::REC_MPR,
-                (15, 20) => stdf_record_type::REC_FTR,
-                (15, 30) => stdf_record_type::REC_STR,
-                // rec type 5
-                (5, 10) => stdf_record_type::REC_PIR,
-                (5, 20) => stdf_record_type::REC_PRR,
-                // rec type 2
-                (2, 10) => stdf_record_type::REC_WIR,
-                (2, 20) => stdf_record_type::REC_WRR,
-                (2, 30) => stdf_record_type::REC_WCR,
-                // rec type 50
-                (50, 10) => stdf_record_type::REC_GDR,
-                (50, 30) => stdf_record_type::REC_DTR,
-                // rec type 0
-                (0, 10) => stdf_record_type::REC_FAR,
-                (0, 20) => stdf_record_type::REC_ATR,
-                (0, 30) => stdf_record_type::REC_VUR,
-                // rec type 1
-                (1, 10) => stdf_record_type::REC_MIR,
-                (1, 20) => stdf_record_type::REC_MRR,
-                (1, 30) => stdf_record_type::REC_PCR,
-                (1, 40) => stdf_record_type::REC_HBR,
-                (1, 50) => stdf_record_type::REC_SBR,
-                (1, 60) => stdf_record_type::REC_PMR,
-                (1, 62) => stdf_record_type::REC_PGR,
-                (1, 63) => stdf_record_type::REC_PLR,
-                (1, 70) => stdf_record_type::REC_RDR,
-                (1, 80) => stdf_record_type::REC_SDR,
-                (1, 90) => stdf_record_type::REC_PSR,
-                (1, 91) => stdf_record_type::REC_NMR,
-                (1, 92) => stdf_record_type::REC_CNR,
-                (1, 93) => stdf_record_type::REC_SSR,
-                (1, 94) => stdf_record_type::REC_CDR,
-                // rec type 10
-                (10, 30) => stdf_record_type::REC_TSR,
-                // rec type 20
-                (20, 10) => stdf_record_type::REC_BPS,
-                (20, 20) => stdf_record_type::REC_EPS,
-                // rec type 180: Reserved
-                // rec type 181: Reserved
-                (180 | 181, _) => stdf_record_type::REC_RESERVE,
-                // not matched
-                (_, _) => stdf_record_type::REC_INVALID,
-            };
-
+            self.type_code = stdf_record_type::get_code_from_typ_sub(self.typ, self.sub);
             if self.type_code == stdf_record_type::REC_INVALID {
                 Err(StdfError {
                     code: 2,
@@ -1823,6 +2026,28 @@ impl StdfRecord {
             // not matched
             StdfRecord::InvalidRec => self,
         }
+    }
+}
+
+impl RawDataElement {
+    pub fn is_type(&self, rec_type: u64) -> bool {
+        (self.type_code & rec_type) != 0
+    }
+}
+
+impl From<&RawDataElement> for StdfRecord {
+    /// it will NOT consume the input RawDataElement
+    fn from(raw_element: &RawDataElement) -> Self {
+        StdfRecord::new(raw_element.type_code)
+            .read_from_bytes(&raw_element.raw_data, &raw_element.byte_order)
+    }
+}
+
+impl From<RawDataElement> for StdfRecord {
+    /// it will consume the input RawDataElement
+    fn from(raw_element: RawDataElement) -> Self {
+        StdfRecord::new(raw_element.type_code)
+            .read_from_bytes(&raw_element.raw_data, &raw_element.byte_order)
     }
 }
 
