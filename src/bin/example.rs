@@ -32,7 +32,7 @@ fn main() {
 
     // use type filter to work on certain types,
     // use `|` to combine multiple typs
-    let rec_types = REC_PIR | REC_PTR;
+    let rec_types = REC_PIR | REC_PTR | REC_MPR;
     // iterator starts from current file position,
     // if file hits EOF, it will NOT redirect to 0.
     for rec in reader.get_record_iter().filter(|x| x.is_type(rec_types)) {
@@ -43,6 +43,11 @@ fn main() {
             StdfRecord::PTR(ref ptr_rec) => {
                 if ptr_rec.test_txt == ptr_test_name {
                     continuity_rlt.push(ptr_rec.result);
+                }
+            }
+            StdfRecord::MPR(ref mpr_rec) => {
+                if mpr_rec.res_scal.is_none() {
+                    println!("{:?}", mpr_rec);
                 }
             }
             _ => {}

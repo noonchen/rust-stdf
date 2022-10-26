@@ -14,6 +14,37 @@ extern crate smart_default;
 use smart_default::SmartDefault;
 use std::convert::From;
 
+macro_rules! read_optional {
+    ([$func:ident($raw:expr, $pos:expr)], $min_bytes:expr) => {{
+        if *$pos + $min_bytes > $raw.len() {
+            None
+        } else {
+            Some([$func($raw, $pos)])
+        }
+    }};
+    ($func:ident($raw:expr, $pos:expr), $min_bytes:expr) => {{
+        if *$pos + $min_bytes > $raw.len() {
+            None
+        } else {
+            Some($func($raw, $pos))
+        }
+    }};
+    ($func:ident($raw:expr, $pos:expr, $order:expr), $min_bytes:expr) => {{
+        if *$pos + $min_bytes > $raw.len() {
+            None
+        } else {
+            Some($func($raw, $pos, $order))
+        }
+    }};
+    ($func:ident($raw:expr, $pos:expr, $order:expr, $cnt:expr), $element_bytes:expr) => {{
+        if *$pos + $element_bytes * $cnt as usize > $raw.len() {
+            None
+        } else {
+            Some($func($raw, $pos, $order, $cnt))
+        }
+    }};
+}
+
 // Common Type
 #[derive(Debug)]
 pub enum ByteOrder {
@@ -585,57 +616,57 @@ pub struct TSR {
 
 #[derive(SmartDefault, Debug)]
 pub struct PTR {
-    pub test_num: U4, // Test number
-    pub head_num: U1, // Test head number
-    pub site_num: U1, // Test site number
-    pub test_flg: B1, // Test flags (fail, alarm, etc.)
-    pub parm_flg: B1, // Parametric test flags (drift, etc.)
-    pub result: R4,   // Test result
-    pub test_txt: Cn, // Test description text or label
-    pub alarm_id: Cn, // Name of alarm
-    pub opt_flag: B1, // Optional data flag
-    pub res_scal: I1, // Test results scaling exponent
-    pub llm_scal: I1, // Low limit scaling exponent
-    pub hlm_scal: I1, // High limit scaling exponent
-    pub lo_limit: R4, // Low test limit value
-    pub hi_limit: R4, // High test limit value
-    pub units: Cn,    // Test units
-    pub c_resfmt: Cn, // ANSI C result format string
-    pub c_llmfmt: Cn, // ANSI C low limit format string
-    pub c_hlmfmt: Cn, // ANSI C high limit format string
-    pub lo_spec: R4,  // Low specification limit value
-    pub hi_spec: R4,  // High specification limit value
+    pub test_num: U4,         // Test number
+    pub head_num: U1,         // Test head number
+    pub site_num: U1,         // Test site number
+    pub test_flg: B1,         // Test flags (fail, alarm, etc.)
+    pub parm_flg: B1,         // Parametric test flags (drift, etc.)
+    pub result: R4,           // Test result
+    pub test_txt: Cn,         // Test description text or label
+    pub alarm_id: Cn,         // Name of alarm
+    pub opt_flag: Option<B1>, // Optional data flag
+    pub res_scal: Option<I1>, // Test results scaling exponent
+    pub llm_scal: Option<I1>, // Low limit scaling exponent
+    pub hlm_scal: Option<I1>, // High limit scaling exponent
+    pub lo_limit: Option<R4>, // Low test limit value
+    pub hi_limit: Option<R4>, // High test limit value
+    pub units: Option<Cn>,    // Test units
+    pub c_resfmt: Option<Cn>, // ANSI C result format string
+    pub c_llmfmt: Option<Cn>, // ANSI C low limit format string
+    pub c_hlmfmt: Option<Cn>, // ANSI C high limit format string
+    pub lo_spec: Option<R4>,  // Low specification limit value
+    pub hi_spec: Option<R4>,  // High specification limit value
 }
 
 #[derive(SmartDefault, Debug)]
 pub struct MPR {
-    pub test_num: U4,   // Test number
-    pub head_num: U1,   // Test head number
-    pub site_num: U1,   // Test site number
-    pub test_flg: B1,   // Test flags (fail, alarm, etc.)
-    pub parm_flg: B1,   // Parametric test flags (drift, etc.)
-    pub rtn_icnt: U2,   // Count of PMR indexes
-    pub rslt_cnt: U2,   // Count of returned results
-    pub rtn_stat: KxN1, // Array of returned states
-    pub rtn_rslt: KxR4, // Array of returned results
-    pub test_txt: Cn,   // Descriptive text or label
-    pub alarm_id: Cn,   // Name of alarm
-    pub opt_flag: B1,   // Optional data flag
-    pub res_scal: I1,   // Test result scaling exponent
-    pub llm_scal: I1,   // Test low limit scaling exponent
-    pub hlm_scal: I1,   // Test high limit scaling exponent
-    pub lo_limit: R4,   // Test low limit value
-    pub hi_limit: R4,   // Test high limit value
-    pub start_in: R4,   // Starting input value (condition)
-    pub incr_in: R4,    // Increment of input condition
-    pub rtn_indx: KxU2, // Array of PMR indexes
-    pub units: Cn,      // Units of returned results
-    pub units_in: Cn,   // Input condition units
-    pub c_resfmt: Cn,   // ANSI C result format string
-    pub c_llmfmt: Cn,   // ANSI C low limit format string
-    pub c_hlmfmt: Cn,   // ANSI C high limit format string
-    pub lo_spec: R4,    // Low specification limit value
-    pub hi_spec: R4,    // High specification limit value
+    pub test_num: U4,           // Test number
+    pub head_num: U1,           // Test head number
+    pub site_num: U1,           // Test site number
+    pub test_flg: B1,           // Test flags (fail, alarm, etc.)
+    pub parm_flg: B1,           // Parametric test flags (drift, etc.)
+    pub rtn_icnt: U2,           // Count of PMR indexes
+    pub rslt_cnt: U2,           // Count of returned results
+    pub rtn_stat: KxN1,         // Array of returned states
+    pub rtn_rslt: KxR4,         // Array of returned results
+    pub test_txt: Cn,           // Descriptive text or label
+    pub alarm_id: Cn,           // Name of alarm
+    pub opt_flag: Option<B1>,   // Optional data flag
+    pub res_scal: Option<I1>,   // Test result scaling exponent
+    pub llm_scal: Option<I1>,   // Test low limit scaling exponent
+    pub hlm_scal: Option<I1>,   // Test high limit scaling exponent
+    pub lo_limit: Option<R4>,   // Test low limit value
+    pub hi_limit: Option<R4>,   // Test high limit value
+    pub start_in: Option<R4>,   // Starting input value (condition)
+    pub incr_in: Option<R4>,    // Increment of input condition
+    pub rtn_indx: Option<KxU2>, // Array of PMR indexes
+    pub units: Option<Cn>,      // Units of returned results
+    pub units_in: Option<Cn>,   // Input condition units
+    pub c_resfmt: Option<Cn>,   // ANSI C result format string
+    pub c_llmfmt: Option<Cn>,   // ANSI C low limit format string
+    pub c_hlmfmt: Option<Cn>,   // ANSI C high limit format string
+    pub lo_spec: Option<R4>,    // Low specification limit value
+    pub hi_spec: Option<R4>,    // High specification limit value
 }
 
 #[derive(SmartDefault, Debug)]
@@ -1399,18 +1430,18 @@ impl PTR {
         self.result = read_r4(raw_data, pos, order);
         self.test_txt = read_cn(raw_data, pos);
         self.alarm_id = read_cn(raw_data, pos);
-        self.opt_flag = [read_uint8(raw_data, pos)];
-        self.res_scal = read_i1(raw_data, pos);
-        self.llm_scal = read_i1(raw_data, pos);
-        self.hlm_scal = read_i1(raw_data, pos);
-        self.lo_limit = read_r4(raw_data, pos, order);
-        self.hi_limit = read_r4(raw_data, pos, order);
-        self.units = read_cn(raw_data, pos);
-        self.c_resfmt = read_cn(raw_data, pos);
-        self.c_llmfmt = read_cn(raw_data, pos);
-        self.c_hlmfmt = read_cn(raw_data, pos);
-        self.lo_spec = read_r4(raw_data, pos, order);
-        self.hi_spec = read_r4(raw_data, pos, order);
+        self.opt_flag = read_optional!([read_uint8(raw_data, pos)], 1);
+        self.res_scal = read_optional!(read_i1(raw_data, pos), 1);
+        self.llm_scal = read_optional!(read_i1(raw_data, pos), 1);
+        self.hlm_scal = read_optional!(read_i1(raw_data, pos), 1);
+        self.lo_limit = read_optional!(read_r4(raw_data, pos, order), 4);
+        self.hi_limit = read_optional!(read_r4(raw_data, pos, order), 4);
+        self.units = read_optional!(read_cn(raw_data, pos), 1);
+        self.c_resfmt = read_optional!(read_cn(raw_data, pos), 1);
+        self.c_llmfmt = read_optional!(read_cn(raw_data, pos), 1);
+        self.c_hlmfmt = read_optional!(read_cn(raw_data, pos), 1);
+        self.lo_spec = read_optional!(read_r4(raw_data, pos, order), 4);
+        self.hi_spec = read_optional!(read_r4(raw_data, pos, order), 4);
         self
     }
 }
@@ -1433,22 +1464,22 @@ impl MPR {
         self.rtn_rslt = read_kx_r4(raw_data, pos, order, self.rslt_cnt);
         self.test_txt = read_cn(raw_data, pos);
         self.alarm_id = read_cn(raw_data, pos);
-        self.opt_flag = [read_uint8(raw_data, pos)];
-        self.res_scal = read_i1(raw_data, pos);
-        self.llm_scal = read_i1(raw_data, pos);
-        self.hlm_scal = read_i1(raw_data, pos);
-        self.lo_limit = read_r4(raw_data, pos, order);
-        self.hi_limit = read_r4(raw_data, pos, order);
-        self.start_in = read_r4(raw_data, pos, order);
-        self.incr_in = read_r4(raw_data, pos, order);
-        self.rtn_indx = read_kx_u2(raw_data, pos, order, self.rtn_icnt);
-        self.units = read_cn(raw_data, pos);
-        self.units_in = read_cn(raw_data, pos);
-        self.c_resfmt = read_cn(raw_data, pos);
-        self.c_llmfmt = read_cn(raw_data, pos);
-        self.c_hlmfmt = read_cn(raw_data, pos);
-        self.lo_spec = read_r4(raw_data, pos, order);
-        self.hi_spec = read_r4(raw_data, pos, order);
+        self.opt_flag = read_optional!([read_uint8(raw_data, pos)], 1);
+        self.res_scal = read_optional!(read_i1(raw_data, pos), 1);
+        self.llm_scal = read_optional!(read_i1(raw_data, pos), 1);
+        self.hlm_scal = read_optional!(read_i1(raw_data, pos), 1);
+        self.lo_limit = read_optional!(read_r4(raw_data, pos, order), 4);
+        self.hi_limit = read_optional!(read_r4(raw_data, pos, order), 4);
+        self.start_in = read_optional!(read_r4(raw_data, pos, order), 4);
+        self.incr_in = read_optional!(read_r4(raw_data, pos, order), 4);
+        self.rtn_indx = read_optional!(read_kx_u2(raw_data, pos, order, self.rtn_icnt), 2);
+        self.units = read_optional!(read_cn(raw_data, pos), 1);
+        self.units_in = read_optional!(read_cn(raw_data, pos), 1);
+        self.c_resfmt = read_optional!(read_cn(raw_data, pos), 1);
+        self.c_llmfmt = read_optional!(read_cn(raw_data, pos), 1);
+        self.c_hlmfmt = read_optional!(read_cn(raw_data, pos), 1);
+        self.lo_spec = read_optional!(read_r4(raw_data, pos, order), 4);
+        self.hi_spec = read_optional!(read_r4(raw_data, pos, order), 4);
         self
     }
 }

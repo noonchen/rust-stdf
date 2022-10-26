@@ -14,6 +14,23 @@ use crate::{stdf_error::StdfError, stdf_record_type::*, *};
 use chrono::NaiveDateTime;
 use std::collections::hash_map::HashMap;
 
+macro_rules! ser_optional {
+    ($struct_name:ident.$field:ident, $method:ident) => {
+        if let Some(ref $field) = $struct_name.$field {
+            $field.$method()
+        } else {
+            String::new()
+        }
+    };
+    (&$struct_name:ident.$field:ident, $method:ident()) => {
+        if let Some(ref $field) = $struct_name.$field {
+            $method(&$field)
+        } else {
+            String::new()
+        }
+    };
+}
+
 pub(crate) mod atdf_record_field {
     // ATDF fields may not map to STDF fields
     // (ATDF field name, is required? or must presented)
@@ -854,17 +871,17 @@ pub(crate) fn atdf_data_from_ptr(rec: &PTR) -> Vec<String> {
         } else {
             "<=".to_string()
         },
-        rec.units.clone(),        //UNITS
-        rec.lo_limit.to_string(), //LO_LIMIT
-        rec.hi_limit.to_string(), //HI_LIMIT
-        rec.c_resfmt.clone(),     //C_RESFMT
-        rec.c_llmfmt.clone(),     //C_LLMFMT
-        rec.c_hlmfmt.clone(),     //C_HLMFMT
-        rec.lo_spec.to_string(),  //LO_SPEC
-        rec.hi_spec.to_string(),  //HI_SPEC
-        rec.res_scal.to_string(), //RES_SCAL
-        rec.llm_scal.to_string(), //LLM_SCAL
-        rec.hlm_scal.to_string(), //HLM_SCAL
+        ser_optional!(rec.units, clone),        //UNITS
+        ser_optional!(rec.lo_limit, to_string), //LO_LIMIT
+        ser_optional!(rec.hi_limit, to_string), //HI_LIMIT
+        ser_optional!(rec.c_resfmt, clone),     //C_RESFMT
+        ser_optional!(rec.c_llmfmt, clone),     //C_LLMFMT
+        ser_optional!(rec.c_hlmfmt, clone),     //C_HLMFMT
+        ser_optional!(rec.lo_spec, to_string),  //LO_SPEC
+        ser_optional!(rec.hi_spec, to_string),  //HI_SPEC
+        ser_optional!(rec.res_scal, to_string), //RES_SCAL
+        ser_optional!(rec.llm_scal, to_string), //LLM_SCAL
+        ser_optional!(rec.hlm_scal, to_string), //HLM_SCAL
     ]
 }
 
@@ -930,21 +947,21 @@ pub(crate) fn atdf_data_from_mpr(rec: &MPR) -> Vec<String> {
         } else {
             "<=".to_string()
         },
-        rec.units.clone(),               //UNITS
-        rec.lo_limit.to_string(),        //LO_LIMIT
-        rec.hi_limit.to_string(),        //HI_LIMIT
-        rec.start_in.to_string(),        //START_IN
-        rec.incr_in.to_string(),         //INCR_IN
-        rec.units_in.clone(),            //UNITS_IN
-        ser_stdf_kx_data(&rec.rtn_indx), //RTN_INDX
-        rec.c_resfmt.clone(),            //C_RESFMT
-        rec.c_llmfmt.clone(),            //C_LLMFMT
-        rec.c_hlmfmt.clone(),            //C_HLMFMT
-        rec.lo_spec.to_string(),         //LO_SPEC
-        rec.hi_spec.to_string(),         //HI_SPEC
-        rec.res_scal.to_string(),        //RES_SCAL
-        rec.llm_scal.to_string(),        //LLM_SCAL
-        rec.hlm_scal.to_string(),        //HLM_SCAL
+        ser_optional!(rec.units, clone),                  //UNITS
+        ser_optional!(rec.lo_limit, to_string),           //LO_LIMIT
+        ser_optional!(rec.hi_limit, to_string),           //HI_LIMIT
+        ser_optional!(rec.start_in, to_string),           //START_IN
+        ser_optional!(rec.incr_in, to_string),            //INCR_IN
+        ser_optional!(rec.units_in, clone),               //UNITS_IN
+        ser_optional!(&rec.rtn_indx, ser_stdf_kx_data()), //RTN_INDX
+        ser_optional!(rec.c_resfmt, clone),               //C_RESFMT
+        ser_optional!(rec.c_llmfmt, clone),               //C_LLMFMT
+        ser_optional!(rec.c_hlmfmt, clone),               //C_HLMFMT
+        ser_optional!(rec.lo_spec, to_string),            //LO_SPEC
+        ser_optional!(rec.hi_spec, to_string),            //HI_SPEC
+        ser_optional!(rec.res_scal, to_string),           //RES_SCAL
+        ser_optional!(rec.llm_scal, to_string),           //LLM_SCAL
+        ser_optional!(rec.hlm_scal, to_string),           //HLM_SCAL
     ]
 }
 
