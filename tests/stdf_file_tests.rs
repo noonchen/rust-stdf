@@ -19,7 +19,7 @@ use std::{
 
 fn get_test_stdf_files() -> Vec<PathBuf> {
     let mut test_folder = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    test_folder.push("tests");
+    test_folder.push("demo_stdf");
 
     fn supported_ext(p: &PathBuf) -> bool {
         let p = p.display().to_string();
