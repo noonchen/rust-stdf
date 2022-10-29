@@ -13,9 +13,9 @@ use crate::stdf_error::StdfError;
 use crate::stdf_types::*;
 use bzip2::bufread::BzDecoder;
 use flate2::bufread::GzDecoder;
-use std::{fs, path::Path};
 use std::io::{self, BufReader, SeekFrom}; // struct or enum
-use std::io::{BufRead, Read, Seek}; // trait
+use std::io::{BufRead, Read, Seek};
+use std::{fs, path::Path}; // trait
 
 pub(crate) enum StdfStream<R> {
     Binary(R),
@@ -93,8 +93,9 @@ pub struct RawDataIter<'a, R> {
 
 impl StdfReader<BufReader<fs::File>> {
     /// Open the given file and return a StdfReader, if successful
-    pub fn new<P>(path: P) -> Result<Self, StdfError> 
-    where P: AsRef<Path>
+    pub fn new<P>(path: P) -> Result<Self, StdfError>
+    where
+        P: AsRef<Path>,
     {
         // determine the compress type by file extension
         let path_string = path.as_ref().display().to_string();

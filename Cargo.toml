@@ -6,9 +6,9 @@ repository = "https://github.com/noonchen/rust-stdf"
 documentation = "https://docs.rs/rust-stdf/"
 readme = "README.md"
 license = "MIT"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-keywords = ["stdf", "atdf"]
+keywords = ["stdf", "atdf", "semiconductor", "file parsing"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

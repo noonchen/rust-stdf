@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Wed Oct 26 2022
+// Last Modified: Sat Oct 29 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -46,12 +46,13 @@ macro_rules! read_optional {
 }
 
 // Common Type
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ByteOrder {
     LittleEndian,
     BigEndian,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompressType {
     Uncompressed,
     GzipCompressed,
@@ -116,7 +117,7 @@ pub type KxN1 = Vec<U1>;
 ///
 /// the nested data is a vector of Uf type,
 /// where f = 1, 2, 4 or 8
-#[derive(SmartDefault, Debug, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub enum KxUf {
     #[default]
     F1(KxU1),
@@ -128,7 +129,7 @@ pub enum KxUf {
 /// This enum is for storing
 /// generic data V1, the data type
 /// is the field name.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum V1 {
     B0,
     U1(U1),
@@ -437,7 +438,7 @@ pub mod stdf_record_type {
 /// }
 /// println!("{:?}", rec);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StdfRecord {
     // rec type 0
     FAR(FAR),
@@ -485,7 +486,7 @@ pub enum StdfRecord {
     InvalidRec,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// unprocessed STDF record data, contains:
 ///  - offset
 ///  - type_code
@@ -528,24 +529,24 @@ pub struct RawDataElement {
     pub byte_order: ByteOrder,
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct FAR {
     pub cpu_type: U1, // CPU type that wrote this file
     pub stdf_ver: U1, // STDF version number
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct ATR {
     pub mod_tim: U4,  //Date and time of STDF file modification
     pub cmd_line: Cn, //Command line of program
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct VUR {
     pub upd_nam: Cn, //Update Version Name
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct MIR {
     pub setup_t: U4,  // Date and time of job setup
     pub start_t: U4,  // Date and time first part tested
@@ -592,7 +593,7 @@ pub struct MIR {
     pub supr_nam: Cn, // Supervisor name or ID
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct MRR {
     pub finish_t: U4, // Date and time last part tested
     #[default = ' ']
@@ -601,7 +602,7 @@ pub struct MRR {
     pub exc_desc: Cn, // Lot description supplied by exec
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PCR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -616,7 +617,7 @@ pub struct PCR {
     pub func_cnt: U4, // Number of functional parts tested
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct HBR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -627,7 +628,7 @@ pub struct HBR {
     pub hbin_nam: Cn, // Name of hardware bin
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct SBR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -638,7 +639,7 @@ pub struct SBR {
     pub sbin_nam: Cn, // Name of software bin
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PMR {
     pub pmr_indx: U2, // Unique index associated with pin
     #[default = 0]
@@ -652,7 +653,7 @@ pub struct PMR {
     pub site_num: U1, // Site number associated with channel
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PGR {
     pub grp_indx: U2,   // Unique index associated with pin group
     pub grp_nam: Cn,    // Name of pin group
@@ -660,7 +661,7 @@ pub struct PGR {
     pub pmr_indx: KxU2, // Array of indexes for pins in the group
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PLR {
     pub grp_cnt: U2,    // Count (k) of pins or pin groups
     pub grp_indx: KxU2, // Array of pin or pin group indexes
@@ -672,13 +673,13 @@ pub struct PLR {
     pub rtn_chal: KxCn, // Return state encoding characters
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct RDR {
     pub num_bins: U2,   // Number (k) of bins being retested
     pub rtst_bin: KxU2, // Array of retest bin numbers
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct SDR {
     pub head_num: U1,   // Test head number
     pub site_grp: U1,   // Site group number
@@ -702,7 +703,7 @@ pub struct SDR {
     pub extr_id: Cn,    // Extra equipment ID
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PSR {
     pub cont_flg: B1,   // Continuation PSR record exist
     pub psr_indx: U2,   // PSR Record Index (used by STR records)
@@ -719,7 +720,7 @@ pub struct PSR {
     pub src_id: KxCn, // Optional array of PatternInSrcFileID
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct NMR {
     pub cont_flg: B1,   // Continuation NMR record follows if not 0
     pub totm_cnt: U2,   // Count of PMR indexes and ATPG_NAM entries
@@ -728,21 +729,21 @@ pub struct NMR {
     pub atpg_nam: KxCn, // Array of ATPG signal names
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct CNR {
     pub chn_num: U2,  // Chain number. Referenced by the CHN_NUM array in an STR record
     pub bit_pos: U4,  // Bit position in the chain
     pub cell_nam: Sn, // Scan Cell Name
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct SSR {
     pub ssr_nam: Cn,    // Name of the STIL Scan pub structure for reference
     pub chn_cnt: U2,    // Count (k) of number of Chains listed in CHN_LIST
     pub chn_list: KxU2, // Array of CDR Indexes
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct CDR {
     pub cont_flg: B1, // Continuation CDR record follows if not 0
     pub cdr_indx: U2, // SCR Index
@@ -760,7 +761,7 @@ pub struct CDR {
     pub cell_lst: KxSn, // Array of Scan Cell Names
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct WIR {
     pub head_num: U1, // Test head number
     #[default = 255]
@@ -769,7 +770,7 @@ pub struct WIR {
     pub wafer_id: Cn, // Wafer ID length byte = 0
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct WRR {
     pub head_num: U1, // Test head number
     #[default = 255]
@@ -792,7 +793,7 @@ pub struct WRR {
     pub exc_desc: Cn, // Wafer description supplied by exec
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct WCR {
     #[default = 0.0]
     pub wafr_siz: R4, // Diameter of wafer in WF_UNITS
@@ -814,13 +815,13 @@ pub struct WCR {
     pub pos_y: C1, // Positive Y direction of wafer
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PIR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PRR {
     pub head_num: U1, //Test head number
     pub site_num: U1, //Test site number
@@ -840,7 +841,7 @@ pub struct PRR {
     pub part_fix: Bn, //Part repair information
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct TSR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -864,7 +865,7 @@ pub struct TSR {
     pub tst_sqrs: R4, // Sum of squares of test result values
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct PTR {
     pub test_num: U4,         // Test number
     pub head_num: U1,         // Test head number
@@ -888,7 +889,7 @@ pub struct PTR {
     pub hi_spec: Option<R4>,  // High specification limit value
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct MPR {
     pub test_num: U4,           // Test number
     pub head_num: U1,           // Test head number
@@ -919,7 +920,7 @@ pub struct MPR {
     pub hi_spec: Option<R4>,    // High specification limit value
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct FTR {
     pub test_num: U4,   // Test number
     pub head_num: U1,   // Test head number
@@ -952,7 +953,7 @@ pub struct FTR {
     pub spin_map: Dn,   // Bit map of enabled comparators
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct STR {
     pub cont_flg: B1,   // Continuation STR follows if not 0
     pub test_num: U4,   // Test number
@@ -1015,26 +1016,26 @@ pub struct STR {
     pub user_txt: KxCf, // Array of user defined fixed length strings for each logged fail
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct BPS {
     pub seq_name: Cn, // Program section (or sequencer) name length byte = 0
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct EPS {}
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct GDR {
     pub fld_cnt: U2,  // Count of data fields in record
     pub gen_data: Vn, // Data type code and data for one field(Repeat GEN_DATA for each data field)
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct DTR {
     pub text_dat: Cn, // ASCII text string
 }
 
-#[derive(SmartDefault, Debug)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct ReservedRec {
     pub raw_data: Cn, // unparsed data
 }
@@ -1872,6 +1873,21 @@ impl ReservedRec {
 }
 
 impl StdfRecord {
+    /// Create a StdfRecord of a given type with default data
+    ///
+    /// ```
+    /// use rust_stdf::{StdfRecord, stdf_record_type::REC_PMR};
+    ///
+    /// // create StdfRecord with a nested PMR
+    /// let new_rec = StdfRecord::new(REC_PMR);
+    ///
+    /// if let StdfRecord::PMR(pmr_rec) = new_rec {
+    ///     assert_eq!(pmr_rec.head_num, 1);
+    ///     assert_eq!(pmr_rec.site_num, 1);
+    /// } else {
+    ///     // this case will not be hit
+    /// }
+    /// ```
     pub fn new(rec_type: u64) -> Self {
         match rec_type {
             // rec type 15
@@ -1922,6 +1938,24 @@ impl StdfRecord {
         }
     }
 
+    /// returns the record type cdoe of the given StdfRecord,
+    /// which is defined in `rust_stdf::stdf_record_type::*` module.
+    ///
+    /// ```
+    /// use rust_stdf::{StdfRecord, stdf_record_type::*};
+    ///
+    /// // `REC_PTR` type code can be used for creating a new StdfRecord
+    /// let new_rec = StdfRecord::new(REC_PTR);
+    /// let returned_code = new_rec.get_type();
+    ///
+    /// assert_eq!(REC_PTR, returned_code);
+    ///
+    /// // type code can be used in variety of functions
+    /// // get record (typ, sub)
+    /// assert_eq!((15, 10), get_typ_sub_from_code(returned_code).unwrap());
+    /// // get record name
+    /// assert_eq!("PTR", get_rec_name_from_code(returned_code));
+    /// ```
     pub fn get_type(&self) -> u64 {
         match &self {
             // rec type 15
@@ -1972,10 +2006,34 @@ impl StdfRecord {
         }
     }
 
+    /// check the StdfRecord belongs the given type code(s),
+    /// it is useful for filtering the records during the parsing iteration.
+    /// ```
+    /// use rust_stdf::{StdfRecord, stdf_record_type::*};
+    ///
+    /// let new_rec = StdfRecord::new(REC_PTR);
+    ///
+    /// assert!(new_rec.is_type(REC_PTR));
+    /// assert!(new_rec.is_type(REC_PTR | REC_FTR | REC_MPR));
+    /// assert!(!new_rec.is_type(REC_FTR | REC_MPR));
+    /// ```
     pub fn is_type(&self, rec_type: u64) -> bool {
         (self.get_type() & rec_type) != 0
     }
 
+    /// parse StdfRecord from byte data which **DOES NOT**
+    /// contain the record header (len, typ, sub).
+    ///
+    /// ```
+    /// use rust_stdf::{StdfRecord, ByteOrder, stdf_record_type::*};
+    ///
+    /// let new_rec = StdfRecord::new(REC_FAR);
+    /// let new_rec = new_rec.read_from_bytes(&[1u8, 4u8], &ByteOrder::LittleEndian);
+    ///
+    /// if let StdfRecord::FAR(ref far_rec) = new_rec {
+    ///     assert_eq!(4, far_rec.stdf_ver);
+    /// }
+    /// ```
     pub fn read_from_bytes(self, raw_data: &[u8], order: &ByteOrder) -> Self {
         match self {
             // rec type 15
