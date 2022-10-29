@@ -15,7 +15,7 @@ use rust_stdf::{stdf_record_type::*, *};
 fn record_default_value_test() {
     let empty_raw_data = [0u8; 0];
     // mir
-    let mir_rec = StdfRecord::new(REC_MIR);
+    let mut mir_rec = StdfRecord::new(REC_MIR);
     if let StdfRecord::MIR(ref inner) = mir_rec {
         assert_eq!(inner.mode_cod, ' ', "Testing default of new rec");
         assert_eq!(inner.rtst_cod, ' ', "Testing default of new rec");
@@ -23,7 +23,7 @@ fn record_default_value_test() {
         assert_eq!(inner.burn_tim, 65535, "Testing default of new rec");
         assert_eq!(inner.cmod_cod, ' ', "Testing default of new rec");
     }
-    let mir_rec = mir_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    mir_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::MIR(ref inner) = mir_rec {
         assert_eq!(inner.mode_cod, ' ', "Testing default value after reading");
         assert_eq!(inner.rtst_cod, ' ', "Testing default value after reading");
@@ -33,24 +33,24 @@ fn record_default_value_test() {
     }
 
     // mrr
-    let mrr_rec = StdfRecord::new(REC_MRR);
+    let mut mrr_rec = StdfRecord::new(REC_MRR);
     if let StdfRecord::MRR(ref inner) = mrr_rec {
         assert_eq!(inner.disp_cod, ' ', "Testing default of new rec");
     }
-    let mrr_rec = mrr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    mrr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::MRR(ref inner) = mrr_rec {
         assert_eq!(inner.disp_cod, ' ', "Testing default value after reading");
     }
 
     // pcr
-    let pcr_rec = StdfRecord::new(REC_PCR);
+    let mut pcr_rec = StdfRecord::new(REC_PCR);
     if let StdfRecord::PCR(ref inner) = pcr_rec {
         assert_eq!(inner.rtst_cnt, 4_294_967_295, "Testing default of new rec");
         assert_eq!(inner.abrt_cnt, 4_294_967_295, "Testing default of new rec");
         assert_eq!(inner.good_cnt, 4_294_967_295, "Testing default of new rec");
         assert_eq!(inner.func_cnt, 4_294_967_295, "Testing default of new rec");
     }
-    let pcr_rec = pcr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    pcr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::PCR(ref inner) = pcr_rec {
         assert_eq!(
             inner.rtst_cnt, 4_294_967_295,
@@ -71,33 +71,33 @@ fn record_default_value_test() {
     }
 
     // hbr
-    let hbr_rec = StdfRecord::new(REC_HBR);
+    let mut hbr_rec = StdfRecord::new(REC_HBR);
     if let StdfRecord::HBR(ref inner) = hbr_rec {
         assert_eq!(inner.hbin_pf, ' ', "Testing default of new rec");
     }
-    let hbr_rec = hbr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    hbr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::HBR(ref inner) = hbr_rec {
         assert_eq!(inner.hbin_pf, ' ', "Testing default value after reading");
     }
 
     // sbr
-    let sbr_rec = StdfRecord::new(REC_SBR);
+    let mut sbr_rec = StdfRecord::new(REC_SBR);
     if let StdfRecord::SBR(ref inner) = sbr_rec {
         assert_eq!(inner.sbin_pf, ' ', "Testing default of new rec");
     }
-    let sbr_rec = sbr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    sbr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::SBR(ref inner) = sbr_rec {
         assert_eq!(inner.sbin_pf, ' ', "Testing default value after reading");
     }
 
     // pmr
-    let pmr_rec = StdfRecord::new(REC_PMR);
+    let mut pmr_rec = StdfRecord::new(REC_PMR);
     if let StdfRecord::PMR(ref inner) = pmr_rec {
         assert_eq!(inner.chan_typ, 0, "Testing default of new rec");
         assert_eq!(inner.head_num, 1, "Testing default of new rec");
         assert_eq!(inner.site_num, 1, "Testing default of new rec");
     }
-    let pmr_rec = pmr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    pmr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::PMR(ref inner) = pmr_rec {
         assert_eq!(inner.chan_typ, 0, "Testing default value after reading");
         assert_eq!(inner.head_num, 1, "Testing default value after reading");
@@ -105,27 +105,27 @@ fn record_default_value_test() {
     }
 
     // cdr
-    let cdr_rec = StdfRecord::new(REC_CDR);
+    let mut cdr_rec = StdfRecord::new(REC_CDR);
     if let StdfRecord::CDR(ref inner) = cdr_rec {
         assert_eq!(inner.inv_val, 255, "Testing default of new rec");
     }
-    let cdr_rec = cdr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    cdr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::CDR(ref inner) = cdr_rec {
         assert_eq!(inner.inv_val, 255, "Testing default value after reading");
     }
 
     // wir
-    let wir_rec = StdfRecord::new(REC_WIR);
+    let mut wir_rec = StdfRecord::new(REC_WIR);
     if let StdfRecord::WIR(ref inner) = wir_rec {
         assert_eq!(inner.site_grp, 255, "Testing default of new rec");
     }
-    let wir_rec = wir_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    wir_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::WIR(ref inner) = wir_rec {
         assert_eq!(inner.site_grp, 255, "Testing default value after reading");
     }
 
     // wrr
-    let wrr_rec = StdfRecord::new(REC_WRR);
+    let mut wrr_rec = StdfRecord::new(REC_WRR);
     if let StdfRecord::WRR(ref inner) = wrr_rec {
         assert_eq!(inner.site_grp, 255, "Testing default of new rec");
         assert_eq!(inner.rtst_cnt, 4_294_967_295, "Testing default of new rec");
@@ -133,7 +133,7 @@ fn record_default_value_test() {
         assert_eq!(inner.good_cnt, 4_294_967_295, "Testing default of new rec");
         assert_eq!(inner.func_cnt, 4_294_967_295, "Testing default of new rec");
     }
-    let wrr_rec = wrr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    wrr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::WRR(ref inner) = wrr_rec {
         assert_eq!(inner.site_grp, 255, "Testing default value after reading");
         assert_eq!(
@@ -155,7 +155,7 @@ fn record_default_value_test() {
     }
 
     // wcr
-    let wcr_rec = StdfRecord::new(REC_WCR);
+    let mut wcr_rec = StdfRecord::new(REC_WCR);
     if let StdfRecord::WCR(ref inner) = wcr_rec {
         assert_eq!(inner.wafr_siz, 0.0, "Testing default of new rec");
         assert_eq!(inner.die_ht, 0.0, "Testing default of new rec");
@@ -167,7 +167,7 @@ fn record_default_value_test() {
         assert_eq!(inner.pos_x, ' ', "Testing default of new rec");
         assert_eq!(inner.pos_y, ' ', "Testing default of new rec");
     }
-    let wcr_rec = wcr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    wcr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::WCR(ref inner) = wcr_rec {
         assert_eq!(inner.wafr_siz, 0.0, "Testing default value after reading");
         assert_eq!(inner.die_ht, 0.0, "Testing default value after reading");
@@ -187,14 +187,14 @@ fn record_default_value_test() {
     }
 
     // prr
-    let prr_rec = StdfRecord::new(REC_PRR);
+    let mut prr_rec = StdfRecord::new(REC_PRR);
     if let StdfRecord::PRR(ref inner) = prr_rec {
         assert_eq!(inner.soft_bin, 65535, "Testing default of new rec");
         assert_eq!(inner.x_coord, -32768, "Testing default of new rec");
         assert_eq!(inner.y_coord, -32768, "Testing default of new rec");
         assert_eq!(inner.test_t, 0, "Testing default of new rec");
     }
-    let prr_rec = prr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    prr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::PRR(ref inner) = prr_rec {
         assert_eq!(inner.soft_bin, 65535, "Testing default value after reading");
         assert_eq!(inner.x_coord, -32768, "Testing default value after reading");
@@ -203,14 +203,14 @@ fn record_default_value_test() {
     }
 
     // tsr
-    let tsr_rec = StdfRecord::new(REC_TSR);
+    let mut tsr_rec = StdfRecord::new(REC_TSR);
     if let StdfRecord::TSR(ref inner) = tsr_rec {
         assert_eq!(inner.test_typ, ' ', "Testing default of new rec");
         assert_eq!(inner.exec_cnt, 4_294_967_295, "Testing default of new rec");
         assert_eq!(inner.fail_cnt, 4_294_967_295, "Testing default of new rec");
         assert_eq!(inner.alrm_cnt, 4_294_967_295, "Testing default of new rec");
     }
-    let tsr_rec = tsr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    tsr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::TSR(ref inner) = tsr_rec {
         assert_eq!(inner.test_typ, ' ', "Testing default value after reading");
         assert_eq!(
@@ -228,11 +228,11 @@ fn record_default_value_test() {
     }
 
     // ftr
-    let ftr_rec = StdfRecord::new(REC_FTR);
+    let mut ftr_rec = StdfRecord::new(REC_FTR);
     if let StdfRecord::FTR(ref inner) = ftr_rec {
         assert_eq!(inner.patg_num, 255, "Testing default of new rec");
     }
-    let ftr_rec = ftr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
+    ftr_rec.read_from_bytes(&empty_raw_data, &ByteOrder::LittleEndian);
     if let StdfRecord::FTR(ref inner) = ftr_rec {
         assert_eq!(inner.patg_num, 255, "Testing default value after reading");
     }

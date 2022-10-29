@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Thu Oct 27 2022
+// Last Modified: Sat Oct 29 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -230,7 +230,10 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
         if self.inner.stream.read_exact(&mut buffer).is_err() {
             return None;
         }
-        Some(StdfRecord::new(header.type_code).read_from_bytes(&buffer, &self.inner.endianness))
+
+        let mut rec = StdfRecord::new(header.type_code);
+        rec.read_from_bytes(&buffer, &self.inner.endianness);
+        Some(rec)
     }
 }
 
