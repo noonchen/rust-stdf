@@ -217,10 +217,10 @@ pub mod stdf_record_type {
 
     /// This function convert record type constant to
     /// STDF record (typ, sub)
-    /// 
+    ///
     /// ```
     /// use rust_stdf::stdf_record_type::*;
-    /// 
+    ///
     /// let ptr_typ_sub = get_typ_sub_from_code(REC_PTR).unwrap();
     /// assert_eq!((15, 10), ptr_typ_sub);
     /// ```
@@ -281,10 +281,10 @@ pub mod stdf_record_type {
 
     /// This function convert (typ, sub) to
     /// STDF record type constant
-    /// 
+    ///
     /// ```
     /// use rust_stdf::stdf_record_type::*;
-    /// 
+    ///
     /// let type_code = get_code_from_typ_sub(15, 10);
     /// assert_eq!(REC_PTR, type_code);
     /// ```
@@ -341,10 +341,10 @@ pub mod stdf_record_type {
 
     /// This function convert record type constant to
     /// STDF record name string
-    /// 
+    ///
     /// ```
     /// use rust_stdf::stdf_record_type::*;
-    /// 
+    ///
     /// let rec_name = get_rec_name_from_code(REC_PTR);
     /// assert_eq!("PTR", rec_name);
     /// ```
@@ -401,14 +401,14 @@ pub mod stdf_record_type {
 
     /// This function convert record name string to
     /// STDF record type constant
-    /// 
+    ///
     /// ```
     /// use rust_stdf::stdf_record_type::*;
-    /// 
+    ///
     /// let type_code = get_code_from_rec_name("PTR");
     /// assert_eq!(REC_PTR, type_code);
     /// ```
-    /// 
+    ///
     #[inline(always)]
     pub fn get_code_from_rec_name(rec_name: &str) -> u64 {
         match rec_name {
