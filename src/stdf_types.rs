@@ -46,13 +46,13 @@ macro_rules! read_optional {
 }
 
 // Common Type
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ByteOrder {
     LittleEndian,
     BigEndian,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompressType {
     Uncompressed,
     GzipCompressed,
@@ -217,6 +217,13 @@ pub mod stdf_record_type {
 
     /// This function convert record type constant to
     /// STDF record (typ, sub)
+    /// 
+    /// ```
+    /// use rust_stdf::stdf_record_type::*;
+    /// 
+    /// let ptr_typ_sub = get_typ_sub_from_code(REC_PTR).unwrap();
+    /// assert_eq!((15, 10), ptr_typ_sub);
+    /// ```
     #[inline(always)]
     pub fn get_typ_sub_from_code(code: u64) -> Result<(u8, u8), StdfError> {
         match code {
@@ -274,6 +281,13 @@ pub mod stdf_record_type {
 
     /// This function convert (typ, sub) to
     /// STDF record type constant
+    /// 
+    /// ```
+    /// use rust_stdf::stdf_record_type::*;
+    /// 
+    /// let type_code = get_code_from_typ_sub(15, 10);
+    /// assert_eq!(REC_PTR, type_code);
+    /// ```
     #[inline(always)]
     pub fn get_code_from_typ_sub(typ: u8, sub: u8) -> u64 {
         match (typ, sub) {
@@ -327,6 +341,13 @@ pub mod stdf_record_type {
 
     /// This function convert record type constant to
     /// STDF record name string
+    /// 
+    /// ```
+    /// use rust_stdf::stdf_record_type::*;
+    /// 
+    /// let rec_name = get_rec_name_from_code(REC_PTR);
+    /// assert_eq!("PTR", rec_name);
+    /// ```
     #[inline(always)]
     pub fn get_rec_name_from_code(rec_type: u64) -> &'static str {
         match rec_type {
@@ -380,6 +401,14 @@ pub mod stdf_record_type {
 
     /// This function convert record name string to
     /// STDF record type constant
+    /// 
+    /// ```
+    /// use rust_stdf::stdf_record_type::*;
+    /// 
+    /// let type_code = get_code_from_rec_name("PTR");
+    /// assert_eq!(REC_PTR, type_code);
+    /// ```
+    /// 
     #[inline(always)]
     pub fn get_code_from_rec_name(rec_name: &str) -> u64 {
         match rec_name {
@@ -1988,8 +2017,8 @@ impl StdfRecord {
     }
 
     /// parse StdfRecord from byte data which **DOES NOT**
-    /// contain the record header (len, typ, sub), 
-    /// 
+    /// contain the record header (len, typ, sub),
+    ///
     /// requires a mutable StdfRecord to store the parsed data
     ///
     /// ```
@@ -2055,10 +2084,10 @@ impl StdfRecord {
 
     /// parse StdfRecord from byte data which
     /// **contains** the record header (len, typ, sub).
-    /// 
+    ///
     /// ## Error
-    /// if the input data is not a valid (wrong typ, sub), 
-    /// incomplete data or incorrect byte order, `StdfError` will be 
+    /// if the input data is not a valid (wrong typ, sub),
+    /// incomplete data or incorrect byte order, `StdfError` will be
     /// returned instead.
     ///
     /// ```

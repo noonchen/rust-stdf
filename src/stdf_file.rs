@@ -260,7 +260,7 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
             offset: data_offset,
             type_code: header.type_code,
             raw_data: buffer,
-            byte_order: self.inner.endianness.clone(),
+            byte_order: self.inner.endianness,
         })
     }
 }

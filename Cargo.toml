@@ -18,3 +18,6 @@ bzip2 = "0.4.3"
 smart-default = "0.6.0"
 chrono = "0.4.22"
 hex = "0.4.3"
+
+[dev-dependencies]
+rand = "0.8.5"

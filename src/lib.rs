@@ -31,7 +31,7 @@ pub use stdf_types::*;
 /// This module contains STDF Reader
 /// and record iterator
 ///
-/// For more detailed example, click `StdfReader`
+/// For more detailed example, see [`StdfReader`].
 pub mod stdf_file;
 
 /// This module contains ATDF Reader
