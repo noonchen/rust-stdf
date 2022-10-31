@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 26th 2022
 // -----
-// Last Modified: Wed Oct 26 2022
+// Last Modified: Tue Nov 01 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -337,6 +337,7 @@ pub struct AtdfRecord {
 }
 
 impl From<&AtdfRecord> for StdfRecord {
+    #[inline(always)]
     fn from(atdf_rec: &AtdfRecord) -> Self {
         //TODO
         if atdf_rec.scale_flag {}
@@ -345,6 +346,7 @@ impl From<&AtdfRecord> for StdfRecord {
 }
 
 impl AtdfRecord {
+    #[inline(always)]
     pub fn from_atdf_string(
         atdf_str: &str,
         delim: char,
@@ -404,6 +406,7 @@ impl AtdfRecord {
         })
     }
 
+    #[inline(always)]
     pub fn to_atdf_string(&self) -> String {
         let field_name = get_atdf_fields(self.type_code);
         let rec_data = if self.type_code == REC_GDR {
@@ -434,6 +437,7 @@ impl From<&StdfRecord> for AtdfRecord {
     ///
     /// If you have ATDF spec for V4-2007, it would
     /// be most helpful for me to dev the full feature.
+    #[inline(always)]
     fn from(stdf_rec: &StdfRecord) -> Self {
         let type_code;
         let rec_name;
@@ -668,6 +672,7 @@ impl From<&StdfRecord> for AtdfRecord {
 
 // ATDF help functions
 
+#[inline(always)]
 pub(crate) fn get_atdf_fields(rec_type: u64) -> &'static [(&'static str, bool)] {
     match rec_type {
         REC_FAR => &FAR_FIELD,
@@ -706,6 +711,7 @@ pub(crate) fn get_atdf_fields(rec_type: u64) -> &'static [(&'static str, bool)] 
     }
 }
 
+#[inline(always)]
 pub(crate) fn count_reqired(p_arr: &[(&str, bool)]) -> usize {
     p_arr
         .iter()
@@ -715,6 +721,7 @@ pub(crate) fn count_reqired(p_arr: &[(&str, bool)]) -> usize {
 // STDF -> ATDF convertion help functions
 // parameter test value will be scaled by default
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_ptr(rec: &PTR) -> Vec<String> {
     let test_bits = flag_to_array(&rec.test_flg);
     let parm_bits = flag_to_array(&rec.parm_flg);
@@ -790,6 +797,7 @@ pub(crate) fn atdf_data_from_ptr(rec: &PTR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_mpr(rec: &MPR) -> Vec<String> {
     let test_bits = flag_to_array(&rec.test_flg);
     let parm_bits = flag_to_array(&rec.parm_flg);
@@ -870,6 +878,7 @@ pub(crate) fn atdf_data_from_mpr(rec: &MPR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_ftr(rec: &FTR) -> Vec<String> {
     let test_bits = flag_to_array(&rec.test_flg);
     let mut alarm_flags = "".to_string();
@@ -930,6 +939,7 @@ pub(crate) fn atdf_data_from_ftr(rec: &FTR) -> Vec<String> {
 // pub(crate) fn atdf_data_from_str_rec(rec: &STR) -> Vec<String>  {
 //     vec![]}
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_pir(rec: &PIR) -> Vec<String> {
     vec![
         rec.head_num.to_string(), //HEAD_NUM
@@ -937,6 +947,7 @@ pub(crate) fn atdf_data_from_pir(rec: &PIR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_prr(rec: &PRR) -> Vec<String> {
     let flg_bits = flag_to_array(&rec.part_flg);
     vec![
@@ -976,6 +987,7 @@ pub(crate) fn atdf_data_from_prr(rec: &PRR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_wir(rec: &WIR) -> Vec<String> {
     vec![
         rec.head_num.to_string(), //HEAD_NUM
@@ -985,6 +997,7 @@ pub(crate) fn atdf_data_from_wir(rec: &WIR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_wrr(rec: &WRR) -> Vec<String> {
     vec![
         rec.head_num.to_string(), //HEAD_NUM
@@ -1004,6 +1017,7 @@ pub(crate) fn atdf_data_from_wrr(rec: &WRR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_wcr(rec: &WCR) -> Vec<String> {
     vec![
         rec.wf_flat.to_string(),  //WF_FLAT
@@ -1018,6 +1032,7 @@ pub(crate) fn atdf_data_from_wcr(rec: &WCR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_gdr(rec: &GDR) -> Vec<String> {
     let mut gen_data_list = vec![];
     for v1_data in &rec.gen_data {
@@ -1043,12 +1058,14 @@ pub(crate) fn atdf_data_from_gdr(rec: &GDR) -> Vec<String> {
     gen_data_list
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_dtr(rec: &DTR) -> Vec<String> {
     vec![
         rec.text_dat.clone(), // TEST_DAT
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_tsr(rec: &TSR) -> Vec<String> {
     vec![
         //HEAD_NUM
@@ -1079,6 +1096,7 @@ pub(crate) fn atdf_data_from_tsr(rec: &TSR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_mir(rec: &MIR) -> Vec<String> {
     vec![
         rec.lot_id.clone(),   //LOT_ID
@@ -1126,6 +1144,7 @@ pub(crate) fn atdf_data_from_mir(rec: &MIR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_mrr(rec: &MRR) -> Vec<String> {
     vec![
         NaiveDateTime::from_timestamp(rec.finish_t as i64, 0)
@@ -1137,6 +1156,7 @@ pub(crate) fn atdf_data_from_mrr(rec: &MRR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_pcr(rec: &PCR) -> Vec<String> {
     vec![
         if rec.head_num == 255 {
@@ -1157,6 +1177,7 @@ pub(crate) fn atdf_data_from_pcr(rec: &PCR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_hbr(rec: &HBR) -> Vec<String> {
     vec![
         if rec.head_num == 255 {
@@ -1176,6 +1197,7 @@ pub(crate) fn atdf_data_from_hbr(rec: &HBR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_sbr(rec: &SBR) -> Vec<String> {
     vec![
         if rec.head_num == 255 {
@@ -1195,6 +1217,7 @@ pub(crate) fn atdf_data_from_sbr(rec: &SBR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_pmr(rec: &PMR) -> Vec<String> {
     vec![
         rec.pmr_indx.to_string(), //PMR_INDX
@@ -1207,6 +1230,7 @@ pub(crate) fn atdf_data_from_pmr(rec: &PMR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_pgr(rec: &PGR) -> Vec<String> {
     vec![
         rec.grp_indx.to_string(),        //GRP_INDX
@@ -1215,6 +1239,7 @@ pub(crate) fn atdf_data_from_pgr(rec: &PGR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_plr(rec: &PLR) -> Vec<String> {
     // convert radx to ASCII symbol
     let radx_func = |x: u8| match x {
@@ -1294,12 +1319,14 @@ pub(crate) fn atdf_data_from_plr(rec: &PLR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_rdr(rec: &RDR) -> Vec<String> {
     vec![
         ser_stdf_kx_data(&rec.rtst_bin), //RTST_BIN
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_sdr(rec: &SDR) -> Vec<String> {
     vec![
         rec.head_num.to_string(),        //HEAD_NUM
@@ -1330,6 +1357,7 @@ pub(crate) fn atdf_data_from_sdr(rec: &SDR) -> Vec<String> {
 // pub(crate) fn atdf_data_from_ssr(_rec: &SSR) -> Vec<String>  {vec![]}
 // pub(crate) fn atdf_data_from_cdr(_rec: &CDR) -> Vec<String>  {vec![]}
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_far(rec: &FAR) -> Vec<String> {
     vec![
         "A".to_string(),          // File type, ATDF
@@ -1339,6 +1367,7 @@ pub(crate) fn atdf_data_from_far(rec: &FAR) -> Vec<String> {
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_atr(rec: &ATR) -> Vec<String> {
     vec![
         NaiveDateTime::from_timestamp(rec.mod_tim as i64, 0)
@@ -1350,17 +1379,20 @@ pub(crate) fn atdf_data_from_atr(rec: &ATR) -> Vec<String> {
 
 // pub(crate) fn atdf_data_from_vur(_rec: &VUR) -> Vec<String>  {vec![]}
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_bps(rec: &BPS) -> Vec<String> {
     vec![
         rec.seq_name.clone(), // SEQ_NAME
     ]
 }
 
+#[inline(always)]
 pub(crate) fn atdf_data_from_eps(_rec: &EPS) -> Vec<String> {
     vec![]
 }
 
 /// generate ATDF hashmap for records ***other than GDR***
+#[inline(always)]
 fn create_atdf_map_from_fields_and_data(
     fields: &[(&str, bool)],
     data_list: Vec<String>,
@@ -1373,6 +1405,7 @@ fn create_atdf_map_from_fields_and_data(
 }
 
 /// generate ATDF hashmap for GDR record
+#[inline(always)]
 fn create_atdf_gdr_map(data_list: Vec<String>) -> HashMap<String, String> {
     (0..data_list.len())
         .zip(data_list)
@@ -1381,6 +1414,7 @@ fn create_atdf_gdr_map(data_list: Vec<String>) -> HashMap<String, String> {
 }
 
 /// serialize STDF kx type data to String
+#[inline(always)]
 fn ser_stdf_kx_data<T: ToString>(kx: &[T]) -> String {
     kx.iter()
         .map(|x| x.to_string())
@@ -1389,6 +1423,7 @@ fn ser_stdf_kx_data<T: ToString>(kx: &[T]) -> String {
 }
 
 /// serialize vector of u8 to hex digit String
+#[inline(always)]
 fn ser_kx_digit_hex(kx: &[u8]) -> String {
     kx.iter()
         .map(|&x| format!("{:X}", x))
@@ -1397,6 +1432,7 @@ fn ser_kx_digit_hex(kx: &[u8]) -> String {
 }
 
 /// convert a 1 byte STDF flag to vector of u8
+#[inline(always)]
 fn flag_to_array(flag: &[u8; 1]) -> Vec<u8> {
     let mut flag = flag[0];
     let mut bits = Vec::with_capacity(8);
@@ -1408,6 +1444,7 @@ fn flag_to_array(flag: &[u8; 1]) -> Vec<u8> {
 }
 
 /// serialize bit data
+#[inline(always)]
 fn ser_bn_dn(d: &[u8]) -> String {
     hex::encode_upper(d)
 }

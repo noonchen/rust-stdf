@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 6th 2022
 // -----
-// Last Modified: Wed Oct 26 2022
+// Last Modified: Tue Nov 01 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -34,6 +34,7 @@ pub struct AtdfRecordIter<'a, R> {
 // impl
 
 impl AtdfReader<BufReader<fs::File>> {
+    #[inline(always)]
     pub fn new(path: &str) -> Result<Self, StdfError> {
         // determine the compress type by file extension
         let compress_type = if path.ends_with(".gz") {
@@ -53,6 +54,7 @@ impl AtdfReader<BufReader<fs::File>> {
 }
 
 impl<R: BufRead + Seek> AtdfReader<R> {
+    #[inline(always)]
     pub fn from(in_stream: R, compress_type: &CompressType) -> Result<Self, StdfError> {
         let mut stream = match compress_type {
             CompressType::GzipCompressed => StdfStream::Gz(GzDecoder::new(in_stream)),
@@ -90,6 +92,7 @@ impl<R: BufRead + Seek> AtdfReader<R> {
         })
     }
 
+    #[inline(always)]
     pub fn get_record_iter(&mut self) -> AtdfRecordIter<R> {
         AtdfRecordIter {
             inner: self,
@@ -103,6 +106,7 @@ impl<R: BufRead + Seek> AtdfReader<R> {
 impl<R: BufRead + Seek> Iterator for AtdfRecordIter<'_, R> {
     type Item = AtdfRecord;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         // if next_rec is empty, means
         // the previous rec is not completed yet
@@ -170,6 +174,7 @@ impl<R: BufRead + Seek> Iterator for AtdfRecordIter<'_, R> {
     }
 }
 
+#[inline(always)]
 pub(crate) fn str_trim(input: &str) -> &str {
     let no_pre_space = input.strip_prefix(' ').unwrap_or(input);
     no_pre_space

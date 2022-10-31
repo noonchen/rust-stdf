@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Sat Oct 29 2022
+// Last Modified: Tue Nov 01 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -93,6 +93,7 @@ pub struct RawDataIter<'a, R> {
 
 impl StdfReader<BufReader<fs::File>> {
     /// Open the given file and return a StdfReader, if successful
+    #[inline(always)]
     pub fn new<P>(path: P) -> Result<Self, StdfError>
     where
         P: AsRef<Path>,
@@ -116,6 +117,7 @@ impl StdfReader<BufReader<fs::File>> {
 
 impl<R: BufRead + Seek> StdfReader<R> {
     /// Consume a input stream and generate a StdfReader, if successful
+    #[inline(always)]
     pub fn from(in_stream: R, compress_type: &CompressType) -> Result<Self, StdfError> {
         let mut stream = match compress_type {
             CompressType::GzipCompressed => StdfStream::Gz(GzDecoder::new(in_stream)),
@@ -158,6 +160,7 @@ impl<R: BufRead + Seek> StdfReader<R> {
         Ok(StdfReader { endianness, stream })
     }
 
+    #[inline(always)]
     fn read_header(&mut self) -> Result<RecordHeader, StdfError> {
         let mut buf = [0u8; 4];
         self.stream.read_exact(&mut buf)?;
@@ -169,6 +172,7 @@ impl<R: BufRead + Seek> StdfReader<R> {
     ///
     /// Only the records after the current file position
     /// can be read.
+    #[inline(always)]
     pub fn get_record_iter(&mut self) -> RecordIter<R> {
         RecordIter { inner: self }
     }
@@ -177,6 +181,7 @@ impl<R: BufRead + Seek> StdfReader<R> {
     ///
     /// beware that internal `offset` counter is starting
     /// from the current position.
+    #[inline(always)]
     pub fn get_rawdata_iter(&mut self) -> RawDataIter<R> {
         RawDataIter {
             offset: 0,
@@ -186,6 +191,7 @@ impl<R: BufRead + Seek> StdfReader<R> {
 }
 
 impl<R: BufRead> StdfStream<R> {
+    #[inline(always)]
     pub(crate) fn read_until(&mut self, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
         match self {
             StdfStream::Binary(bstream) => bstream.read_until(delim, buf),
@@ -196,6 +202,7 @@ impl<R: BufRead> StdfStream<R> {
 }
 
 impl<R: BufRead> Read for StdfStream<R> {
+    #[inline(always)]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             StdfStream::Gz(gzstream) => gzstream.read(buf),
@@ -218,6 +225,7 @@ impl<R: BufRead> Read for StdfStream<R> {
 impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
     type Item = StdfRecord;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let header = match self.inner.read_header() {
             Ok(h) => h,
@@ -240,6 +248,7 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
 impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
     type Item = RawDataElement;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let header = match self.inner.read_header() {
             Ok(h) => h,
@@ -267,6 +276,7 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
 
 // help functions
 
+#[inline(always)]
 pub(crate) fn rewind_stream_position<R: BufRead + Seek>(
     old_stream: StdfStream<R>,
 ) -> Result<StdfStream<R>, StdfError> {
@@ -291,6 +301,7 @@ pub(crate) fn rewind_stream_position<R: BufRead + Seek>(
     Ok(new_stream)
 }
 
+#[inline(always)]
 fn general_read_until<T: Read>(r: &mut T, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
     let mut one_byte = [0u8; 1];
     let mut n: usize = 0;
