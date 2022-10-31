@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Sat Oct 29 2022
+// Last Modified: Mon Oct 31 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -15,32 +15,34 @@ use smart_default::SmartDefault;
 use std::convert::From;
 
 macro_rules! read_optional {
-    ([$func:ident($raw:expr, $pos:expr)], $min_bytes:expr) => {{
+    ($var:expr, [$func:ident($raw:expr, $pos:expr)], $min_bytes:expr) => {{
         if *$pos + $min_bytes > $raw.len() {
-            None
+            $var = None;
+            return;
         } else {
-            Some([$func($raw, $pos)])
+            $var = Some([$func($raw, $pos)]);
         }
     }};
-    ($func:ident($raw:expr, $pos:expr), $min_bytes:expr) => {{
+    ($var:expr, $func:ident($raw:expr, $pos:expr), $min_bytes:expr) => {{
         if *$pos + $min_bytes > $raw.len() {
-            None
+            $var = None;
+            return;
         } else {
-            Some($func($raw, $pos))
+            $var = Some($func($raw, $pos));
         }
     }};
-    ($func:ident($raw:expr, $pos:expr, $order:expr), $min_bytes:expr) => {{
+    ($var:expr, $func:ident($raw:expr, $pos:expr, $order:expr), $min_bytes:expr) => {{
         if *$pos + $min_bytes > $raw.len() {
-            None
+            $var = None;
         } else {
-            Some($func($raw, $pos, $order))
+            $var = Some($func($raw, $pos, $order));
         }
     }};
-    ($func:ident($raw:expr, $pos:expr, $order:expr, $cnt:expr), $element_bytes:expr) => {{
+    ($var:expr, $func:ident($raw:expr, $pos:expr, $order:expr, $cnt:expr), $element_bytes:expr) => {{
         if *$pos + $element_bytes * $cnt as usize > $raw.len() {
-            None
+            $var = None;
         } else {
-            Some($func($raw, $pos, $order, $cnt))
+            $var = Some($func($raw, $pos, $order, $cnt));
         }
     }};
 }
@@ -1639,18 +1641,18 @@ impl PTR {
         self.result = read_r4(raw_data, pos, order);
         self.test_txt = read_cn(raw_data, pos);
         self.alarm_id = read_cn(raw_data, pos);
-        self.opt_flag = read_optional!([read_uint8(raw_data, pos)], 1);
-        self.res_scal = read_optional!(read_i1(raw_data, pos), 1);
-        self.llm_scal = read_optional!(read_i1(raw_data, pos), 1);
-        self.hlm_scal = read_optional!(read_i1(raw_data, pos), 1);
-        self.lo_limit = read_optional!(read_r4(raw_data, pos, order), 4);
-        self.hi_limit = read_optional!(read_r4(raw_data, pos, order), 4);
-        self.units = read_optional!(read_cn(raw_data, pos), 1);
-        self.c_resfmt = read_optional!(read_cn(raw_data, pos), 1);
-        self.c_llmfmt = read_optional!(read_cn(raw_data, pos), 1);
-        self.c_hlmfmt = read_optional!(read_cn(raw_data, pos), 1);
-        self.lo_spec = read_optional!(read_r4(raw_data, pos, order), 4);
-        self.hi_spec = read_optional!(read_r4(raw_data, pos, order), 4);
+        read_optional!(self.opt_flag, [read_uint8(raw_data, pos)], 1);
+        read_optional!(self.res_scal, read_i1(raw_data, pos), 1);
+        read_optional!(self.llm_scal, read_i1(raw_data, pos), 1);
+        read_optional!(self.hlm_scal, read_i1(raw_data, pos), 1);
+        read_optional!(self.lo_limit, read_r4(raw_data, pos, order), 4);
+        read_optional!(self.hi_limit, read_r4(raw_data, pos, order), 4);
+        read_optional!(self.units, read_cn(raw_data, pos), 1);
+        read_optional!(self.c_resfmt, read_cn(raw_data, pos), 1);
+        read_optional!(self.c_llmfmt, read_cn(raw_data, pos), 1);
+        read_optional!(self.c_hlmfmt, read_cn(raw_data, pos), 1);
+        read_optional!(self.lo_spec, read_r4(raw_data, pos, order), 4);
+        read_optional!(self.hi_spec, read_r4(raw_data, pos, order), 4);
     }
 }
 
@@ -1672,22 +1674,22 @@ impl MPR {
         self.rtn_rslt = read_kx_r4(raw_data, pos, order, self.rslt_cnt);
         self.test_txt = read_cn(raw_data, pos);
         self.alarm_id = read_cn(raw_data, pos);
-        self.opt_flag = read_optional!([read_uint8(raw_data, pos)], 1);
-        self.res_scal = read_optional!(read_i1(raw_data, pos), 1);
-        self.llm_scal = read_optional!(read_i1(raw_data, pos), 1);
-        self.hlm_scal = read_optional!(read_i1(raw_data, pos), 1);
-        self.lo_limit = read_optional!(read_r4(raw_data, pos, order), 4);
-        self.hi_limit = read_optional!(read_r4(raw_data, pos, order), 4);
-        self.start_in = read_optional!(read_r4(raw_data, pos, order), 4);
-        self.incr_in = read_optional!(read_r4(raw_data, pos, order), 4);
-        self.rtn_indx = read_optional!(read_kx_u2(raw_data, pos, order, self.rtn_icnt), 2);
-        self.units = read_optional!(read_cn(raw_data, pos), 1);
-        self.units_in = read_optional!(read_cn(raw_data, pos), 1);
-        self.c_resfmt = read_optional!(read_cn(raw_data, pos), 1);
-        self.c_llmfmt = read_optional!(read_cn(raw_data, pos), 1);
-        self.c_hlmfmt = read_optional!(read_cn(raw_data, pos), 1);
-        self.lo_spec = read_optional!(read_r4(raw_data, pos, order), 4);
-        self.hi_spec = read_optional!(read_r4(raw_data, pos, order), 4);
+        read_optional!(self.opt_flag, [read_uint8(raw_data, pos)], 1);
+        read_optional!(self.res_scal, read_i1(raw_data, pos), 1);
+        read_optional!(self.llm_scal, read_i1(raw_data, pos), 1);
+        read_optional!(self.hlm_scal, read_i1(raw_data, pos), 1);
+        read_optional!(self.lo_limit, read_r4(raw_data, pos, order), 4);
+        read_optional!(self.hi_limit, read_r4(raw_data, pos, order), 4);
+        read_optional!(self.start_in, read_r4(raw_data, pos, order), 4);
+        read_optional!(self.incr_in, read_r4(raw_data, pos, order), 4);
+        read_optional!(self.rtn_indx, read_kx_u2(raw_data, pos, order, self.rtn_icnt), 2);
+        read_optional!(self.units, read_cn(raw_data, pos), 1);
+        read_optional!(self.units_in, read_cn(raw_data, pos), 1);
+        read_optional!(self.c_resfmt, read_cn(raw_data, pos), 1);
+        read_optional!(self.c_llmfmt, read_cn(raw_data, pos), 1);
+        read_optional!(self.c_hlmfmt, read_cn(raw_data, pos), 1);
+        read_optional!(self.lo_spec, read_r4(raw_data, pos, order), 4);
+        read_optional!(self.hi_spec, read_r4(raw_data, pos, order), 4);
     }
 }
 
