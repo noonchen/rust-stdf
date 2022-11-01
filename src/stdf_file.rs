@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Tue Nov 01 2022
+// Last Modified: Wed Nov 02 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -59,6 +59,7 @@ pub(crate) enum StdfStream<R> {
 /// // if file hits EOF, it will NOT redirect to 0.
 /// for rec in reader
 ///     .get_record_iter()
+///     .map(|x| x.unwrap())
 ///     .filter(|x| x.is_type(rec_types))
 /// {
 ///     match rec {
@@ -164,7 +165,6 @@ impl<R: BufRead + Seek> StdfReader<R> {
     fn read_header(&mut self) -> Result<RecordHeader, StdfError> {
         let mut buf = [0u8; 4];
         self.stream.read_exact(&mut buf)?;
-        // parse header assuming little endian
         RecordHeader::new().read_from_bytes(&buf, &self.endianness)
     }
 
@@ -223,37 +223,51 @@ impl<R: BufRead> Read for StdfStream<R> {
 // }
 
 impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
-    type Item = StdfRecord;
+    type Item = Result<StdfRecord, StdfError>;
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let header = match self.inner.read_header() {
             Ok(h) => h,
-            Err(_) => {
-                return None;
+            Err(e) => {
+                return match e.code {
+                    // only 2 error will be returned by `read_header`
+                    // code = 4, indicates normal EOF
+                    4 => None,
+                    // code = 5, indicates unexpected EOF
+                    _ => Some(Err(e)),
+                };
             }
         };
         // create a buffer to store record raw data
         let mut buffer = vec![0u8; header.len as usize];
-        if self.inner.stream.read_exact(&mut buffer).is_err() {
-            return None;
+        if let Err(io_e) = self.inner.stream.read_exact(&mut buffer) {
+            return Some(Err(StdfError {
+                code: 3,
+                msg: io_e.to_string(),
+            }));
         }
 
         let mut rec = StdfRecord::new(header.type_code);
         rec.read_from_bytes(&buffer, &self.inner.endianness);
-        Some(rec)
+        Some(Ok(rec))
     }
 }
 
 impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
-    type Item = RawDataElement;
+    type Item = Result<RawDataElement, StdfError>;
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let header = match self.inner.read_header() {
             Ok(h) => h,
-            Err(_) => {
-                return None;
+            Err(e) => {
+                return match e.code {
+                    // code = 4, indicates normal EOF
+                    4 => None,
+                    // code = 5, indicates unexpected EOF
+                    _ => Some(Err(e)),
+                };
             }
         };
         // advance position by 4 after reading a header successfully
@@ -261,16 +275,20 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
         let data_offset = self.offset;
         // create a buffer to store record raw data
         let mut buffer = vec![0u8; header.len as usize];
-        if self.inner.stream.read_exact(&mut buffer).is_err() {
-            return None;
+        if let Err(io_e) = self.inner.stream.read_exact(&mut buffer) {
+            return Some(Err(StdfError {
+                code: 3,
+                msg: io_e.to_string(),
+            }));
         }
         self.offset += header.len as u64;
-        Some(RawDataElement {
+
+        Some(Ok(RawDataElement {
             offset: data_offset,
             type_code: header.type_code,
             raw_data: buffer,
             byte_order: self.inner.endianness,
-        })
+        }))
     }
 }
 

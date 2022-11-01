@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Tue Nov 01 2022
+// Last Modified: Wed Nov 02 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -62,8 +62,8 @@ pub enum CompressType {
     ZipCompressed,
 }
 
-#[derive(SmartDefault, Debug)]
-pub(crate) struct RecordHeader {
+#[derive(SmartDefault, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecordHeader {
     pub len: u16,
     pub typ: u8,
     pub sub: u8,
@@ -514,7 +514,7 @@ pub enum StdfRecord {
     // rec type 180: Reserved
     // rec type 181: Reserved
     ReservedRec(ReservedRec),
-    InvalidRec,
+    InvalidRec(RecordHeader),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1075,42 +1075,43 @@ pub struct ReservedRec {
 
 impl RecordHeader {
     #[inline(always)]
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         RecordHeader::default()
     }
 
-    /// Construct a STDF record header from first 4 elements of given byte array.
+    /// Construct a STDF record header from first 4 elements of given byte array,
+    /// no error would occur even if the header is invalid.
     ///
-    /// If array size is less than 4, this function return a StdfError
+    /// Unless the array size is less than 4, StdfError of
+    /// `EOF` or `Unexpected EOF` will be returned
     #[inline(always)]
-    pub(crate) fn read_from_bytes(
+    pub fn read_from_bytes(
         mut self,
         raw_data: &[u8],
         order: &ByteOrder,
     ) -> Result<Self, StdfError> {
-        if raw_data.len() >= 4 {
-            let len_bytes = [raw_data[0], raw_data[1]];
-            self.len = match order {
-                ByteOrder::LittleEndian => u16::from_le_bytes(len_bytes),
-                ByteOrder::BigEndian => u16::from_be_bytes(len_bytes),
-            };
-            self.typ = raw_data[2];
-            self.sub = raw_data[3];
-            // validate header
-            self.type_code = stdf_record_type::get_code_from_typ_sub(self.typ, self.sub);
-            if self.type_code == stdf_record_type::REC_INVALID {
-                Err(StdfError {
-                    code: 2,
-                    msg: format!("{:?}", self),
-                })
-            } else {
+        match raw_data.len() {
+            0 => Err(StdfError {
+                code: 4,
+                msg: String::from("No bytes to read"),
+            }),
+            1..=3 => Err(StdfError {
+                code: 5,
+                msg: String::from("Not enough data to construct record header"),
+            }),
+            _ => {
+                let len_bytes = [raw_data[0], raw_data[1]];
+                self.len = match order {
+                    ByteOrder::LittleEndian => u16::from_le_bytes(len_bytes),
+                    ByteOrder::BigEndian => u16::from_be_bytes(len_bytes),
+                };
+                self.typ = raw_data[2];
+                self.sub = raw_data[3];
+                // validate header
+                self.type_code = stdf_record_type::get_code_from_typ_sub(self.typ, self.sub);
+                // return even if we have a invalid record type, let other code to handle it
                 Ok(self)
             }
-        } else {
-            Err(StdfError {
-                code: 1,
-                msg: String::from("Not enough data to construct record header"),
-            })
         }
     }
 }
@@ -2000,7 +2001,7 @@ impl StdfRecord {
             // rec type 181: Reserved
             stdf_record_type::REC_RESERVE => StdfRecord::ReservedRec(ReservedRec::new()),
             // not matched
-            _ => StdfRecord::InvalidRec,
+            _ => StdfRecord::InvalidRec(RecordHeader::new()),
         }
     }
 
@@ -2069,7 +2070,7 @@ impl StdfRecord {
             // rec type 181: Reserved
             StdfRecord::ReservedRec(_) => stdf_record_type::REC_RESERVE,
             // not matched
-            StdfRecord::InvalidRec => stdf_record_type::REC_INVALID,
+            StdfRecord::InvalidRec(_) => stdf_record_type::REC_INVALID,
         }
     }
 
@@ -2151,8 +2152,8 @@ impl StdfRecord {
             // rec type 180: Reserved
             // rec type 181: Reserved
             StdfRecord::ReservedRec(reserve_rec) => reserve_rec.read_from_bytes(raw_data, order),
-            // not matched
-            StdfRecord::InvalidRec => (),
+            // not matched, invalid rec do not parse anything
+            StdfRecord::InvalidRec(_) => (),
         };
     }
 

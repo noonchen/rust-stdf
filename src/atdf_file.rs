@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 6th 2022
 // -----
-// Last Modified: Tue Nov 01 2022
+// Last Modified: Wed Nov 02 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -12,7 +12,7 @@
 use crate::atdf_types::AtdfRecord;
 use crate::stdf_error::StdfError;
 use crate::stdf_file::{rewind_stream_position, StdfStream};
-use crate::stdf_types::CompressType;
+use crate::stdf_types::{bytes_to_string, CompressType};
 use bzip2::bufread::BzDecoder;
 use flate2::bufread::GzDecoder;
 use std::io::{BufRead, BufReader, Seek};
@@ -64,11 +64,11 @@ impl<R: BufRead + Seek> AtdfReader<R> {
 
         let mut far_bytes = vec![];
         stream.read_until(b'\n', &mut far_bytes)?;
-        let far_str = std::str::from_utf8(&far_bytes)?;
+        let far_str = bytes_to_string(&far_bytes);
         if !far_str.starts_with("FAR:A") || far_bytes.len() < 9 {
             return Err(StdfError {
                 code: 6,
-                msg: format!("FAR record pattern 'FAR:A' not detected, found {}", far_str),
+                msg: format!("FAR record pattern 'FAR:A' not detected or required fields missing, found {}", far_str),
             });
         }
         // according to atdf spec, delimiter is the byte after 'A'
