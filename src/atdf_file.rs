@@ -68,7 +68,10 @@ impl<R: BufRead + Seek> AtdfReader<R> {
         if !far_str.starts_with("FAR:A") || far_bytes.len() < 9 {
             return Err(StdfError {
                 code: 6,
-                msg: format!("FAR record pattern 'FAR:A' not detected or required fields missing, found {}", far_str),
+                msg: format!(
+                    "FAR record pattern 'FAR:A' not detected or required fields missing, found {}",
+                    far_str
+                ),
             });
         }
         // according to atdf spec, delimiter is the byte after 'A'
