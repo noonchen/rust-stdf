@@ -67,8 +67,6 @@ pub struct RecordHeader {
     pub len: u16,
     pub typ: u8,
     pub sub: u8,
-    #[default(stdf_record_type::REC_INVALID)]
-    pub type_code: u64,
 }
 
 // Data Types
@@ -526,11 +524,11 @@ pub enum StdfRecord {
 ///
 /// it can be converted back to `StdfRecord`
 /// ```
-/// use rust_stdf::{RawDataElement, ByteOrder, StdfRecord, stdf_record_type::REC_FAR};
+/// use rust_stdf::{RawDataElement, ByteOrder, StdfRecord, RecordHeader, stdf_record_type::REC_FAR};
 ///
 /// let rde = RawDataElement {
 ///     offset: 0,
-///     type_code: 1,
+///     header: RecordHeader {typ: 0, sub: 10, len: 2},
 ///     raw_data: vec![0u8; 0],
 ///     byte_order: ByteOrder::LittleEndian
 /// };
@@ -552,8 +550,8 @@ pub struct RawDataElement {
     /// the iteration starts from beginning of the file.
     pub offset: u64,
 
-    /// used for filtering and creating StdfRecord
-    pub type_code: u64,
+    /// used for identifying StdfRecord types
+    pub header: RecordHeader,
 
     /// field data of current STDF Record
     pub raw_data: Vec<u8>,
@@ -1107,12 +1105,15 @@ impl RecordHeader {
                 };
                 self.typ = raw_data[2];
                 self.sub = raw_data[3];
-                // validate header
-                self.type_code = stdf_record_type::get_code_from_typ_sub(self.typ, self.sub);
                 // return even if we have a invalid record type, let other code to handle it
                 Ok(self)
             }
         }
+    }
+
+    /// return the type_code of current header
+    pub fn get_type(&self) -> u64 {
+        stdf_record_type::get_code_from_typ_sub(self.typ, self.sub)
     }
 }
 
@@ -2005,6 +2006,81 @@ impl StdfRecord {
         }
     }
 
+    /// Create a `StdfRecord` from a `RecordHeader` with default data
+    ///
+    /// The difference between `new()` is that this method can save
+    /// the info of an invalid record header, help the caller to
+    /// debug
+    ///
+    /// ```
+    /// use rust_stdf::{StdfRecord, RecordHeader, stdf_record_type::REC_PMR};
+    ///
+    /// // create a PMR StdfRecord from header
+    /// // (1, 60)
+    /// let pmr_header = RecordHeader {typ: 1, sub: 60, len: 0 };
+    /// let new_rec = StdfRecord::new_from_header(pmr_header);
+    ///
+    /// if let StdfRecord::PMR(pmr_rec) = new_rec {
+    ///     assert_eq!(pmr_rec.head_num, 1);
+    ///     assert_eq!(pmr_rec.site_num, 1);
+    /// } else {
+    ///     // this case will not be hit
+    /// }
+    /// ```
+    #[inline(always)]
+    pub fn new_from_header(header: RecordHeader) -> Self {
+        // I can use `header.get_type_code()` to get type_code
+        // and reuse the code from `new()`
+        // but match a tuple directly may be more efficient?
+        match (header.typ, header.sub) {
+            // rec type 15
+            (15, 10) => StdfRecord::PTR(PTR::new()),
+            (15, 15) => StdfRecord::MPR(MPR::new()),
+            (15, 20) => StdfRecord::FTR(FTR::new()),
+            (15, 30) => StdfRecord::STR(STR::new()),
+            // rec type 5
+            (5, 10) => StdfRecord::PIR(PIR::new()),
+            (5, 20) => StdfRecord::PRR(PRR::new()),
+            // rec type 2
+            (2, 10) => StdfRecord::WIR(WIR::new()),
+            (2, 20) => StdfRecord::WRR(WRR::new()),
+            (2, 30) => StdfRecord::WCR(WCR::new()),
+            // rec type 50
+            (50, 10) => StdfRecord::GDR(GDR::new()),
+            (50, 30) => StdfRecord::DTR(DTR::new()),
+            // rec type 0
+            (0, 10) => StdfRecord::FAR(FAR::new()),
+            (0, 20) => StdfRecord::ATR(ATR::new()),
+            (0, 30) => StdfRecord::VUR(VUR::new()),
+            // rec type 1
+            (1, 10) => StdfRecord::MIR(MIR::new()),
+            (1, 20) => StdfRecord::MRR(MRR::new()),
+            (1, 30) => StdfRecord::PCR(PCR::new()),
+            (1, 40) => StdfRecord::HBR(HBR::new()),
+            (1, 50) => StdfRecord::SBR(SBR::new()),
+            (1, 60) => StdfRecord::PMR(PMR::new()),
+            (1, 62) => StdfRecord::PGR(PGR::new()),
+            (1, 63) => StdfRecord::PLR(PLR::new()),
+            (1, 70) => StdfRecord::RDR(RDR::new()),
+            (1, 80) => StdfRecord::SDR(SDR::new()),
+            (1, 90) => StdfRecord::PSR(PSR::new()),
+            (1, 91) => StdfRecord::NMR(NMR::new()),
+            (1, 92) => StdfRecord::CNR(CNR::new()),
+            (1, 93) => StdfRecord::SSR(SSR::new()),
+            (1, 94) => StdfRecord::CDR(CDR::new()),
+            // rec type 10
+            (10, 30) => StdfRecord::TSR(TSR::new()),
+            // rec type 20
+            (20, 10) => StdfRecord::BPS(BPS::new()),
+            (20, 20) => StdfRecord::EPS(EPS::new()),
+            // rec type 180: Reserved
+            // rec type 181: Reserved
+            (180 | 181, _) => StdfRecord::ReservedRec(ReservedRec::new()),
+            // not matched
+            _ => StdfRecord::InvalidRec(header),
+        }
+    }
+
     /// returns the record type cdoe of the given StdfRecord,
     /// which is defined in `rust_stdf::stdf_record_type::*` module.
     ///
@@ -2196,7 +2272,7 @@ impl StdfRecord {
         }
 
         let data_slice = &raw_data[4..expected_end_pos];
-        let mut rec = StdfRecord::new(header.type_code);
+        let mut rec = StdfRecord::new(header.get_type());
         rec.read_from_bytes(data_slice, order);
         Ok(rec)
     }
@@ -2205,7 +2281,7 @@ impl StdfRecord {
 impl RawDataElement {
     #[inline(always)]
     pub fn is_type(&self, rec_type: u64) -> bool {
-        (self.type_code & rec_type) != 0
+        (self.header.get_type() & rec_type) != 0
     }
 }
 
@@ -2213,7 +2289,7 @@ impl From<&RawDataElement> for StdfRecord {
     /// it will NOT consume the input RawDataElement
     #[inline(always)]
     fn from(raw_element: &RawDataElement) -> Self {
-        let mut rec = StdfRecord::new(raw_element.type_code);
+        let mut rec = StdfRecord::new_from_header(raw_element.header);
         rec.read_from_bytes(&raw_element.raw_data, &raw_element.byte_order);
         rec
     }
@@ -2223,7 +2299,7 @@ impl From<RawDataElement> for StdfRecord {
     /// it will consume the input RawDataElement
     #[inline(always)]
     fn from(raw_element: RawDataElement) -> Self {
-        let mut rec = StdfRecord::new(raw_element.type_code);
+        let mut rec = StdfRecord::new_from_header(raw_element.header);
         rec.read_from_bytes(&raw_element.raw_data, &raw_element.byte_order);
         rec
     }

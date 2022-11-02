@@ -52,7 +52,7 @@ fn supported_stdf_file_test() {
             let raw_rec = raw_rec.unwrap();
 
             record_positions_list.push((
-                raw_rec.type_code,
+                raw_rec.header.get_type(),
                 raw_rec.offset,
                 raw_rec.raw_data.len(),
                 raw_rec.byte_order.clone(),

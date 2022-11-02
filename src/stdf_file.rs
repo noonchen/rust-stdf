@@ -248,7 +248,7 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
             }));
         }
 
-        let mut rec = StdfRecord::new(header.type_code);
+        let mut rec = StdfRecord::new_from_header(header);
         rec.read_from_bytes(&buffer, &self.inner.endianness);
         Some(Ok(rec))
     }
@@ -285,7 +285,7 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
 
         Some(Ok(RawDataElement {
             offset: data_offset,
-            type_code: header.type_code,
+            header,
             raw_data: buffer,
             byte_order: self.inner.endianness,
         }))
