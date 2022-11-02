@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Sat Oct 29 2022
+// Last Modified: Wed Nov 02 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -59,6 +59,7 @@ pub(crate) enum StdfStream<R> {
 /// // if file hits EOF, it will NOT redirect to 0.
 /// for rec in reader
 ///     .get_record_iter()
+///     .map(|x| x.unwrap())
 ///     .filter(|x| x.is_type(rec_types))
 /// {
 ///     match rec {
@@ -93,6 +94,7 @@ pub struct RawDataIter<'a, R> {
 
 impl StdfReader<BufReader<fs::File>> {
     /// Open the given file and return a StdfReader, if successful
+    #[inline(always)]
     pub fn new<P>(path: P) -> Result<Self, StdfError>
     where
         P: AsRef<Path>,
@@ -116,6 +118,7 @@ impl StdfReader<BufReader<fs::File>> {
 
 impl<R: BufRead + Seek> StdfReader<R> {
     /// Consume a input stream and generate a StdfReader, if successful
+    #[inline(always)]
     pub fn from(in_stream: R, compress_type: &CompressType) -> Result<Self, StdfError> {
         let mut stream = match compress_type {
             CompressType::GzipCompressed => StdfStream::Gz(GzDecoder::new(in_stream)),
@@ -158,10 +161,10 @@ impl<R: BufRead + Seek> StdfReader<R> {
         Ok(StdfReader { endianness, stream })
     }
 
+    #[inline(always)]
     fn read_header(&mut self) -> Result<RecordHeader, StdfError> {
         let mut buf = [0u8; 4];
         self.stream.read_exact(&mut buf)?;
-        // parse header assuming little endian
         RecordHeader::new().read_from_bytes(&buf, &self.endianness)
     }
 
@@ -169,6 +172,7 @@ impl<R: BufRead + Seek> StdfReader<R> {
     ///
     /// Only the records after the current file position
     /// can be read.
+    #[inline(always)]
     pub fn get_record_iter(&mut self) -> RecordIter<R> {
         RecordIter { inner: self }
     }
@@ -177,6 +181,7 @@ impl<R: BufRead + Seek> StdfReader<R> {
     ///
     /// beware that internal `offset` counter is starting
     /// from the current position.
+    #[inline(always)]
     pub fn get_rawdata_iter(&mut self) -> RawDataIter<R> {
         RawDataIter {
             offset: 0,
@@ -186,6 +191,7 @@ impl<R: BufRead + Seek> StdfReader<R> {
 }
 
 impl<R: BufRead> StdfStream<R> {
+    #[inline(always)]
     pub(crate) fn read_until(&mut self, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
         match self {
             StdfStream::Binary(bstream) => bstream.read_until(delim, buf),
@@ -196,6 +202,7 @@ impl<R: BufRead> StdfStream<R> {
 }
 
 impl<R: BufRead> Read for StdfStream<R> {
+    #[inline(always)]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             StdfStream::Gz(gzstream) => gzstream.read(buf),
@@ -216,35 +223,51 @@ impl<R: BufRead> Read for StdfStream<R> {
 // }
 
 impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
-    type Item = StdfRecord;
+    type Item = Result<StdfRecord, StdfError>;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let header = match self.inner.read_header() {
             Ok(h) => h,
-            Err(_) => {
-                return None;
+            Err(e) => {
+                return match e.code {
+                    // only 2 error will be returned by `read_header`
+                    // code = 4, indicates normal EOF
+                    4 => None,
+                    // code = 5, indicates unexpected EOF
+                    _ => Some(Err(e)),
+                };
             }
         };
         // create a buffer to store record raw data
         let mut buffer = vec![0u8; header.len as usize];
-        if self.inner.stream.read_exact(&mut buffer).is_err() {
-            return None;
+        if let Err(io_e) = self.inner.stream.read_exact(&mut buffer) {
+            return Some(Err(StdfError {
+                code: 3,
+                msg: io_e.to_string(),
+            }));
         }
 
-        let mut rec = StdfRecord::new(header.type_code);
+        let mut rec = StdfRecord::new_from_header(header);
         rec.read_from_bytes(&buffer, &self.inner.endianness);
-        Some(rec)
+        Some(Ok(rec))
     }
 }
 
 impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
-    type Item = RawDataElement;
+    type Item = Result<RawDataElement, StdfError>;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let header = match self.inner.read_header() {
             Ok(h) => h,
-            Err(_) => {
-                return None;
+            Err(e) => {
+                return match e.code {
+                    // code = 4, indicates normal EOF
+                    4 => None,
+                    // code = 5, indicates unexpected EOF
+                    _ => Some(Err(e)),
+                };
             }
         };
         // advance position by 4 after reading a header successfully
@@ -252,21 +275,26 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
         let data_offset = self.offset;
         // create a buffer to store record raw data
         let mut buffer = vec![0u8; header.len as usize];
-        if self.inner.stream.read_exact(&mut buffer).is_err() {
-            return None;
+        if let Err(io_e) = self.inner.stream.read_exact(&mut buffer) {
+            return Some(Err(StdfError {
+                code: 3,
+                msg: io_e.to_string(),
+            }));
         }
         self.offset += header.len as u64;
-        Some(RawDataElement {
+
+        Some(Ok(RawDataElement {
             offset: data_offset,
-            type_code: header.type_code,
+            header,
             raw_data: buffer,
             byte_order: self.inner.endianness,
-        })
+        }))
     }
 }
 
 // help functions
 
+#[inline(always)]
 pub(crate) fn rewind_stream_position<R: BufRead + Seek>(
     old_stream: StdfStream<R>,
 ) -> Result<StdfStream<R>, StdfError> {
@@ -291,6 +319,7 @@ pub(crate) fn rewind_stream_position<R: BufRead + Seek>(
     Ok(new_stream)
 }
 
+#[inline(always)]
 fn general_read_until<T: Read>(r: &mut T, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
     let mut one_byte = [0u8; 1];
     let mut n: usize = 0;

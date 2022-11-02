@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 26th 2022
 // -----
-// Last Modified: Sat Oct 29 2022
+// Last Modified: Wed Nov 02 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -49,8 +49,10 @@ fn supported_stdf_file_test() {
         let mut count = 0;
 
         for (ind, raw_rec) in reader.get_rawdata_iter().enumerate() {
+            let raw_rec = raw_rec.unwrap();
+
             record_positions_list.push((
-                raw_rec.type_code,
+                raw_rec.header.get_type(),
                 raw_rec.offset,
                 raw_rec.raw_data.len(),
                 raw_rec.byte_order.clone(),

@@ -37,6 +37,7 @@ fn main() {
     // if file hits EOF, it will NOT redirect to 0.
     for rec in reader
         .get_record_iter()
+        .map(|x| x.unwrap())
         .filter(|x| x.is_type(rec_types))
     {
         match rec {

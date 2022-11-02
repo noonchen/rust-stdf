@@ -24,7 +24,11 @@ fn main() {
 
     let rec_types = REC_PTR;
     // if file hits EOF, it will NOT redirect to 0.
-    for raw in reader.get_rawdata_iter().filter(|x| x.is_type(rec_types)) {
+    for raw in reader
+        .get_rawdata_iter()
+        .map(|x| x.unwrap())
+        .filter(|x| x.is_type(rec_types))
+    {
         println!("{:?}", raw);
     }
     let elapsed = start_time.elapsed().as_millis();
