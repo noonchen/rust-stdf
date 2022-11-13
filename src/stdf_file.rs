@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Wed Nov 02 2022
+// Last Modified: Mon Nov 14 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -11,7 +11,9 @@
 
 use crate::stdf_error::StdfError;
 use crate::stdf_types::*;
+#[cfg(feature = "bzip")]
 use bzip2::bufread::BzDecoder;
+#[cfg(feature = "gzip")]
 use flate2::bufread::GzDecoder;
 use std::io::{self, BufReader, SeekFrom}; // struct or enum
 use std::io::{BufRead, Read, Seek};
@@ -19,7 +21,9 @@ use std::{fs, path::Path}; // trait
 
 pub(crate) enum StdfStream<R> {
     Binary(R),
+    #[cfg(feature = "gzip")]
     Gz(GzDecoder<R>),
+    #[cfg(feature = "bzip")]
     Bz(BzDecoder<R>),
 }
 
@@ -101,14 +105,16 @@ impl StdfReader<BufReader<fs::File>> {
     {
         // determine the compress type by file extension
         let path_string = path.as_ref().display().to_string();
-        let compress_type = if path_string.ends_with(".gz") {
-            CompressType::GzipCompressed
-        } else if path_string.ends_with(".bz2") {
-            CompressType::BzipCompressed
-        } else if path_string.ends_with(".zip") {
-            CompressType::ZipCompressed
-        } else {
-            CompressType::Uncompressed
+        let file_ext = path_string.rsplit('.').next();
+        let compress_type = match file_ext {
+            Some(ext) => match ext {
+                #[cfg(feature = "gzip")]
+                "gz" => CompressType::GzipCompressed,
+                #[cfg(feature = "bzip")]
+                "bz2" => CompressType::BzipCompressed,
+                _ => CompressType::Uncompressed,
+            },
+            None => CompressType::Uncompressed,
         };
         let fp = fs::OpenOptions::new().read(true).open(path)?;
         let br = BufReader::with_capacity(2 << 20, fp);
@@ -121,7 +127,9 @@ impl<R: BufRead + Seek> StdfReader<R> {
     #[inline(always)]
     pub fn from(in_stream: R, compress_type: &CompressType) -> Result<Self, StdfError> {
         let mut stream = match compress_type {
+            #[cfg(feature = "gzip")]
             CompressType::GzipCompressed => StdfStream::Gz(GzDecoder::new(in_stream)),
+            #[cfg(feature = "bzip")]
             CompressType::BzipCompressed => StdfStream::Bz(BzDecoder::new(in_stream)),
             _ => StdfStream::Binary(in_stream),
         };
@@ -191,11 +199,14 @@ impl<R: BufRead + Seek> StdfReader<R> {
 }
 
 impl<R: BufRead> StdfStream<R> {
+    #[cfg(feature = "atdf")]
     #[inline(always)]
     pub(crate) fn read_until(&mut self, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
         match self {
             StdfStream::Binary(bstream) => bstream.read_until(delim, buf),
+            #[cfg(feature = "gzip")]
             StdfStream::Gz(gzstream) => general_read_until(gzstream, delim, buf),
+            #[cfg(feature = "bzip")]
             StdfStream::Bz(bzstream) => general_read_until(bzstream, delim, buf),
         }
     }
@@ -205,9 +216,11 @@ impl<R: BufRead> Read for StdfStream<R> {
     #[inline(always)]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
-            StdfStream::Gz(gzstream) => gzstream.read(buf),
-            StdfStream::Bz(bzstream) => bzstream.read(buf),
             StdfStream::Binary(bstream) => bstream.read(buf),
+            #[cfg(feature = "gzip")]
+            StdfStream::Gz(gzstream) => gzstream.read(buf),
+            #[cfg(feature = "bzip")]
+            StdfStream::Bz(bzstream) => bzstream.read(buf),
         }
     }
 }
@@ -303,12 +316,14 @@ pub(crate) fn rewind_stream_position<R: BufRead + Seek>(
             br.seek(SeekFrom::Start(0))?;
             StdfStream::Binary(br)
         }
+        #[cfg(feature = "gzip")]
         StdfStream::Gz(gzr) => {
             // get the inner handle and create a new stream after seek
             let mut fp = gzr.into_inner();
             fp.seek(SeekFrom::Start(0))?;
             StdfStream::Gz(GzDecoder::new(fp))
         }
+        #[cfg(feature = "bzip")]
         StdfStream::Bz(bzr) => {
             // get the inner handle and create a new stream after seek
             let mut fp = bzr.into_inner();
@@ -319,6 +334,7 @@ pub(crate) fn rewind_stream_position<R: BufRead + Seek>(
     Ok(new_stream)
 }
 
+#[cfg(all(feature = "atdf", any(feature = "gzip", feature = "bzip",)))]
 #[inline(always)]
 fn general_read_until<T: Read>(r: &mut T, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
     let mut one_byte = [0u8; 1];
