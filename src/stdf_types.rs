@@ -64,6 +64,8 @@ pub enum CompressType {
     GzipCompressed,
     #[cfg(feature = "bzip")]
     BzipCompressed,
+    #[cfg(feature = "zipfile")]
+    ZipCompressed,
 }
 
 #[derive(SmartDefault, Debug, Clone, Copy, PartialEq, Eq)]

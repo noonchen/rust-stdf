@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Wed Nov 02 2022
+// Last Modified: Mon Nov 14 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -11,6 +11,8 @@
 
 use std::fmt;
 use std::io::{self, ErrorKind};
+#[cfg(feature = "zipfile")]
+use zip::result::ZipError;
 
 #[derive(Debug)]
 pub struct StdfError {
@@ -28,6 +30,8 @@ impl fmt::Display for StdfError {
             5 => "Unexpected EOF",
             6 => "Non-ASCII Found",
             7 => "Invalid ATDF File",
+            #[cfg(feature = "zipfile")]
+            8 => "Zip related",
             _ => "Other error",
         };
         write!(f, "{}, {}", short_msg, self.msg)
@@ -44,6 +48,22 @@ impl From<io::Error> for StdfError {
             _ => StdfError {
                 code: 3,
                 msg: format!("{}, {}", error.kind(), error),
+            },
+        }
+    }
+}
+
+#[cfg(feature = "zipfile")]
+impl From<ZipError> for StdfError {
+    fn from(error: ZipError) -> Self {
+        match error {
+            ZipError::Io(err) => StdfError {
+                code: 3,
+                msg: err.to_string(),
+            },
+            _ => StdfError {
+                code: 8,
+                msg: error.to_string(),
             },
         }
     }
