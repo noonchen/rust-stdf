@@ -14,6 +14,9 @@ extern crate smart_default;
 use smart_default::SmartDefault;
 use std::convert::From;
 
+#[cfg(feature = "serialize")]
+use serde::Serialize;
+
 macro_rules! read_optional {
     ($var:expr, [$func:ident($raw:expr, $pos:expr)], $min_bytes:expr) => {{
         if *$pos + $min_bytes > $raw.len() {
@@ -118,6 +121,7 @@ pub type KxN1 = Vec<U1>;
 ///
 /// the nested data is a vector of Uf type,
 /// where f = 1, 2, 4 or 8
+#[cfg_attr(feature = "serialize", derive(Serialize))]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub enum KxUf {
     #[default]
@@ -130,6 +134,7 @@ pub enum KxUf {
 /// This enum is for storing
 /// generic data V1, the data type
 /// is the field name.
+#[cfg_attr(feature = "serialize", derive(Serialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum V1 {
     B0,
@@ -559,23 +564,43 @@ pub struct RawDataElement {
     pub byte_order: ByteOrder,
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct FAR {
     pub cpu_type: U1, // CPU type that wrote this file
     pub stdf_ver: U1, // STDF version number
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct ATR {
     pub mod_tim: U4,  //Date and time of STDF file modification
     pub cmd_line: Cn, //Command line of program
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct VUR {
     pub upd_nam: Cn, //Update Version Name
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct MIR {
     pub setup_t: U4,  // Date and time of job setup
@@ -623,6 +648,11 @@ pub struct MIR {
     pub supr_nam: Cn, // Supervisor name or ID
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct MRR {
     pub finish_t: U4, // Date and time last part tested
@@ -632,6 +662,11 @@ pub struct MRR {
     pub exc_desc: Cn, // Lot description supplied by exec
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PCR {
     pub head_num: U1, // Test head number
@@ -647,6 +682,11 @@ pub struct PCR {
     pub func_cnt: U4, // Number of functional parts tested
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct HBR {
     pub head_num: U1, // Test head number
@@ -658,6 +698,11 @@ pub struct HBR {
     pub hbin_nam: Cn, // Name of hardware bin
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct SBR {
     pub head_num: U1, // Test head number
@@ -669,6 +714,11 @@ pub struct SBR {
     pub sbin_nam: Cn, // Name of software bin
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PMR {
     pub pmr_indx: U2, // Unique index associated with pin
@@ -683,6 +733,11 @@ pub struct PMR {
     pub site_num: U1, // Site number associated with channel
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PGR {
     pub grp_indx: U2,   // Unique index associated with pin group
@@ -691,6 +746,11 @@ pub struct PGR {
     pub pmr_indx: KxU2, // Array of indexes for pins in the group
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PLR {
     pub grp_cnt: U2,    // Count (k) of pins or pin groups
@@ -703,12 +763,22 @@ pub struct PLR {
     pub rtn_chal: KxCn, // Return state encoding characters
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct RDR {
     pub num_bins: U2,   // Number (k) of bins being retested
     pub rtst_bin: KxU2, // Array of retest bin numbers
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct SDR {
     pub head_num: U1,   // Test head number
@@ -733,6 +803,11 @@ pub struct SDR {
     pub extr_id: Cn,    // Extra equipment ID
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PSR {
     pub cont_flg: B1,   // Continuation PSR record exist
@@ -750,6 +825,11 @@ pub struct PSR {
     pub src_id: KxCn, // Optional array of PatternInSrcFileID
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct NMR {
     pub cont_flg: B1,   // Continuation NMR record follows if not 0
@@ -759,6 +839,11 @@ pub struct NMR {
     pub atpg_nam: KxCn, // Array of ATPG signal names
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct CNR {
     pub chn_num: U2,  // Chain number. Referenced by the CHN_NUM array in an STR record
@@ -766,6 +851,11 @@ pub struct CNR {
     pub cell_nam: Sn, // Scan Cell Name
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct SSR {
     pub ssr_nam: Cn,    // Name of the STIL Scan pub structure for reference
@@ -773,6 +863,11 @@ pub struct SSR {
     pub chn_list: KxU2, // Array of CDR Indexes
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct CDR {
     pub cont_flg: B1, // Continuation CDR record follows if not 0
@@ -791,6 +886,11 @@ pub struct CDR {
     pub cell_lst: KxSn, // Array of Scan Cell Names
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct WIR {
     pub head_num: U1, // Test head number
@@ -800,6 +900,11 @@ pub struct WIR {
     pub wafer_id: Cn, // Wafer ID length byte = 0
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct WRR {
     pub head_num: U1, // Test head number
@@ -823,6 +928,11 @@ pub struct WRR {
     pub exc_desc: Cn, // Wafer description supplied by exec
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct WCR {
     #[default = 0.0]
@@ -845,12 +955,22 @@ pub struct WCR {
     pub pos_y: C1, // Positive Y direction of wafer
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PIR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PRR {
     pub head_num: U1, //Test head number
@@ -871,6 +991,11 @@ pub struct PRR {
     pub part_fix: Bn, //Part repair information
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct TSR {
     pub head_num: U1, // Test head number
@@ -895,6 +1020,11 @@ pub struct TSR {
     pub tst_sqrs: R4, // Sum of squares of test result values
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct PTR {
     pub test_num: U4,         // Test number
@@ -919,6 +1049,11 @@ pub struct PTR {
     pub hi_spec: Option<R4>,  // High specification limit value
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct MPR {
     pub test_num: U4,           // Test number
@@ -950,6 +1085,11 @@ pub struct MPR {
     pub hi_spec: Option<R4>,    // High specification limit value
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct FTR {
     pub test_num: U4,   // Test number
@@ -983,6 +1123,11 @@ pub struct FTR {
     pub spin_map: Dn,   // Bit map of enabled comparators
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct STR {
     pub cont_flg: B1,   // Continuation STR follows if not 0
@@ -1046,28 +1191,53 @@ pub struct STR {
     pub user_txt: KxCf, // Array of user defined fixed length strings for each logged fail
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct BPS {
     pub seq_name: Cn, // Program section (or sequencer) name length byte = 0
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct EPS {}
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct GDR {
     pub fld_cnt: U2,  // Count of data fields in record
     pub gen_data: Vn, // Data type code and data for one field(Repeat GEN_DATA for each data field)
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct DTR {
     pub text_dat: Cn, // ASCII text string
 }
 
+#[cfg_attr(
+    feature = "serialize",
+    derive(Serialize),
+    serde(rename_all = "UPPERCASE")
+)]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct ReservedRec {
-    pub raw_data: Cn, // unparsed data
+    pub raw_data: Vec<u8>, // unparsed data
 }
 
 // implementation
@@ -1935,8 +2105,9 @@ impl ReservedRec {
     }
 
     pub fn read_from_bytes(&mut self, raw_data: &[u8], _order: &ByteOrder) {
-        let pos = &mut 0;
-        self.raw_data = read_cn(raw_data, pos);
+        let mut dataclone = Vec::with_capacity(raw_data.len());
+        dataclone.extend_from_slice(raw_data);
+        self.raw_data = dataclone;
     }
 }
 
