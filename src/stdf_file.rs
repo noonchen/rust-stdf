@@ -19,6 +19,7 @@ use std::io::{self, BufReader, SeekFrom}; // struct or enum
 use std::io::{BufRead, Read, Seek};
 use std::{fs, path::Path}; // trait
 
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum StdfStream<R> {
     Binary(R),
     #[cfg(feature = "gzip")]
