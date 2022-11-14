@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 26th 2022
 // -----
-// Last Modified: Tue Nov 01 2022
+// Last Modified: Mon Nov 14 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -1104,10 +1104,12 @@ pub(crate) fn atdf_data_from_mir(rec: &MIR) -> Vec<String> {
         rec.job_nam.clone(),  //JOB_NAM
         rec.node_nam.clone(), //NODE_NAM
         rec.tstr_typ.clone(), //TSTR_TYP
-        NaiveDateTime::from_timestamp(rec.setup_t as i64, 0)
+        NaiveDateTime::from_timestamp_opt(rec.setup_t as i64, 0)
+            .expect("invalid or out-of-range datetime")
             .format("%H:%M:%S %d-%b-%Y")
             .to_string(), //SETUP_T
-        NaiveDateTime::from_timestamp(rec.start_t as i64, 0)
+        NaiveDateTime::from_timestamp_opt(rec.start_t as i64, 0)
+            .expect("invalid or out-of-range datetime")
             .format("%H:%M:%S %d-%b-%Y")
             .to_string(), //START_T
         rec.oper_nam.clone(), //OPER_NAM
@@ -1147,7 +1149,8 @@ pub(crate) fn atdf_data_from_mir(rec: &MIR) -> Vec<String> {
 #[inline(always)]
 pub(crate) fn atdf_data_from_mrr(rec: &MRR) -> Vec<String> {
     vec![
-        NaiveDateTime::from_timestamp(rec.finish_t as i64, 0)
+        NaiveDateTime::from_timestamp_opt(rec.finish_t as i64, 0)
+            .expect("invalid or out-of-range datetime")
             .format("%H:%M:%S %d-%b-%Y")
             .to_string(), //FINISH_T
         rec.disp_cod.to_string(), //DISP_COD
@@ -1370,7 +1373,8 @@ pub(crate) fn atdf_data_from_far(rec: &FAR) -> Vec<String> {
 #[inline(always)]
 pub(crate) fn atdf_data_from_atr(rec: &ATR) -> Vec<String> {
     vec![
-        NaiveDateTime::from_timestamp(rec.mod_tim as i64, 0)
+        NaiveDateTime::from_timestamp_opt(rec.mod_tim as i64, 0)
+            .expect("invalid or out-of-range datetime")
             .format("%H:%M:%S %d-%b-%Y")
             .to_string(), // MOD_TIM
         rec.cmd_line.clone(), // CMD_LINE

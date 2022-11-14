@@ -31,6 +31,8 @@ fn get_test_stdf_files() -> Vec<PathBuf> {
                 "gz" => true,
                 #[cfg(feature = "bzip")]
                 "bz2" => true,
+                #[cfg(feature = "zipfile")]
+                "zip" => true,
                 "stdf" => true,
                 _ => false,
             },

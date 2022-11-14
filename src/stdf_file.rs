@@ -18,6 +18,21 @@ use flate2::bufread::GzDecoder;
 use std::io::{self, BufReader, SeekFrom}; // struct or enum
 use std::io::{BufRead, Read, Seek};
 use std::{fs, path::Path}; // trait
+#[cfg(feature = "zipfile")]
+use zip::{read::ZipFile, ZipArchive};
+
+/// `Unsafe` struct for coupling
+/// file and `ZipArchive`
+/// in order to get access to
+/// the same `ZipFile`
+#[cfg(feature = "zipfile")]
+pub(crate) struct ZipBundle<R> {
+    // put `ZipFile` on top
+    // to ensure it is dropped
+    // before `ZipArchive`
+    file: Option<ZipFile<'static>>,
+    archive: Box<ZipArchive<R>>,
+}
 
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum StdfStream<R> {
@@ -26,6 +41,8 @@ pub(crate) enum StdfStream<R> {
     Gz(GzDecoder<R>),
     #[cfg(feature = "bzip")]
     Bz(BzDecoder<R>),
+    #[cfg(feature = "zipfile")]
+    Zip(ZipBundle<R>),
 }
 
 /// STDF Reader
@@ -113,6 +130,8 @@ impl StdfReader<BufReader<fs::File>> {
                 "gz" => CompressType::GzipCompressed,
                 #[cfg(feature = "bzip")]
                 "bz2" => CompressType::BzipCompressed,
+                #[cfg(feature = "zipfile")]
+                "zip" => CompressType::ZipCompressed,
                 _ => CompressType::Uncompressed,
             },
             None => CompressType::Uncompressed,
@@ -132,6 +151,8 @@ impl<R: BufRead + Seek> StdfReader<R> {
             CompressType::GzipCompressed => StdfStream::Gz(GzDecoder::new(in_stream)),
             #[cfg(feature = "bzip")]
             CompressType::BzipCompressed => StdfStream::Bz(BzDecoder::new(in_stream)),
+            #[cfg(feature = "zipfile")]
+            CompressType::ZipCompressed => StdfStream::Zip(ZipBundle::new(in_stream, 0)?),
             _ => StdfStream::Binary(in_stream),
         };
 
@@ -199,7 +220,40 @@ impl<R: BufRead + Seek> StdfReader<R> {
     }
 }
 
-impl<R: BufRead> StdfStream<R> {
+#[cfg(feature = "zipfile")]
+impl<R: BufRead + Seek> ZipBundle<R> {
+    /// the following code is modified from this SO post:
+    /// https://stackoverflow.com/questions/67823680/open-a-single-file-from-a-zip-archive-and-pass-on-as-read-instance/
+    pub(crate) fn new(stream: R, file_index: usize) -> Result<ZipBundle<R>, StdfError> {
+        let archive = ZipArchive::new(stream)?;
+        let mut archive = Box::new(archive);
+
+        let file =
+            unsafe { std::mem::transmute::<_, ZipFile<'static>>(archive.by_index(file_index)?) };
+        Ok(ZipBundle {
+            archive,
+            file: Some(file),
+        })
+    }
+
+    pub(crate) fn reopen_file(&mut self, file_index: usize) -> Result<(), StdfError> {
+        self.file = None;
+        let file = unsafe {
+            std::mem::transmute::<_, ZipFile<'static>>(self.archive.by_index(file_index)?)
+        };
+        self.file = Some(file);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "zipfile")]
+impl<R: BufRead + Seek> Read for ZipBundle<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.file.as_mut().unwrap().read(buf)
+    }
+}
+
+impl<R: BufRead + Seek> StdfStream<R> {
     #[cfg(feature = "atdf")]
     #[inline(always)]
     pub(crate) fn read_until(&mut self, delim: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
@@ -209,11 +263,13 @@ impl<R: BufRead> StdfStream<R> {
             StdfStream::Gz(gzstream) => general_read_until(gzstream, delim, buf),
             #[cfg(feature = "bzip")]
             StdfStream::Bz(bzstream) => general_read_until(bzstream, delim, buf),
+            #[cfg(feature = "zipfile")]
+            StdfStream::Zip(zipstream) => general_read_until(zipstream, delim, buf),
         }
     }
 }
 
-impl<R: BufRead> Read for StdfStream<R> {
+impl<R: BufRead + Seek> Read for StdfStream<R> {
     #[inline(always)]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
@@ -222,6 +278,8 @@ impl<R: BufRead> Read for StdfStream<R> {
             StdfStream::Gz(gzstream) => gzstream.read(buf),
             #[cfg(feature = "bzip")]
             StdfStream::Bz(bzstream) => bzstream.read(buf),
+            #[cfg(feature = "zipfile")]
+            StdfStream::Zip(zipstream) => zipstream.read(buf),
         }
     }
 }
@@ -330,6 +388,11 @@ pub(crate) fn rewind_stream_position<R: BufRead + Seek>(
             let mut fp = bzr.into_inner();
             fp.seek(SeekFrom::Start(0))?;
             StdfStream::Bz(BzDecoder::new(fp))
+        }
+        #[cfg(feature = "zipfile")]
+        StdfStream::Zip(mut zipr) => {
+            zipr.reopen_file(0)?;
+            StdfStream::Zip(zipr)
         }
     };
     Ok(new_stream)
