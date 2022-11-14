@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 6th 2022
 // -----
-// Last Modified: Wed Nov 02 2022
+// Last Modified: Mon Nov 14 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -13,10 +13,12 @@ use crate::atdf_types::AtdfRecord;
 use crate::stdf_error::StdfError;
 use crate::stdf_file::{rewind_stream_position, StdfStream};
 use crate::stdf_types::{bytes_to_string, CompressType};
+#[cfg(feature = "bzip")]
 use bzip2::bufread::BzDecoder;
+#[cfg(feature = "gzip")]
 use flate2::bufread::GzDecoder;
 use std::io::{BufRead, BufReader, Seek};
-use std::{fs, mem, str};
+use std::{fs, mem, path::Path, str};
 
 pub struct AtdfReader<R> {
     delimiter: char,
@@ -35,16 +37,22 @@ pub struct AtdfRecordIter<'a, R> {
 
 impl AtdfReader<BufReader<fs::File>> {
     #[inline(always)]
-    pub fn new(path: &str) -> Result<Self, StdfError> {
+    pub fn new<P>(path: P) -> Result<Self, StdfError>
+    where
+        P: AsRef<Path>,
+    {
         // determine the compress type by file extension
-        let compress_type = if path.ends_with(".gz") {
-            CompressType::GzipCompressed
-        } else if path.ends_with(".bz2") {
-            CompressType::BzipCompressed
-        } else if path.ends_with(".zip") {
-            CompressType::ZipCompressed
-        } else {
-            CompressType::Uncompressed
+        let path_string = path.as_ref().display().to_string();
+        let file_ext = path_string.rsplit('.').next();
+        let compress_type = match file_ext {
+            Some(ext) => match ext {
+                #[cfg(feature = "gzip")]
+                "gz" => CompressType::GzipCompressed,
+                #[cfg(feature = "bzip")]
+                "bz2" => CompressType::BzipCompressed,
+                _ => CompressType::Uncompressed,
+            },
+            None => CompressType::Uncompressed,
         };
 
         let fp = fs::OpenOptions::new().read(true).open(path)?;
@@ -57,7 +65,9 @@ impl<R: BufRead + Seek> AtdfReader<R> {
     #[inline(always)]
     pub fn from(in_stream: R, compress_type: &CompressType) -> Result<Self, StdfError> {
         let mut stream = match compress_type {
+            #[cfg(feature = "gzip")]
             CompressType::GzipCompressed => StdfStream::Gz(GzDecoder::new(in_stream)),
+            #[cfg(feature = "bzip")]
             CompressType::BzipCompressed => StdfStream::Bz(BzDecoder::new(in_stream)),
             _ => StdfStream::Binary(in_stream),
         };

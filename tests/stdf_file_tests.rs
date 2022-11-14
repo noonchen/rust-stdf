@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 26th 2022
 // -----
-// Last Modified: Wed Nov 02 2022
+// Last Modified: Mon Nov 14 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -23,7 +23,18 @@ fn get_test_stdf_files() -> Vec<PathBuf> {
 
     fn supported_ext(p: &PathBuf) -> bool {
         let p = p.display().to_string();
-        p.ends_with("stdf") || p.ends_with(".stdf.bz2") || p.ends_with(".stdf.gz")
+        let file_ext = p.rsplit('.').next();
+        match file_ext {
+            None => false,
+            Some(ext) => match ext {
+                #[cfg(feature = "gzip")]
+                "gz" => true,
+                #[cfg(feature = "bzip")]
+                "bz2" => true,
+                "stdf" => true,
+                _ => false,
+            },
+        }
     }
 
     // list folder and get supported file paths
@@ -37,6 +48,7 @@ fn get_test_stdf_files() -> Vec<PathBuf> {
 #[test]
 fn supported_stdf_file_test() {
     let stdf_file_list = get_test_stdf_files();
+    assert_ne!(stdf_file_list.len(), 0);
 
     for file in stdf_file_list.iter() {
         let mut reader =

@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Wed Nov 02 2022
+// Last Modified: Mon Nov 14 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -57,9 +57,10 @@ pub enum ByteOrder {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompressType {
     Uncompressed,
+    #[cfg(feature = "gzip")]
     GzipCompressed,
+    #[cfg(feature = "bzip")]
     BzipCompressed,
-    ZipCompressed,
 }
 
 #[derive(SmartDefault, Debug, Clone, Copy, PartialEq, Eq)]

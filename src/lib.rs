@@ -23,6 +23,7 @@
 
 extern crate smart_default;
 
+#[cfg(feature = "atdf")]
 mod atdf_types;
 mod stdf_error;
 mod stdf_types;
@@ -38,12 +39,12 @@ pub mod stdf_file;
 /// and record iterator
 ///
 /// For more detailed example, click `AtdfReader`
+#[cfg(feature = "atdf")]
 pub mod atdf_file;
 
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use atdf_types::atdf_record_field::*;
     use stdf_types::ByteOrder;
 
     // unsigned data type
@@ -876,9 +877,13 @@ mod tests {
         }
     }
 
-    use std::collections::HashMap;
+    #[cfg(feature = "atdf")]
+    use atdf_types::atdf_record_field::*;
+
+    #[cfg(feature = "atdf")]
     #[test]
     fn test_atdf_fields_duplicate() {
+        use std::collections::HashMap;
         let find_dup = |arr: &[(&str, bool)], name: &str| {
             arr.iter()
                 // .copied()
@@ -918,6 +923,7 @@ mod tests {
         find_dup(&DTR_FIELD, "DTR");
     }
 
+    #[cfg(feature = "atdf")]
     #[test]
     fn test_atdf_field_req_count() {
         assert_eq!(3, atdf_types::count_reqired(&PTR_FIELD));
