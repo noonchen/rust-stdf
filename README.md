@@ -4,10 +4,29 @@
  
 A Rust STDF library for process STDF datalogs of Version V4 and V4-2007.
 
-Supported compression:
- - Uncompressed
- - Gzip (.gz)
- - Bzip (.bz2)
+```
+# Cargo.toml
+[dependencies]
+rust-stdf = "0.3.0"
+```
+## Features
+
+Available features are listed below:
+ - `gzip`: gzip compression (.gz) support powered by `flate2`
+ - `bzip`: bzip compression (.bz2) support powered by `bzip2`
+ - `zipfile`: zip compression (.zip) support powered by `zip`
+ - `atdf`: ATDF reader + STDF -> ATDF convertor (in dev)
+ - `serialize`: serialize STDF records by `serde`
+
+***Note***: *`zipfile` feature contains unsafe Rust code, and STDF Reader will only open the first file in the zip archive with no password.*
+
+`rust-stdf` enable `gzip` and `bzip` by default, you can also control features by yourself.
+
+```
+rust-stdf = { version="0.3.0", default-features = false, features = ["gzip", ...]}
+```
+
+---
 
 ## Example
 

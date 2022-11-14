@@ -4,8 +4,15 @@
 //!
 //! Current capability:
 //!  - Reading & parsing STDF files.
-//!  - Reading & parsing ATDF files.
-//!  - Support gzip and bzip compressed files.
+//!  - Reading & parsing ATDF files. (feature: `atdf`)
+//!  - Support several compressed formats.
+//!
+//! Available features:
+//!  - `gzip`: gzip compression (.gz) support powered by `flate2`
+//!  - `bzip`: bzip compression (.bz2) support powered by `bzip2`
+//!  - `zipfile`: zip compression (.zip) support powered by `zip`
+//!  - `atdf`: ATDF reader + STDF -> ATDF convertor (in dev)
+//!  - `serialize`: serialize STDF records by `serde`
 //!
 //! In development:
 //!  - (dev) Dump `StdfRecord` to a new stdf file.
