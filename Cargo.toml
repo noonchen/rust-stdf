@@ -36,3 +36,16 @@ zipfile = ["zip"]
 atdf = [ "chrono", "hex" ]
 serialize = ["serde"]
 default = [ "gzip", "bzip" ]
+
+[[example]]
+name = "stdf_record_printer"
+path = "example/stdf_example.rs"
+
+[[example]]
+name = "stdf_raw_iter_example.rs"
+path = "example/stdf_raw_iter_example.rs"
+
+[[example]]
+name = "atdf_reader"
+path = "example/atdf_example.rs"
+required-features = ["atdf"]
