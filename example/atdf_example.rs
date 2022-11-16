@@ -1,5 +1,12 @@
 //
 // atdf_example.rs
+//
+// This example read and parse
+// a ATDF file, then convert back to 
+// the standard ATDF string
+//
+// Requires feature "atdf"
+//
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 7th 2022
 // -----
@@ -14,16 +21,16 @@ use std::env;
 use std::time::Instant;
 
 fn main() {
-    let stdf_path: String;
+    let atdf_path: String;
     if let Some(fpath) = env::args().nth(1) {
-        stdf_path = fpath;
-        println!("Input path: {}\n", stdf_path);
+        atdf_path = fpath;
+        println!("Input path: {}\n", atdf_path);
     } else {
         println!("no path\n");
         return;
     };
 
-    let mut reader = match AtdfReader::new(&stdf_path) {
+    let mut reader = match AtdfReader::new(&atdf_path) {
         Ok(r) => r,
         Err(e) => {
             println!("{}", e);

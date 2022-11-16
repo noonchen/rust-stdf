@@ -30,6 +30,8 @@ rust-stdf = { version="0.3.0", default-features = false, features = ["gzip", ...
 
 ## Example
 
+Here is a simple example to show you how to iterate records in a STDF V4 file. There is a rather complex example in the [github repo](https://github.com/noonchen/rust-stdf/tree/main/example) shows how to use existing APIs to convert STDF to Excel xlsx file.
+
 ```rust
 use rust_stdf::{stdf_file::*, stdf_record_type::*, StdfRecord};
 

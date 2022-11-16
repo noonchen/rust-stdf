@@ -1,5 +1,11 @@
 //
 // stdf_to_xlsx.rs
+//
+// This example convert a STDF V4 to 
+// xlsx with record name as sheet name.
+//
+// Requires feature "serialize"
+//
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: November 16th 2022
 // -----
