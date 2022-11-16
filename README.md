@@ -7,7 +7,7 @@ A Rust STDF library for process STDF datalogs of Version V4 and V4-2007.
 ```
 # Cargo.toml
 [dependencies]
-rust-stdf = "0.3.0"
+rust-stdf = "0.3.1"
 ```
 ## Features
 
@@ -23,7 +23,7 @@ Available features are listed below:
 `rust-stdf` enable `gzip` and `bzip` by default, you can also control features by yourself.
 
 ```
-rust-stdf = { version="0.3.0", default-features = false, features = ["gzip", ...]}
+rust-stdf = { version="0.3.1", default-features = false, features = ["gzip", ...]}
 ```
 
 ---

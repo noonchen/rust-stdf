@@ -2,7 +2,7 @@
 // atdf_example.rs
 //
 // This example read and parse
-// a ATDF file, then convert back to 
+// a ATDF file, then convert back to
 // the standard ATDF string
 //
 // Requires feature "atdf"

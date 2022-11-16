@@ -1,7 +1,7 @@
 //
 // stdf_to_xlsx.rs
 //
-// This example convert a STDF V4 to 
+// This example convert a STDF V4 to
 // xlsx with record name as sheet name.
 //
 // Requires feature "serialize"
