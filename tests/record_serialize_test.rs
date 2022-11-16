@@ -50,6 +50,4 @@ fn record_ser_test() {
     // check fields names
     assert_eq!(FAR::FIELD_NAMES_AS_ARRAY, ["CPU_TYPE", "STDF_VER"]);
     assert_eq!(EPS::FIELD_NAMES_AS_ARRAY, [""; 0]);
-
-
 }
