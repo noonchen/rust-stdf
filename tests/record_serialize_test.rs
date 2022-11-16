@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: November 14th 2022
 // -----
-// Last Modified: Mon Nov 14 2022
+// Last Modified: Wed Nov 16 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -46,4 +46,10 @@ fn record_ser_test() {
         }
         _ => {}
     }
+
+    // check fields names
+    assert_eq!(FAR::FIELD_NAMES_AS_ARRAY, ["CPU_TYPE", "STDF_VER"]);
+    assert_eq!(EPS::FIELD_NAMES_AS_ARRAY, [""; 0]);
+
+
 }

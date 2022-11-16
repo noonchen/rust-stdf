@@ -24,6 +24,7 @@ zip = { version = "0.6.3", default-features = false, features = [ "deflate", "bz
 chrono = { version = "0.4.22", optional = true}
 hex = { version = "0.4.3", optional = true }
 serde = { version = "1.0.147", features = ["derive"], optional = true}
+struct-field-names-as-array = { version = "0.1.4", optional = true}
 
 [dev-dependencies]
 rand = "0.8.5"
@@ -34,7 +35,7 @@ gzip = ["flate2"]
 bzip = ["bzip2"]
 zipfile = ["zip"]
 atdf = [ "chrono", "hex" ]
-serialize = ["serde"]
+serialize = [ "serde", "struct-field-names-as-array" ]
 default = [ "gzip", "bzip" ]
 
 [[example]]
@@ -42,7 +43,7 @@ name = "stdf_record_printer"
 path = "example/stdf_example.rs"
 
 [[example]]
-name = "stdf_raw_iter_example.rs"
+name = "stdf_raw_iter_example"
 path = "example/stdf_raw_iter_example.rs"
 
 [[example]]

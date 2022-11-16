@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Mon Nov 14 2022
+// Last Modified: Wed Nov 16 2022
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -16,6 +16,8 @@ use std::convert::From;
 
 #[cfg(feature = "serialize")]
 use serde::Serialize;
+#[cfg(feature = "serialize")]
+use struct_field_names_as_array::FieldNamesAsArray;
 
 macro_rules! read_optional {
     ($var:expr, [$func:ident($raw:expr, $pos:expr)], $min_bytes:expr) => {{
@@ -568,8 +570,9 @@ pub struct RawDataElement {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct FAR {
@@ -579,8 +582,9 @@ pub struct FAR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct ATR {
@@ -590,8 +594,9 @@ pub struct ATR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct VUR {
@@ -600,8 +605,9 @@ pub struct VUR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct MIR {
@@ -652,8 +658,9 @@ pub struct MIR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct MRR {
@@ -666,8 +673,9 @@ pub struct MRR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PCR {
@@ -686,8 +694,9 @@ pub struct PCR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct HBR {
@@ -702,8 +711,9 @@ pub struct HBR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct SBR {
@@ -718,8 +728,9 @@ pub struct SBR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PMR {
@@ -737,8 +748,9 @@ pub struct PMR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PGR {
@@ -750,8 +762,9 @@ pub struct PGR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PLR {
@@ -767,8 +780,9 @@ pub struct PLR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct RDR {
@@ -778,8 +792,9 @@ pub struct RDR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct SDR {
@@ -807,8 +822,9 @@ pub struct SDR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PSR {
@@ -829,8 +845,9 @@ pub struct PSR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct NMR {
@@ -843,8 +860,9 @@ pub struct NMR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct CNR {
@@ -855,8 +873,9 @@ pub struct CNR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct SSR {
@@ -867,8 +886,9 @@ pub struct SSR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct CDR {
@@ -890,8 +910,9 @@ pub struct CDR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct WIR {
@@ -904,8 +925,9 @@ pub struct WIR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct WRR {
@@ -932,8 +954,9 @@ pub struct WRR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct WCR {
@@ -959,8 +982,9 @@ pub struct WCR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PIR {
@@ -970,8 +994,9 @@ pub struct PIR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct PRR {
@@ -995,8 +1020,9 @@ pub struct PRR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct TSR {
@@ -1024,8 +1050,9 @@ pub struct TSR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct PTR {
@@ -1053,8 +1080,9 @@ pub struct PTR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct MPR {
@@ -1089,8 +1117,9 @@ pub struct MPR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct FTR {
@@ -1127,8 +1156,9 @@ pub struct FTR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct STR {
@@ -1195,8 +1225,9 @@ pub struct STR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct BPS {
@@ -1205,16 +1236,18 @@ pub struct BPS {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct EPS {}
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq)]
 pub struct GDR {
@@ -1224,8 +1257,9 @@ pub struct GDR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct DTR {
@@ -1234,8 +1268,9 @@ pub struct DTR {
 
 #[cfg_attr(
     feature = "serialize",
-    derive(Serialize),
-    serde(rename_all = "UPPERCASE")
+    derive(Serialize, FieldNamesAsArray),
+    serde(rename_all = "UPPERCASE"),
+    field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
 pub struct ReservedRec {
