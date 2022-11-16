@@ -7,7 +7,7 @@ A Rust STDF library for process STDF datalogs of Version V4 and V4-2007.
 ```
 # Cargo.toml
 [dependencies]
-rust-stdf = "0.3.0"
+rust-stdf = "0.3.1"
 ```
 ## Features
 
@@ -23,12 +23,14 @@ Available features are listed below:
 `rust-stdf` enable `gzip` and `bzip` by default, you can also control features by yourself.
 
 ```
-rust-stdf = { version="0.3.0", default-features = false, features = ["gzip", ...]}
+rust-stdf = { version="0.3.1", default-features = false, features = ["gzip", ...]}
 ```
 
 ---
 
 ## Example
+
+Here is a simple example to show you how to iterate records in a STDF V4 file. There is a rather complex example in the [github repo](https://github.com/noonchen/rust-stdf/tree/main/example) shows how to use existing APIs to convert STDF to Excel xlsx file.
 
 ```rust
 use rust_stdf::{stdf_file::*, stdf_record_type::*, StdfRecord};
