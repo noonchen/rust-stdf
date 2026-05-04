@@ -2679,11 +2679,7 @@ pub(crate) fn read_bn(raw_data: &[u8], pos: &mut usize) -> Bn {
 #[inline(always)]
 pub(crate) fn read_dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn {
     let bitcount = read_u2(raw_data, pos, order) as usize;
-    let mut bytecount = (bitcount / 8) as usize;
-    if bitcount % 8 > 0 {
-        // remain bit also need one byte
-        bytecount += 1;
-    }
+    let bytecount = (bitcount + 7) / 8;
     if bytecount != 0 {
         let min_pos = std::cmp::min(*pos + bytecount, raw_data.len());
         let data_slice = &raw_data[*pos..min_pos];
