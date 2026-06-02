@@ -105,6 +105,8 @@ pub struct StdfReader<R> {
 
 pub struct RecordIter<'a, R> {
     inner: &'a mut StdfReader<R>,
+    // reused across records, bytes are only borrowed during parsing
+    buffer: Vec<u8>,
 }
 
 pub struct RawDataIter<'a, R> {
@@ -204,7 +206,10 @@ impl<R: BufRead + Seek> StdfReader<R> {
     /// can be read.
     #[inline(always)]
     pub fn get_record_iter(&mut self) -> RecordIter<R> {
-        RecordIter { inner: self }
+        RecordIter {
+            inner: self,
+            buffer: Vec::new(),
+        }
     }
 
     /// return an iterator for unprocessed STDF bytes
@@ -311,9 +316,13 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
                 };
             }
         };
-        // create a buffer to store record raw data
-        let mut buffer = vec![0u8; header.len as usize];
-        if let Err(io_e) = self.inner.stream.read_exact(&mut buffer) {
+        // grow only when this record is larger than any seen so far, then
+        // fill and parse just the [..len] prefix
+        let len = header.len as usize;
+        if self.buffer.len() < len {
+            self.buffer.resize(len, 0);
+        }
+        if let Err(io_e) = self.inner.stream.read_exact(&mut self.buffer[..len]) {
             return Some(Err(StdfError {
                 code: 3,
                 msg: io_e.to_string(),
@@ -321,7 +330,7 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
         }
 
         let mut rec = StdfRecord::new_from_header(header);
-        rec.read_from_bytes(&buffer, &self.inner.endianness);
+        rec.read_from_bytes(&self.buffer[..len], &self.inner.endianness);
         Some(Ok(rec))
     }
 }
