@@ -11,7 +11,7 @@
 
 use self::atdf_record_field::*;
 use crate::{stdf_error::StdfError, stdf_record_type::*, *};
-use chrono::NaiveDateTime;
+use chrono::DateTime;
 use std::collections::hash_map::HashMap;
 
 macro_rules! ser_optional {
@@ -1104,11 +1104,11 @@ pub(crate) fn atdf_data_from_mir(rec: &MIR) -> Vec<String> {
         rec.job_nam.clone(),  //JOB_NAM
         rec.node_nam.clone(), //NODE_NAM
         rec.tstr_typ.clone(), //TSTR_TYP
-        NaiveDateTime::from_timestamp_opt(rec.setup_t as i64, 0)
+        DateTime::from_timestamp(rec.setup_t as i64, 0)
             .expect("invalid or out-of-range datetime")
             .format("%H:%M:%S %d-%b-%Y")
             .to_string(), //SETUP_T
-        NaiveDateTime::from_timestamp_opt(rec.start_t as i64, 0)
+        DateTime::from_timestamp(rec.start_t as i64, 0)
             .expect("invalid or out-of-range datetime")
             .format("%H:%M:%S %d-%b-%Y")
             .to_string(), //START_T
@@ -1149,7 +1149,7 @@ pub(crate) fn atdf_data_from_mir(rec: &MIR) -> Vec<String> {
 #[inline(always)]
 pub(crate) fn atdf_data_from_mrr(rec: &MRR) -> Vec<String> {
     vec![
-        NaiveDateTime::from_timestamp_opt(rec.finish_t as i64, 0)
+        DateTime::from_timestamp(rec.finish_t as i64, 0)
             .expect("invalid or out-of-range datetime")
             .format("%H:%M:%S %d-%b-%Y")
             .to_string(), //FINISH_T
@@ -1373,7 +1373,7 @@ pub(crate) fn atdf_data_from_far(rec: &FAR) -> Vec<String> {
 #[inline(always)]
 pub(crate) fn atdf_data_from_atr(rec: &ATR) -> Vec<String> {
     vec![
-        NaiveDateTime::from_timestamp_opt(rec.mod_tim as i64, 0)
+        DateTime::from_timestamp(rec.mod_tim as i64, 0)
             .expect("invalid or out-of-range datetime")
             .format("%H:%M:%S %d-%b-%Y")
             .to_string(), // MOD_TIM
