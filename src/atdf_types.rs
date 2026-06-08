@@ -332,7 +332,8 @@ pub(crate) mod atdf_record_field {
 pub struct AtdfRecord {
     rec_name: String,
     type_code: u64,
-    scale_flag: bool, // currently not used... maybe in the future
+    #[allow(dead_code)] // currently not used... maybe in the future
+    scale_flag: bool,
     data_map: HashMap<String, String>,
 }
 
@@ -340,7 +341,6 @@ impl From<&AtdfRecord> for StdfRecord {
     #[inline(always)]
     fn from(atdf_rec: &AtdfRecord) -> Self {
         //TODO
-        if atdf_rec.scale_flag {}
         StdfRecord::new(atdf_rec.type_code)
     }
 }
