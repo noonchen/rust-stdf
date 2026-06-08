@@ -935,7 +935,7 @@ pub(crate) fn atdf_data_from_ftr(rec: &FTR) -> Vec<String> {
     ]
 }
 
-/// ignored because I do not know ATDF structure in V4-2007
+// ignored because I do not know ATDF structure in V4-2007
 // pub(crate) fn atdf_data_from_str_rec(rec: &STR) -> Vec<String>  {
 //     vec![]}
 
