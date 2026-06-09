@@ -647,7 +647,7 @@ mod tests {
         );
         assert_eq!(pos, 12);
         assert_eq!(
-            vec!["".to_string(); 0],
+            Vec::<String>::new(),
             stdf_types::read_kx_cn(&raw_data, &mut pos, 0)
         );
     }
@@ -679,7 +679,7 @@ mod tests {
         );
         assert_eq!(pos, 15);
         assert_eq!(
-            vec!["".to_string(); 0],
+            Vec::<String>::new(),
             stdf_types::read_kx_sn(&raw_data, &mut pos, &order, 0)
         );
     }
