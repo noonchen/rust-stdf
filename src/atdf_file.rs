@@ -106,7 +106,7 @@ impl<R: BufRead + Seek> AtdfReader<R> {
     }
 
     #[inline(always)]
-    pub fn get_record_iter(&mut self) -> AtdfRecordIter<R> {
+    pub fn get_record_iter(&mut self) -> AtdfRecordIter<'_, R> {
         AtdfRecordIter {
             inner: self,
             incomplete_rec: String::new(),
