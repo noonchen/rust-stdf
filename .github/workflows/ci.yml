@@ -1,0 +1,70 @@
+name: Rust
+
+on: [pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ci:
+    name: ${{ matrix.task }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        task: [test, fmt, clippy]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Use stable toolchain
+        run: rustup default stable
+
+      - name: Install rustfmt
+        if: matrix.task == 'fmt'
+        run: rustup component add rustfmt
+
+      - name: Install clippy
+        if: matrix.task == 'clippy'
+        run: rustup component add clippy
+
+      - name: Run tests
+        if: matrix.task == 'test'
+        run: cargo test
+
+      - name: Build examples (default features)
+        if: matrix.task == 'test'
+        run: cargo build --examples
+
+      - name: Build atdf example
+        if: matrix.task == 'test'
+        run: cargo build --example atdf_reader --features atdf
+
+      - name: Build serialize example
+        if: matrix.task == 'test'
+        run: cargo build --example stdf_to_xlsx --features serialize
+
+      - name: Run rustfmt
+        if: matrix.task == 'fmt'
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        if: matrix.task == 'clippy'
+        run: cargo clippy -- -D warnings
+
+  coverage:
+    name: Code coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Use stable toolchain
+        run: rustup default stable
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Run cargo-tarpaulin
+        run: cargo tarpaulin --ignore-tests
