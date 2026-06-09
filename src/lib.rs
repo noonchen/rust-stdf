@@ -709,6 +709,14 @@ mod tests {
             stdf_types::read_kx_cf(&raw_data, &mut pos, 4, 0)
         );
         assert_eq!(pos, 3);
+        // k == 0 returns an empty vec without moving the cursor.
+        // Start from a distinct pos to prove non-advancement.
+        let mut pos = 5;
+        assert_eq!(
+            Vec::<String>::new(),
+            stdf_types::read_kx_cf(&raw_data, &mut pos, 0, 0)
+        );
+        assert_eq!(pos, 5);
     }
 
     #[test]
@@ -886,6 +894,17 @@ mod tests {
 
     #[cfg(feature = "atdf")]
     use atdf_types::atdf_record_field::*;
+
+    #[cfg(feature = "atdf")]
+    #[test]
+    fn test_atdf_timestamp_is_utc() {
+        // A fixed UTC instant, non-midnight so a local-tz or zeroed-time
+        // regression would change the rendered string.
+        let mut rec = ATR::new();
+        rec.mod_tim = 1_000_000_000;
+        let fields = atdf_types::atdf_data_from_atr(&rec);
+        assert_eq!(fields[0], "01:46:40 09-Sep-2001"); // MOD_TIM
+    }
 
     #[cfg(feature = "atdf")]
     #[test]
