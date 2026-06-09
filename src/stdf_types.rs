@@ -2786,7 +2786,7 @@ pub(crate) fn read_kx_n1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxN1 {
 /// Read V1 (u8 + generic value) from byte array with offset "pos"
 #[inline(always)]
 pub(crate) fn read_v1(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> V1 {
-    let type_byte = if (*pos as usize) < raw_data.len() {
+    let type_byte = if *pos < raw_data.len() {
         read_uint8(raw_data, pos)
     } else {
         0xF
