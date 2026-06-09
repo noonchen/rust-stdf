@@ -21,7 +21,7 @@ smart-default = "0.6.0"
 flate2 = { version = "1.0.24", optional = true}
 bzip2 = { version = "0.4.3", optional = true}
 zip = { version = "0.6.3", default-features = false, features = [ "deflate", "bzip2" ], optional = true }
-chrono = { version = "0.4.22", optional = true}
+chrono = { version = "0.4.31", optional = true}
 hex = { version = "0.4.3", optional = true }
 serde = { version = "1.0.147", features = ["derive"], optional = true}
 struct-field-names-as-array = { version = "0.1.4", optional = true}

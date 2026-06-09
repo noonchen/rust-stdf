@@ -14,14 +14,14 @@ use rust_stdf::{stdf_file::*, stdf_record_type::*, StdfRecord};
 use std::{
     fs::{self, read_dir},
     io::{Read, Seek, SeekFrom},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 fn get_test_stdf_files() -> Vec<PathBuf> {
     let mut test_folder = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     test_folder.push("demo_stdf");
 
-    fn supported_ext(p: &PathBuf) -> bool {
+    fn supported_ext(p: &Path) -> bool {
         let p = p.display().to_string();
         let file_ext = p.rsplit('.').next();
         match file_ext {
@@ -43,7 +43,7 @@ fn get_test_stdf_files() -> Vec<PathBuf> {
     read_dir(test_folder)
         .unwrap()
         .map(|ent| ent.unwrap().path().to_path_buf())
-        .filter(supported_ext)
+        .filter(|p| supported_ext(p))
         .collect::<Vec<PathBuf>>()
 }
 
@@ -53,8 +53,8 @@ fn supported_stdf_file_test() {
     assert_ne!(stdf_file_list.len(), 0);
 
     for file in stdf_file_list.iter() {
-        let mut reader =
-            StdfReader::new(file).expect(&format!("error when open {}", file.display()));
+        let mut reader = StdfReader::new(file)
+            .unwrap_or_else(|e| panic!("error when open {}: {e}", file.display()));
 
         let mut record_positions_list = Vec::with_capacity(2048);
 
@@ -69,7 +69,7 @@ fn supported_stdf_file_test() {
                 raw_rec.header.get_type(),
                 raw_rec.offset,
                 raw_rec.raw_data.len(),
-                raw_rec.byte_order.clone(),
+                raw_rec.byte_order,
             ));
 
             if count != 0 {

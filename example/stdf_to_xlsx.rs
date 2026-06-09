@@ -17,7 +17,6 @@
 
 use rust_stdf::{stdf_file::*, stdf_record_type::*, StdfRecord};
 use rust_xlsxwriter::{Workbook, Worksheet, XlsxError};
-use serde_json;
 use std::collections::HashMap;
 use std::env;
 

@@ -2533,17 +2533,13 @@ macro_rules! read_multi_byte_num {
 }
 
 macro_rules! read_multi_element {
-    ($count:expr, $default:expr, $func:ident($($arg:tt)+)) => {
+    ($count:expr, $func:ident($($arg:tt)+)) => {
         {
-            if $count != 0 {
-                let mut value = Vec::with_capacity($count as usize);
-                for _ in 0..$count {
-                    value.push( $func($($arg)+) );
-                }
-                value
-            } else {
-                vec![$default; 0]
+            let mut value = Vec::with_capacity($count as usize);
+            for _ in 0..$count {
+                value.push( $func($($arg)+) );
             }
+            value
         }
     }
 }
@@ -2679,7 +2675,7 @@ pub(crate) fn read_bn(raw_data: &[u8], pos: &mut usize) -> Bn {
 #[inline(always)]
 pub(crate) fn read_dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn {
     let bitcount = read_u2(raw_data, pos, order) as usize;
-    let bytecount = (bitcount + 7) / 8;
+    let bytecount = bitcount.div_ceil(8);
     if bytecount != 0 {
         let min_pos = std::cmp::min(*pos + bytecount, raw_data.len());
         let data_slice = &raw_data[*pos..min_pos];
@@ -2695,51 +2691,47 @@ pub(crate) fn read_dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn
 /// Read KxCn (Vec<Cn>) from byte array with offset "pos", vector size is provide by "k"
 #[inline(always)]
 pub(crate) fn read_kx_cn(raw_data: &[u8], pos: &mut usize, k: u16) -> KxCn {
-    read_multi_element!(k, String::new(), read_cn(raw_data, pos))
+    read_multi_element!(k, read_cn(raw_data, pos))
 }
 
 /// Read KxSn (Vec<Sn>) from byte array with offset "pos", vector size is provide by "k"
 #[inline(always)]
 pub(crate) fn read_kx_sn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxSn {
-    read_multi_element!(k, String::new(), read_sn(raw_data, pos, order))
+    read_multi_element!(k, read_sn(raw_data, pos, order))
 }
 
 /// Read KxCf (Vec<Cf>) from byte array with offset "pos", vector size is provide by "k", String size is "f"
 #[inline(always)]
 pub(crate) fn read_kx_cf(raw_data: &[u8], pos: &mut usize, k: u16, f: u8) -> KxCf {
-    if k != 0 {
-        let mut value = Vec::with_capacity(k as usize);
-        for _ in 0..k {
-            value.push(read_cf(raw_data, pos, f));
-        }
-        value
-    } else {
-        vec!["".to_string(); 0]
+    let mut value = Vec::with_capacity(k as usize);
+    for _ in 0..k {
+        value.push(read_cf(raw_data, pos, f));
     }
+    value
 }
 
 /// Read KxU1 (Vec<u8>) from byte array with offset "pos", vector size is provide by "k"
 #[inline(always)]
 pub(crate) fn read_kx_u1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxU1 {
-    read_multi_element!(k, 0, read_uint8(raw_data, pos))
+    read_multi_element!(k, read_uint8(raw_data, pos))
 }
 
 /// Read KxU2 (Vec<u16>) from byte array with offset "pos", vector size is provide by "k"
 #[inline(always)]
 pub(crate) fn read_kx_u2(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU2 {
-    read_multi_element!(k, 0, read_u2(raw_data, pos, order))
+    read_multi_element!(k, read_u2(raw_data, pos, order))
 }
 
 /// Read KxU4 (Vec<u32>) from byte array with offset "pos", vector size is provide by "k"
 #[inline(always)]
 pub(crate) fn read_kx_u4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU4 {
-    read_multi_element!(k, 0, read_u4(raw_data, pos, order))
+    read_multi_element!(k, read_u4(raw_data, pos, order))
 }
 
 /// Read KxU8 (Vec<u64>) from byte array with offset "pos", vector size is provide by "k"
 #[inline(always)]
 pub(crate) fn read_kx_u8(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxU8 {
-    read_multi_element!(k, 0, read_u8(raw_data, pos, order))
+    read_multi_element!(k, read_u8(raw_data, pos, order))
 }
 
 /// Read KxUf (Vec<u8|u16|u32|u64>) from byte array with offset "pos", vector size is provide by "k", size of number is "f"
@@ -2767,7 +2759,7 @@ pub(crate) fn read_kx_uf(
 /// Read KxR4 (Vec<f32>) from byte array with offset "pos", vector size is provide by "k"
 #[inline(always)]
 pub(crate) fn read_kx_r4(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> KxR4 {
-    read_multi_element!(k, 0.0, read_r4(raw_data, pos, order))
+    read_multi_element!(k, read_r4(raw_data, pos, order))
 }
 
 /// Read KxN1 (Vec<u8>) from byte array with offset "pos", vector size is provide by "k"
@@ -2794,7 +2786,7 @@ pub(crate) fn read_kx_n1(raw_data: &[u8], pos: &mut usize, k: u16) -> KxN1 {
 /// Read V1 (u8 + generic value) from byte array with offset "pos"
 #[inline(always)]
 pub(crate) fn read_v1(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> V1 {
-    let type_byte = if (*pos as usize) < raw_data.len() {
+    let type_byte = if *pos < raw_data.len() {
         read_uint8(raw_data, pos)
     } else {
         0xF
@@ -2821,7 +2813,7 @@ pub(crate) fn read_v1(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> V1
 /// Read Vn (Vec<V1>) from byte array with offset "pos", vector size is provide by "k"
 #[inline(always)]
 pub(crate) fn read_vn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u16) -> Vn {
-    read_multi_element!(k, V1::Invalid, read_v1(raw_data, pos, order))
+    read_multi_element!(k, read_v1(raw_data, pos, order))
 }
 
 #[inline(always)]

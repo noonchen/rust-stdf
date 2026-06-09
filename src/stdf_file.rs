@@ -205,7 +205,7 @@ impl<R: BufRead + Seek> StdfReader<R> {
     /// Only the records after the current file position
     /// can be read.
     #[inline(always)]
-    pub fn get_record_iter(&mut self) -> RecordIter<R> {
+    pub fn get_record_iter(&mut self) -> RecordIter<'_, R> {
         RecordIter {
             inner: self,
             buffer: Vec::new(),
@@ -217,7 +217,7 @@ impl<R: BufRead + Seek> StdfReader<R> {
     /// beware that internal `offset` counter is starting
     /// from the current position.
     #[inline(always)]
-    pub fn get_rawdata_iter(&mut self) -> RawDataIter<R> {
+    pub fn get_rawdata_iter(&mut self) -> RawDataIter<'_, R> {
         RawDataIter {
             offset: 0,
             inner: self,
@@ -233,8 +233,13 @@ impl<R: BufRead + Seek> ZipBundle<R> {
         let archive = ZipArchive::new(stream)?;
         let mut archive = Box::new(archive);
 
-        let file =
-            unsafe { std::mem::transmute::<_, ZipFile<'static>>(archive.by_index(file_index)?) };
+        // SAFETY: fakes a 'static borrow of `archive`. Sound because `archive` is
+        // boxed (address stable across the move below), `file` drops before
+        // `archive` (whose Drop reads it), and `archive` is never aliased while
+        // `file` is alive (reopen_file clears `file` before re-borrowing).
+        let file = unsafe {
+            std::mem::transmute::<ZipFile<'_>, ZipFile<'static>>(archive.by_index(file_index)?)
+        };
         Ok(ZipBundle {
             archive,
             file: Some(file),
@@ -242,9 +247,11 @@ impl<R: BufRead + Seek> ZipBundle<R> {
     }
 
     pub(crate) fn reopen_file(&mut self, file_index: usize) -> Result<(), StdfError> {
+        // Drop the outstanding borrow before re-borrowing `archive`.
         self.file = None;
+        // SAFETY: same invariants as `new`. `file` was just cleared above.
         let file = unsafe {
-            std::mem::transmute::<_, ZipFile<'static>>(self.archive.by_index(file_index)?)
+            std::mem::transmute::<ZipFile<'_>, ZipFile<'static>>(self.archive.by_index(file_index)?)
         };
         self.file = Some(file);
         Ok(())

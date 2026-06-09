@@ -18,13 +18,10 @@ use serde_json::{self, json};
 #[cfg(feature = "serialize")]
 fn record_ser_test() {
     // check upper case
-    match StdfRecord::new(REC_FAR) {
-        StdfRecord::FAR(r) => {
-            let json = serde_json::to_value(&r).unwrap();
-            assert_eq!(json["CPU_TYPE"], json!(0));
-            assert_eq!(json["cpu_type"], serde_json::Value::Null);
-        }
-        _ => {}
+    if let StdfRecord::FAR(r) = StdfRecord::new(REC_FAR) {
+        let json = serde_json::to_value(&r).unwrap();
+        assert_eq!(json["CPU_TYPE"], json!(0));
+        assert_eq!(json["cpu_type"], serde_json::Value::Null);
     }
 
     // check GDR
@@ -36,15 +33,12 @@ fn record_ser_test() {
             V1::N1(8),
         ],
     });
-    match gdr_rec {
-        StdfRecord::GDR(r) => {
-            let json = serde_json::to_value(&r).unwrap();
-            assert_eq!(json["FLD_CNT"], json!(3));
-            assert_eq!(json["GEN_DATA"][0]["Cn"], json!("test"));
-            assert_eq!(json["GEN_DATA"][1]["Bn"], json!(vec![1, 2, 3, 4, 5, 6, 7]));
-            assert_eq!(json["GEN_DATA"][2]["N1"], json!(8));
-        }
-        _ => {}
+    if let StdfRecord::GDR(r) = gdr_rec {
+        let json = serde_json::to_value(&r).unwrap();
+        assert_eq!(json["FLD_CNT"], json!(3));
+        assert_eq!(json["GEN_DATA"][0]["Cn"], json!("test"));
+        assert_eq!(json["GEN_DATA"][1]["Bn"], json!(vec![1, 2, 3, 4, 5, 6, 7]));
+        assert_eq!(json["GEN_DATA"][2]["N1"], json!(8));
     }
 
     // check fields names
