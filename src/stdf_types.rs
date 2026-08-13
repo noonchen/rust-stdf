@@ -52,6 +52,398 @@ macro_rules! read_optional {
     }};
 }
 
+// ============================================================================
+// Zero-copy record "views"
+//
+// A `*View` borrows the raw record bytes and exposes one getter per field.
+// Instead of eagerly parsing every field into an owned `StdfRecord` (which
+// allocates a `String`/`Vec` for every Cn/Bn/Kx field), a view scans the
+// record once to record each field's byte offset, then reads a field only
+// when its getter is called. Scalar fields cost O(1) and zero allocation;
+// string fields allocate only if you call `to_cn()`.
+//
+// Both the eager parser (`read_from_bytes`) and the view are generated from a
+// single field list by the `stdf_record!` macro below, so the two parsing
+// paths can never drift apart.
+// ============================================================================
+
+/// Sentinel stored in a view when a (trailing/optional) field is absent.
+const STDF_VIEW_ABSENT: u16 = u16::MAX;
+
+/// Turn a stored offset into `Some(pos)`, or `None` when the field is absent.
+#[inline]
+fn stdf_view_opt(off: u16) -> Option<usize> {
+    if off == STDF_VIEW_ABSENT {
+        None
+    } else {
+        Some(off as usize)
+    }
+}
+
+/// Zero-copy borrow of a `Cn` payload (the bytes *after* the 1-byte length prefix).
+#[derive(Clone, Copy, Debug)]
+pub struct CnRef<'a>(&'a [u8]);
+
+impl<'a> CnRef<'a> {
+    /// Read a `Cn` starting at the stored offset `off` (which points at the
+    /// length byte). Returns `None` if the field is absent.
+    #[inline]
+    fn read_at(raw: &'a [u8], off: u16) -> Option<Self> {
+        let p = stdf_view_opt(off)?;
+        let cnt = *raw.get(p)? as usize;
+        let start = p + 1;
+        let end = std::cmp::min(start + cnt, raw.len()); // clamp truncated payloads
+        Some(CnRef(&raw[start..end]))
+    }
+
+    /// Raw bytes of the string, always zero-copy.
+    #[inline]
+    pub fn as_bytes(&self) -> &'a [u8] {
+        self.0
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Zero-copy `&str`, but `Some` only when the bytes are valid UTF-8 (ASCII).
+    #[inline]
+    pub fn as_str(&self) -> Option<&'a str> {
+        std::str::from_utf8(self.0).ok()
+    }
+
+    /// Allocating; reproduces the owned `Cn` (byte -> char) semantics used by
+    /// `StdfRecord`, so results match the eager parser.
+    pub fn to_cn(&self) -> Cn {
+        self.0.iter().map(|&b| b as char).collect()
+    }
+}
+
+impl Default for CnRef<'_> {
+    #[inline]
+    fn default() -> Self {
+        CnRef(&[])
+    }
+}
+
+// ---- helper macros used by `stdf_record!` ----------------------------------
+
+/// Wrap a field spec's owned type in `Option<..>` for optional fields.
+///
+/// The `<kind>` token in a spec *is* the record's real type alias (`U1`, `R4`,
+/// `Cn`, ...), so no name mapping is needed here.
+macro_rules! stdf_field_ty {
+    (opt $k:ty) => { Option<$k> };
+    ($k:ty) => { $k };
+}
+
+/// Emit the eager-parse statement for one field (writes into `$recv.<field>`).
+macro_rules! stdf_read_field {
+    // optional fields (reuse the existing `read_optional!` semantics)
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, opt B1) => {
+        read_optional!($recv.$f, [read_uint8($raw, $pos)], 1);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, opt Cn) => {
+        read_optional!($recv.$f, read_cn($raw, $pos), 1);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, opt U1) => {
+        read_optional!($recv.$f, read_uint8($raw, $pos), 1);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, opt I1) => {
+        read_optional!($recv.$f, read_i1($raw, $pos), 1);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, opt U2) => {
+        read_optional!($recv.$f, read_u2($raw, $pos, $order), 2);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, opt I2) => {
+        read_optional!($recv.$f, read_i2($raw, $pos, $order), 2);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, opt U4) => {
+        read_optional!($recv.$f, read_u4($raw, $pos, $order), 4);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, opt R4) => {
+        read_optional!($recv.$f, read_r4($raw, $pos, $order), 4);
+    };
+    // mandatory scalars that don't take a byte order
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, U1) => {
+        $recv.$f = read_uint8($raw, $pos);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, I1) => {
+        $recv.$f = read_i1($raw, $pos);
+    };
+    // mandatory scalars that take a byte order
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, U2) => {
+        $recv.$f = read_u2($raw, $pos, $order);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, I2) => {
+        $recv.$f = read_i2($raw, $pos, $order);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, U4) => {
+        $recv.$f = read_u4($raw, $pos, $order);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, I4) => {
+        $recv.$f = read_i4($raw, $pos, $order);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, U8) => {
+        $recv.$f = read_u8($raw, $pos, $order);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, R4) => {
+        $recv.$f = read_r4($raw, $pos, $order);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, R8) => {
+        $recv.$f = read_r8($raw, $pos, $order);
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, B1) => {
+        $recv.$f = [read_uint8($raw, $pos)];
+    };
+    ($recv:tt, $f:ident, $raw:ident, $pos:ident, $order:ident, Cn) => {
+        $recv.$f = read_cn($raw, $pos);
+    };
+}
+
+/// Record the offset of a fixed-size field and advance `pos` by `$n` bytes.
+macro_rules! stdf_scan_fixed {
+    ($raw:ident, $pos:ident, $n:expr) => {{
+        if *$pos < $raw.len() {
+            let off = *$pos as u16;
+            *$pos += $n;
+            off
+        } else {
+            STDF_VIEW_ABSENT
+        }
+    }};
+}
+
+/// Record the offset of one field and advance `pos` past it (no allocation).
+/// Optionality is irrelevant here: a field is "absent" iff `pos` is already
+/// at/after the end of the record.
+macro_rules! stdf_scan_field {
+    ($raw:ident, $pos:ident, opt $k:tt) => {
+        stdf_scan_field!($raw, $pos, $k)
+    };
+    ($raw:ident, $pos:ident, Cn) => {{
+        if *$pos < $raw.len() {
+            let off = *$pos as u16;
+            *$pos += 1 + $raw[*$pos] as usize;
+            off
+        } else {
+            STDF_VIEW_ABSENT
+        }
+    }};
+    ($raw:ident, $pos:ident, U1) => { stdf_scan_fixed!($raw, $pos, 1) };
+    ($raw:ident, $pos:ident, I1) => { stdf_scan_fixed!($raw, $pos, 1) };
+    ($raw:ident, $pos:ident, B1) => { stdf_scan_fixed!($raw, $pos, 1) };
+    ($raw:ident, $pos:ident, U2) => { stdf_scan_fixed!($raw, $pos, 2) };
+    ($raw:ident, $pos:ident, I2) => { stdf_scan_fixed!($raw, $pos, 2) };
+    ($raw:ident, $pos:ident, U4) => { stdf_scan_fixed!($raw, $pos, 4) };
+    ($raw:ident, $pos:ident, I4) => { stdf_scan_fixed!($raw, $pos, 4) };
+    ($raw:ident, $pos:ident, R4) => { stdf_scan_fixed!($raw, $pos, 4) };
+    ($raw:ident, $pos:ident, U8) => { stdf_scan_fixed!($raw, $pos, 8) };
+    ($raw:ident, $pos:ident, R8) => { stdf_scan_fixed!($raw, $pos, 8) };
+}
+
+/// Emit one `pub fn <field>(&self) -> ...` getter on the view.
+/// `self.$f` is the stored `u16` offset; the method shares the field's name.
+macro_rules! stdf_view_getter {
+    ($f:ident, opt Cn) => {
+        #[inline]
+        pub fn $f(&self) -> Option<CnRef<'a>> {
+            CnRef::read_at(self.raw, self.$f)
+        }
+    };
+    ($f:ident, opt B1) => {
+        #[inline]
+        pub fn $f(&self) -> Option<B1> {
+            stdf_view_opt(self.$f).map(|p| [self.raw.get(p).copied().unwrap_or(0)])
+        }
+    };
+    ($f:ident, opt U1) => {
+        #[inline]
+        pub fn $f(&self) -> Option<U1> {
+            stdf_view_opt(self.$f).map(|mut p| read_uint8(self.raw, &mut p))
+        }
+    };
+    ($f:ident, opt I1) => {
+        #[inline]
+        pub fn $f(&self) -> Option<I1> {
+            stdf_view_opt(self.$f).map(|mut p| read_i1(self.raw, &mut p))
+        }
+    };
+    ($f:ident, opt U2) => {
+        #[inline]
+        pub fn $f(&self) -> Option<U2> {
+            stdf_view_opt(self.$f).map(|mut p| read_u2(self.raw, &mut p, &self.order))
+        }
+    };
+    ($f:ident, opt I2) => {
+        #[inline]
+        pub fn $f(&self) -> Option<I2> {
+            stdf_view_opt(self.$f).map(|mut p| read_i2(self.raw, &mut p, &self.order))
+        }
+    };
+    ($f:ident, opt U4) => {
+        #[inline]
+        pub fn $f(&self) -> Option<U4> {
+            stdf_view_opt(self.$f).map(|mut p| read_u4(self.raw, &mut p, &self.order))
+        }
+    };
+    ($f:ident, opt R4) => {
+        #[inline]
+        pub fn $f(&self) -> Option<R4> {
+            stdf_view_opt(self.$f).map(|mut p| read_r4(self.raw, &mut p, &self.order))
+        }
+    };
+    ($f:ident, Cn) => {
+        #[inline]
+        pub fn $f(&self) -> CnRef<'a> {
+            CnRef::read_at(self.raw, self.$f).unwrap_or_default()
+        }
+    };
+    ($f:ident, B1) => {
+        #[inline]
+        pub fn $f(&self) -> B1 {
+            stdf_view_opt(self.$f)
+                .map(|p| [self.raw.get(p).copied().unwrap_or(0)])
+                .unwrap_or([0])
+        }
+    };
+    ($f:ident, U1) => {
+        #[inline]
+        pub fn $f(&self) -> U1 {
+            stdf_view_opt(self.$f).map(|mut p| read_uint8(self.raw, &mut p)).unwrap_or(0)
+        }
+    };
+    ($f:ident, I1) => {
+        #[inline]
+        pub fn $f(&self) -> I1 {
+            stdf_view_opt(self.$f).map(|mut p| read_i1(self.raw, &mut p)).unwrap_or(0)
+        }
+    };
+    ($f:ident, U2) => {
+        #[inline]
+        pub fn $f(&self) -> U2 {
+            stdf_view_opt(self.$f)
+                .map(|mut p| read_u2(self.raw, &mut p, &self.order))
+                .unwrap_or(0)
+        }
+    };
+    ($f:ident, I2) => {
+        #[inline]
+        pub fn $f(&self) -> I2 {
+            stdf_view_opt(self.$f)
+                .map(|mut p| read_i2(self.raw, &mut p, &self.order))
+                .unwrap_or(0)
+        }
+    };
+    ($f:ident, U4) => {
+        #[inline]
+        pub fn $f(&self) -> U4 {
+            stdf_view_opt(self.$f)
+                .map(|mut p| read_u4(self.raw, &mut p, &self.order))
+                .unwrap_or(0)
+        }
+    };
+    ($f:ident, I4) => {
+        #[inline]
+        pub fn $f(&self) -> I4 {
+            stdf_view_opt(self.$f)
+                .map(|mut p| read_i4(self.raw, &mut p, &self.order))
+                .unwrap_or(0)
+        }
+    };
+    ($f:ident, U8) => {
+        #[inline]
+        pub fn $f(&self) -> U8 {
+            stdf_view_opt(self.$f)
+                .map(|mut p| read_u8(self.raw, &mut p, &self.order))
+                .unwrap_or(0)
+        }
+    };
+    ($f:ident, R4) => {
+        #[inline]
+        pub fn $f(&self) -> R4 {
+            stdf_view_opt(self.$f)
+                .map(|mut p| read_r4(self.raw, &mut p, &self.order))
+                .unwrap_or(0.0)
+        }
+    };
+    ($f:ident, R8) => {
+        #[inline]
+        pub fn $f(&self) -> R8 {
+            stdf_view_opt(self.$f)
+                .map(|mut p| read_r8(self.raw, &mut p, &self.order))
+                .unwrap_or(0.0)
+        }
+    };
+}
+
+/// Generate, from a single field list:
+///  - the owned record struct (used by the writing API and eager parsing),
+///  - `new()` + `read_from_bytes()` (eager parse),
+///  - a zero-copy `*View` with a per-field offset and typed getters.
+///
+/// Field spec grammar: `name: (<kind>)` or `name: (opt <kind>)` where `<kind>`
+/// is a record type alias: `U1 I1 U2 I2 U4 I4 U8 R4 R8 B1 Cn`.
+macro_rules! stdf_record {
+    (
+        $(#[$rec_meta:meta])*
+        $rec:ident / $view:ident : ($typ:literal, $sub:literal) {
+            $( $fname:ident : ( $($fspec:tt)+ ) ),+ $(,)?
+        }
+    ) => {
+        #[cfg_attr(
+            feature = "serialize",
+            derive(Serialize, FieldNamesAsArray),
+            serde(rename_all = "UPPERCASE"),
+            field_names_as_array(rename_all = "UPPERCASE")
+        )]
+        #[derive(SmartDefault, Debug, Clone, PartialEq)]
+        $(#[$rec_meta])*
+        pub struct $rec {
+            $( pub $fname: stdf_field_ty!($($fspec)+), )+
+        }
+
+        impl $rec {
+            #[inline(always)]
+            pub fn new() -> Self {
+                $rec::default()
+            }
+
+            #[inline(always)]
+            pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
+                let pos = &mut 0usize;
+                $( stdf_read_field!(self, $fname, raw_data, pos, order, $($fspec)+); )+
+            }
+        }
+
+        #[doc = concat!("Zero-copy view over a raw `", stringify!($rec), "` record.")]
+        pub struct $view<'a> {
+            raw: &'a [u8],
+            order: ByteOrder,
+            // one stored byte offset per field (`STDF_VIEW_ABSENT` if missing)
+            $( $fname: u16, )+
+        }
+
+        impl<'a> $view<'a> {
+            /// Scan the raw record once, recording each field's offset.
+            #[inline]
+            pub fn new(raw: &'a [u8], order: ByteOrder) -> Self {
+                let pos = &mut 0usize;
+                $( let $fname: u16 = stdf_scan_field!(raw, pos, $($fspec)+); )+
+                $view { raw, order, $( $fname, )+ }
+            }
+
+            $( stdf_view_getter!($fname, $($fspec)+); )+
+        }
+    };
+}
+
 // Common Type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ByteOrder {
@@ -1048,34 +1440,31 @@ pub struct TSR {
     pub tst_sqrs: R4, // Sum of squares of test result values
 }
 
-#[cfg_attr(
-    feature = "serialize",
-    derive(Serialize, FieldNamesAsArray),
-    serde(rename_all = "UPPERCASE"),
-    field_names_as_array(rename_all = "UPPERCASE")
-)]
-#[derive(SmartDefault, Debug, Clone, PartialEq)]
-pub struct PTR {
-    pub test_num: U4,         // Test number
-    pub head_num: U1,         // Test head number
-    pub site_num: U1,         // Test site number
-    pub test_flg: B1,         // Test flags (fail, alarm, etc.)
-    pub parm_flg: B1,         // Parametric test flags (drift, etc.)
-    pub result: R4,           // Test result
-    pub test_txt: Cn,         // Test description text or label
-    pub alarm_id: Cn,         // Name of alarm
-    pub opt_flag: Option<B1>, // Optional data flag
-    pub res_scal: Option<I1>, // Test results scaling exponent
-    pub llm_scal: Option<I1>, // Low limit scaling exponent
-    pub hlm_scal: Option<I1>, // High limit scaling exponent
-    pub lo_limit: Option<R4>, // Low test limit value
-    pub hi_limit: Option<R4>, // High test limit value
-    pub units: Option<Cn>,    // Test units
-    pub c_resfmt: Option<Cn>, // ANSI C result format string
-    pub c_llmfmt: Option<Cn>, // ANSI C low limit format string
-    pub c_hlmfmt: Option<Cn>, // ANSI C high limit format string
-    pub lo_spec: Option<R4>,  // Low specification limit value
-    pub hi_spec: Option<R4>,  // High specification limit value
+// PTR (15, 10): the struct, its eager `read_from_bytes`, and `PtrView`
+// are all generated from this single field list.
+stdf_record! {
+    PTR / PtrView : (15, 10) {
+        test_num: (U4),       // Test number
+        head_num: (U1),       // Test head number
+        site_num: (U1),       // Test site number
+        test_flg: (B1),       // Test flags (fail, alarm, etc.)
+        parm_flg: (B1),       // Parametric test flags (drift, etc.)
+        result:   (R4),       // Test result
+        test_txt: (Cn),       // Test description text or label
+        alarm_id: (Cn),       // Name of alarm
+        opt_flag: (opt B1),   // Optional data flag
+        res_scal: (opt I1),   // Test results scaling exponent
+        llm_scal: (opt I1),   // Low limit scaling exponent
+        hlm_scal: (opt I1),   // High limit scaling exponent
+        lo_limit: (opt R4),   // Low test limit value
+        hi_limit: (opt R4),   // High test limit value
+        units:    (opt Cn),   // Test units
+        c_resfmt: (opt Cn),   // ANSI C result format string
+        c_llmfmt: (opt Cn),   // ANSI C low limit format string
+        c_hlmfmt: (opt Cn),   // ANSI C high limit format string
+        lo_spec:  (opt R4),   // Low specification limit value
+        hi_spec:  (opt R4),   // High specification limit value
+    }
 }
 
 #[cfg_attr(
@@ -1883,38 +2272,6 @@ impl TSR {
         self.test_max = read_r4(raw_data, pos, order);
         self.tst_sums = read_r4(raw_data, pos, order);
         self.tst_sqrs = read_r4(raw_data, pos, order);
-    }
-}
-
-impl PTR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        PTR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.test_num = read_u4(raw_data, pos, order);
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        self.test_flg = [read_uint8(raw_data, pos)];
-        self.parm_flg = [read_uint8(raw_data, pos)];
-        self.result = read_r4(raw_data, pos, order);
-        self.test_txt = read_cn(raw_data, pos);
-        self.alarm_id = read_cn(raw_data, pos);
-        read_optional!(self.opt_flag, [read_uint8(raw_data, pos)], 1);
-        read_optional!(self.res_scal, read_i1(raw_data, pos), 1);
-        read_optional!(self.llm_scal, read_i1(raw_data, pos), 1);
-        read_optional!(self.hlm_scal, read_i1(raw_data, pos), 1);
-        read_optional!(self.lo_limit, read_r4(raw_data, pos, order), 4);
-        read_optional!(self.hi_limit, read_r4(raw_data, pos, order), 4);
-        read_optional!(self.units, read_cn(raw_data, pos), 1);
-        read_optional!(self.c_resfmt, read_cn(raw_data, pos), 1);
-        read_optional!(self.c_llmfmt, read_cn(raw_data, pos), 1);
-        read_optional!(self.c_hlmfmt, read_cn(raw_data, pos), 1);
-        read_optional!(self.lo_spec, read_r4(raw_data, pos, order), 4);
-        read_optional!(self.hi_spec, read_r4(raw_data, pos, order), 4);
     }
 }
 
