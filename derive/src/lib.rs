@@ -10,8 +10,8 @@
 //!
 //! ## Field kinds
 //! Each field's kind is inferred from its type alias: `U1 I1 U2 I2 U4 I4 U8 R4
-//! R8 B1 Cn` and the arrays `KxN1 KxR4 KxU2`. Optional trailing fields are
-//! recognized by `Option<..>`.
+//! R8 B1 C1 Cn Sn Bn Dn` and the arrays `KxN1 KxU1 KxU2 KxU4 KxU8 KxR4 KxCn KxSn
+//! Vn`. Optional trailing fields are recognized by `Option<..>`.
 //!
 //! ## Attributes
 //!  - `#[stdf(view = <Ident>)]` (struct) — name of the generated view; defaults
@@ -21,7 +21,7 @@
 //!
 //! The generated code refers to items that must be in scope at the derive site
 //! (i.e. inside `rust_stdf::stdf_types`): the `read_*` leaf readers, `ByteOrder`,
-//! `CnRef`, `stdf_view_opt`, and `STDF_VIEW_ABSENT`.
+//! `CnRef`/`SnRef`/`BnRef`/`DnRef`, `stdf_view_opt`, and `STDF_VIEW_ABSENT`.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -48,12 +48,24 @@ enum Kind {
     B1,
     /// `C1` = single byte read as a `char`.
     C1,
-    /// `Cn` length-prefixed string.
+    /// `Cn` length-prefixed string (1-byte length).
     Cn,
+    /// `Sn` length-prefixed string (2-byte, byte-order-dependent length).
+    Sn,
+    /// `Bn` length-prefixed byte array (1-byte length).
+    Bn,
+    /// `Dn` bit-field byte array (2-byte, byte-order-dependent bit length).
+    Dn,
     /// `KxN1` nibble-packed array (`fn(raw, pos, k)`).
     KxN1,
-    /// `Kx*` array read with `fn(raw, pos, order, k)`: `KxR4`, `KxU2`.
-    KxOrder { read: Ident, elem: usize },
+    /// Fixed-width counted array. `order == false`: `fn(raw, pos, k)` (`KxU1`);
+    /// `order == true`: `fn(raw, pos, order, k)` (`KxU2 KxU4 KxU8 KxR4`).
+    KxFixed { read: Ident, elem: usize, order: bool },
+    /// Variable-length counted string array. `order == false`: `KxCn`;
+    /// `order == true`: `KxSn`.
+    KxStr { read: Ident, order: bool },
+    /// `Vn` generic-data array (terminal, `fn(raw, pos, order, k)`).
+    Vn,
 }
 
 struct FieldInfo {
@@ -62,6 +74,8 @@ struct FieldInfo {
     optional: bool,
     kind: Kind,
     count: Option<Ident>,
+    /// Byte width (1 or 2) of the `count` field, resolved in a second pass.
+    count_bytes: Option<usize>,
     /// The `smart_default` sentinel (`#[default = ..]` / `#[default(..)]`), used
     /// as the view getter's fallback when the field is absent from a short buffer.
     default_expr: Option<TokenStream2>,
@@ -134,7 +148,11 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             )
         })?;
 
-        if matches!(kind, Kind::KxN1 | Kind::KxOrder { .. }) && count.is_none() {
+        if matches!(
+            kind,
+            Kind::KxN1 | Kind::KxFixed { .. } | Kind::KxStr { .. } | Kind::Vn
+        ) && count.is_none()
+        {
             return Err(syn::Error::new_spanned(
                 &f.ty,
                 "array field requires `#[stdf(count = <field>)]`",
@@ -147,8 +165,26 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             optional,
             kind,
             count,
+            count_bytes: None,
             default_expr: field_default(f),
         });
+    }
+
+    // Second pass: resolve each `count` field's byte width so array readers can
+    // read the count with the correct leaf reader and cast it to `u16`.
+    let width_map: std::collections::HashMap<String, usize> = infos
+        .iter()
+        .filter_map(|fi| match &fi.kind {
+            Kind::ScalarNoOrder { bytes, .. } | Kind::ScalarOrder { bytes, .. } => {
+                Some((fi.ident.to_string(), *bytes))
+            }
+            _ => None,
+        })
+        .collect();
+    for fi in &mut infos {
+        if let Some(c) = &fi.count {
+            fi.count_bytes = width_map.get(&c.to_string()).copied();
+        }
     }
 
     let view_fields = infos.iter().map(|fi| {
@@ -160,6 +196,25 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     let eager_stmts = infos.iter().map(gen_eager);
     let getters = infos.iter().map(gen_getter);
 
+    // The eager `read_from_bytes` only touches `order` when a field is read with
+    // a byte-order-dependent leaf reader; otherwise name the param `_order`.
+    let eager_uses_order = infos.iter().any(|fi| {
+        matches!(
+            &fi.kind,
+            Kind::ScalarOrder { .. }
+                | Kind::Sn
+                | Kind::Dn
+                | Kind::Vn
+                | Kind::KxFixed { order: true, .. }
+                | Kind::KxStr { order: true, .. }
+        )
+    });
+    let eager_order = if eager_uses_order {
+        format_ident!("order")
+    } else {
+        format_ident!("_order")
+    };
+
     let view_doc = format!("Zero-copy view over a raw `{name}` record.");
 
     Ok(quote! {
@@ -170,7 +225,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             }
 
             #[inline(always)]
-            pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
+            pub fn read_from_bytes(&mut self, raw_data: &[u8], #eager_order: &ByteOrder) {
                 let pos = &mut 0usize;
                 #(#eager_stmts)*
             }
@@ -179,6 +234,9 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         #[doc = #view_doc]
         pub struct #view<'a> {
             raw: &'a [u8],
+            // Some records never read `order` through the view; keep the field
+            // for a uniform constructor and silence the dead-code lint.
+            #[allow(dead_code)]
             order: ByteOrder,
             #(#view_fields)*
         }
@@ -256,11 +314,52 @@ fn classify(leaf: &Ident) -> Option<Kind> {
         "B1" => Kind::B1,
         "C1" => Kind::C1,
         "Cn" => Kind::Cn,
+        "Sn" => Kind::Sn,
+        "Bn" => Kind::Bn,
+        "Dn" => Kind::Dn,
         "KxN1" => Kind::KxN1,
-        "KxR4" => Kind::KxOrder { read: format_ident!("read_kx_r4"), elem: 4 },
-        "KxU2" => Kind::KxOrder { read: format_ident!("read_kx_u2"), elem: 2 },
+        "KxU1" => Kind::KxFixed { read: format_ident!("read_kx_u1"), elem: 1, order: false },
+        "KxU2" => Kind::KxFixed { read: format_ident!("read_kx_u2"), elem: 2, order: true },
+        "KxU4" => Kind::KxFixed { read: format_ident!("read_kx_u4"), elem: 4, order: true },
+        "KxU8" => Kind::KxFixed { read: format_ident!("read_kx_u8"), elem: 8, order: true },
+        "KxR4" => Kind::KxFixed { read: format_ident!("read_kx_r4"), elem: 4, order: true },
+        "KxCn" => Kind::KxStr { read: format_ident!("read_kx_cn"), order: false },
+        "KxSn" => Kind::KxStr { read: format_ident!("read_kx_sn"), order: true },
+        "Vn" => Kind::Vn,
         _ => return None,
     })
+}
+
+/// `__k` expression (a `u16`) that reads the count *value* from its stored
+/// offset var `#count` during the view scan, using the count field's own width.
+fn scan_count_expr(fi: &FieldInfo) -> TokenStream2 {
+    let c = fi.count.as_ref().unwrap();
+    match fi.count_bytes {
+        Some(1) => quote! {
+            stdf_view_opt(#c).map(|mut cp| read_uint8(raw, &mut cp) as u16).unwrap_or(0)
+        },
+        _ => quote! {
+            stdf_view_opt(#c).map(|mut cp| read_u2(raw, &mut cp, &order)).unwrap_or(0)
+        },
+    }
+}
+
+/// Count value (`u16`) for the eager reader, taken from the already-parsed field.
+fn eager_count_val(fi: &FieldInfo) -> TokenStream2 {
+    let c = fi.count.as_ref().unwrap();
+    match fi.count_bytes {
+        Some(1) => quote!(self.#c as u16),
+        _ => quote!(self.#c),
+    }
+}
+
+/// Count value (`u16`) for a view getter, read via the count field's getter.
+fn getter_count_val(fi: &FieldInfo) -> TokenStream2 {
+    let c = fi.count.as_ref().unwrap();
+    match fi.count_bytes {
+        Some(1) => quote!(self.#c() as u16),
+        _ => quote!(self.#c()),
+    }
 }
 
 /// One `let <field>: u16 = ...;` offset-recording statement for `View::new`.
@@ -271,7 +370,8 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
         Kind::ScalarOrder { bytes, .. } => scan_fixed(id, *bytes),
         Kind::B1 => scan_fixed(id, 1),
         Kind::C1 => scan_fixed(id, 1),
-        Kind::Cn => quote! {
+        // `Cn` and `Bn` share the 1-byte length prefix.
+        Kind::Cn | Kind::Bn => quote! {
             let #id: u16 = if *pos < raw.len() {
                 let off = *pos as u16;
                 *pos += 1 + raw[*pos] as usize;
@@ -280,14 +380,32 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                 STDF_VIEW_ABSENT
             };
         },
+        Kind::Sn => quote! {
+            let #id: u16 = if *pos < raw.len() {
+                let off = *pos as u16;
+                let __l = read_u2(raw, pos, &order) as usize;
+                *pos += __l;
+                off
+            } else {
+                STDF_VIEW_ABSENT
+            };
+        },
+        Kind::Dn => quote! {
+            let #id: u16 = if *pos < raw.len() {
+                let off = *pos as u16;
+                let __bits = read_u2(raw, pos, &order) as usize;
+                *pos += __bits.div_ceil(8);
+                off
+            } else {
+                STDF_VIEW_ABSENT
+            };
+        },
         Kind::KxN1 => {
-            let c = fi.count.as_ref().unwrap();
+            let count = scan_count_expr(fi);
             quote! {
                 let #id: u16 = if *pos < raw.len() {
                     let off = *pos as u16;
-                    let __k = stdf_view_opt(#c)
-                        .map(|mut cp| read_u2(raw, &mut cp, &order))
-                        .unwrap_or(0);
+                    let __k = #count;
                     *pos += (__k / 2 + __k % 2) as usize;
                     off
                 } else {
@@ -295,15 +413,13 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                 };
             }
         }
-        Kind::KxOrder { elem, .. } => {
-            let c = fi.count.as_ref().unwrap();
+        Kind::KxFixed { elem, .. } => {
             let elem = *elem;
+            let count = scan_count_expr(fi);
             quote! {
                 let #id: u16 = if *pos < raw.len() {
                     let off = *pos as u16;
-                    let __k = stdf_view_opt(#c)
-                        .map(|mut cp| read_u2(raw, &mut cp, &order))
-                        .unwrap_or(0);
+                    let __k = #count;
                     *pos += (#elem as usize) * __k as usize;
                     off
                 } else {
@@ -311,6 +427,41 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                 };
             }
         }
+        Kind::KxStr { order, .. } => {
+            let count = scan_count_expr(fi);
+            let advance = if *order {
+                // `KxSn`: each element is a 2-byte length prefix + payload.
+                quote! {
+                    if *pos + 2 <= raw.len() {
+                        let __l = read_u2(raw, pos, &order) as usize;
+                        *pos += __l;
+                    }
+                }
+            } else {
+                // `KxCn`: each element is a 1-byte length prefix + payload.
+                quote! {
+                    if *pos < raw.len() {
+                        *pos += 1 + raw[*pos] as usize;
+                    }
+                }
+            };
+            quote! {
+                let #id: u16 = if *pos < raw.len() {
+                    let off = *pos as u16;
+                    let __k = #count;
+                    for _ in 0..__k {
+                        #advance
+                    }
+                    off
+                } else {
+                    STDF_VIEW_ABSENT
+                };
+            }
+        }
+        // Terminal generic-data array: only its start offset is needed.
+        Kind::Vn => quote! {
+            let #id: u16 = if *pos < raw.len() { *pos as u16 } else { STDF_VIEW_ABSENT };
+        },
     }
 }
 
@@ -420,27 +571,92 @@ fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
                 self.#id = Some(read_cn(raw_data, pos));
             }
         },
+        (Kind::Sn, false) => quote! {
+            self.#id = read_sn(raw_data, pos, order);
+        },
+        (Kind::Sn, true) => quote! {
+            if *pos + 1 > raw_data.len() {
+                self.#id = None;
+                return;
+            } else {
+                self.#id = Some(read_sn(raw_data, pos, order));
+            }
+        },
+        (Kind::Bn, false) => quote! {
+            self.#id = read_bn(raw_data, pos);
+        },
+        (Kind::Bn, true) => quote! {
+            if *pos + 1 > raw_data.len() {
+                self.#id = None;
+                return;
+            } else {
+                self.#id = Some(read_bn(raw_data, pos));
+            }
+        },
+        (Kind::Dn, false) => quote! {
+            self.#id = read_dn(raw_data, pos, order);
+        },
+        (Kind::Dn, true) => quote! {
+            if *pos + 2 > raw_data.len() {
+                self.#id = None;
+                return;
+            } else {
+                self.#id = Some(read_dn(raw_data, pos, order));
+            }
+        },
         (Kind::KxN1, false) => {
-            let c = fi.count.as_ref().unwrap();
-            quote! { self.#id = read_kx_n1(raw_data, pos, self.#c); }
+            let count = eager_count_val(fi);
+            quote! { self.#id = read_kx_n1(raw_data, pos, #count); }
         }
         (Kind::KxN1, true) => {
             syn::Error::new_spanned(id, "optional KxN1 is not supported").to_compile_error()
         }
-        (Kind::KxOrder { read, .. }, false) => {
-            let c = fi.count.as_ref().unwrap();
-            quote! { self.#id = #read(raw_data, pos, order, self.#c); }
+        (Kind::KxFixed { read, order, .. }, false) => {
+            let count = eager_count_val(fi);
+            if *order {
+                quote! { self.#id = #read(raw_data, pos, order, #count); }
+            } else {
+                quote! { self.#id = #read(raw_data, pos, #count); }
+            }
         }
-        (Kind::KxOrder { read, elem }, true) => {
-            let c = fi.count.as_ref().unwrap();
+        (Kind::KxFixed { read, elem, order }, true) => {
             let elem = *elem;
-            quote! {
-                if *pos + (#elem as usize) * self.#c as usize > raw_data.len() {
-                    self.#id = None;
-                } else {
-                    self.#id = Some(#read(raw_data, pos, order, self.#c));
+            let count = eager_count_val(fi);
+            if *order {
+                quote! {
+                    if *pos + (#elem as usize) * (#count) as usize > raw_data.len() {
+                        self.#id = None;
+                    } else {
+                        self.#id = Some(#read(raw_data, pos, order, #count));
+                    }
+                }
+            } else {
+                quote! {
+                    if *pos + (#elem as usize) * (#count) as usize > raw_data.len() {
+                        self.#id = None;
+                    } else {
+                        self.#id = Some(#read(raw_data, pos, #count));
+                    }
                 }
             }
+        }
+        (Kind::KxStr { read, order }, false) => {
+            let count = eager_count_val(fi);
+            if *order {
+                quote! { self.#id = #read(raw_data, pos, order, #count); }
+            } else {
+                quote! { self.#id = #read(raw_data, pos, #count); }
+            }
+        }
+        (Kind::KxStr { .. }, true) => {
+            syn::Error::new_spanned(id, "optional KxCn/KxSn is not supported").to_compile_error()
+        }
+        (Kind::Vn, false) => {
+            let count = eager_count_val(fi);
+            quote! { self.#id = read_vn(raw_data, pos, order, #count); }
+        }
+        (Kind::Vn, true) => {
+            syn::Error::new_spanned(id, "optional Vn is not supported").to_compile_error()
         }
     }
 }
@@ -511,6 +727,42 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
                 CnRef::read_at(self.raw, self.#id)
             }
         },
+        (Kind::Sn, false) => quote! {
+            #[inline]
+            pub fn #id(&self) -> SnRef<'a> {
+                SnRef::read_at(self.raw, self.#id, &self.order).unwrap_or_default()
+            }
+        },
+        (Kind::Sn, true) => quote! {
+            #[inline]
+            pub fn #id(&self) -> Option<SnRef<'a>> {
+                SnRef::read_at(self.raw, self.#id, &self.order)
+            }
+        },
+        (Kind::Bn, false) => quote! {
+            #[inline]
+            pub fn #id(&self) -> BnRef<'a> {
+                BnRef::read_at(self.raw, self.#id).unwrap_or_default()
+            }
+        },
+        (Kind::Bn, true) => quote! {
+            #[inline]
+            pub fn #id(&self) -> Option<BnRef<'a>> {
+                BnRef::read_at(self.raw, self.#id)
+            }
+        },
+        (Kind::Dn, false) => quote! {
+            #[inline]
+            pub fn #id(&self) -> DnRef<'a> {
+                DnRef::read_at(self.raw, self.#id, &self.order).unwrap_or_default()
+            }
+        },
+        (Kind::Dn, true) => quote! {
+            #[inline]
+            pub fn #id(&self) -> Option<DnRef<'a>> {
+                DnRef::read_at(self.raw, self.#id, &self.order)
+            }
+        },
         (Kind::C1, false) => {
             let dflt = fi.default_expr.clone().unwrap_or_else(|| quote!('\u{0}'));
             quote! {
@@ -529,12 +781,12 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             }
         },
         (Kind::KxN1, false) => {
-            let c = fi.count.as_ref().unwrap();
+            let count = getter_count_val(fi);
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
                     stdf_view_opt(self.#id)
-                        .map(|mut p| read_kx_n1(self.raw, &mut p, self.#c()))
+                        .map(|mut p| read_kx_n1(self.raw, &mut p, #count))
                         .unwrap_or_default()
                 }
             }
@@ -542,26 +794,64 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
         (Kind::KxN1, true) => {
             syn::Error::new_spanned(id, "optional KxN1 is not supported").to_compile_error()
         }
-        (Kind::KxOrder { read, .. }, false) => {
-            let c = fi.count.as_ref().unwrap();
+        (Kind::KxFixed { read, order, .. }, false) => {
+            let count = getter_count_val(fi);
+            let call = if *order {
+                quote!(#read(self.raw, &mut p, &self.order, #count))
+            } else {
+                quote!(#read(self.raw, &mut p, #count))
+            };
+            quote! {
+                #[inline]
+                pub fn #id(&self) -> #ity {
+                    stdf_view_opt(self.#id).map(|mut p| #call).unwrap_or_default()
+                }
+            }
+        }
+        (Kind::KxFixed { read, order, .. }, true) => {
+            let count = getter_count_val(fi);
+            let call = if *order {
+                quote!(#read(self.raw, &mut p, &self.order, #count))
+            } else {
+                quote!(#read(self.raw, &mut p, #count))
+            };
+            quote! {
+                #[inline]
+                pub fn #id(&self) -> Option<#ity> {
+                    stdf_view_opt(self.#id).map(|mut p| #call)
+                }
+            }
+        }
+        (Kind::KxStr { read, order }, false) => {
+            let count = getter_count_val(fi);
+            let call = if *order {
+                quote!(#read(self.raw, &mut p, &self.order, #count))
+            } else {
+                quote!(#read(self.raw, &mut p, #count))
+            };
+            quote! {
+                #[inline]
+                pub fn #id(&self) -> #ity {
+                    stdf_view_opt(self.#id).map(|mut p| #call).unwrap_or_default()
+                }
+            }
+        }
+        (Kind::KxStr { .. }, true) => {
+            syn::Error::new_spanned(id, "optional KxCn/KxSn is not supported").to_compile_error()
+        }
+        (Kind::Vn, false) => {
+            let count = getter_count_val(fi);
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
                     stdf_view_opt(self.#id)
-                        .map(|mut p| #read(self.raw, &mut p, &self.order, self.#c()))
+                        .map(|mut p| read_vn(self.raw, &mut p, &self.order, #count))
                         .unwrap_or_default()
                 }
             }
         }
-        (Kind::KxOrder { read, .. }, true) => {
-            let c = fi.count.as_ref().unwrap();
-            quote! {
-                #[inline]
-                pub fn #id(&self) -> Option<#ity> {
-                    stdf_view_opt(self.#id)
-                        .map(|mut p| #read(self.raw, &mut p, &self.order, self.#c()))
-                }
-            }
+        (Kind::Vn, true) => {
+            syn::Error::new_spanned(id, "optional Vn is not supported").to_compile_error()
         }
     }
 }
