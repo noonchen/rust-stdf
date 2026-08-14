@@ -1075,7 +1075,7 @@ pub struct PRR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, StdfRecordCodec)]
 pub struct TSR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -1099,7 +1099,7 @@ pub struct TSR {
     pub tst_sqrs: R4, // Sum of squares of test result values
 }
 
-// PTR (15, 10): the struct, its eager `read_from_bytes`, and `PtrView`
+// PTR (15, 10): the struct, its eager `read_from_bytes`, and `PTRView`
 // are all generated from this single field list by `#[derive(StdfRecordCodec)]`.
 #[cfg_attr(
     feature = "serialize",
@@ -1108,7 +1108,6 @@ pub struct TSR {
     field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, StdfRecordCodec)]
-#[stdf(view = PtrView)]
 pub struct PTR {
     pub test_num: U4,         // Test number
     pub head_num: U1,         // Test head number
@@ -1139,7 +1138,6 @@ pub struct PTR {
     field_names_as_array(rename_all = "UPPERCASE")
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, StdfRecordCodec)]
-#[stdf(view = MprView)]
 pub struct MPR {
     pub test_num: U4,           // Test number
     pub head_num: U1,           // Test head number
@@ -1905,42 +1903,6 @@ impl PRR {
         self.part_id = read_cn(raw_data, pos);
         self.part_txt = read_cn(raw_data, pos);
         self.part_fix = read_bn(raw_data, pos);
-    }
-}
-
-impl TSR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        TSR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        if *pos < raw_data.len() {
-            self.test_typ = read_uint8(raw_data, pos) as char;
-        }
-        self.test_num = read_u4(raw_data, pos, order);
-        if *pos + 4 <= raw_data.len() {
-            self.exec_cnt = read_u4(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.fail_cnt = read_u4(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.alrm_cnt = read_u4(raw_data, pos, order);
-        }
-        self.test_nam = read_cn(raw_data, pos);
-        self.seq_name = read_cn(raw_data, pos);
-        self.test_lbl = read_cn(raw_data, pos);
-        self.opt_flag = [read_uint8(raw_data, pos)];
-        self.test_tim = read_r4(raw_data, pos, order);
-        self.test_min = read_r4(raw_data, pos, order);
-        self.test_max = read_r4(raw_data, pos, order);
-        self.tst_sums = read_r4(raw_data, pos, order);
-        self.tst_sqrs = read_r4(raw_data, pos, order);
     }
 }
 

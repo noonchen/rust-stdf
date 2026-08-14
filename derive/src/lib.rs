@@ -46,6 +46,8 @@ enum Kind {
     ScalarOrder { read: Ident, bytes: usize, float: bool },
     /// `B1` = `[u8; 1]`.
     B1,
+    /// `C1` = single byte read as a `char`.
+    C1,
     /// `Cn` length-prefixed string.
     Cn,
     /// `KxN1` nibble-packed array (`fn(raw, pos, k)`).
@@ -60,6 +62,9 @@ struct FieldInfo {
     optional: bool,
     kind: Kind,
     count: Option<Ident>,
+    /// The `smart_default` sentinel (`#[default = ..]` / `#[default(..)]`), used
+    /// as the view getter's fallback when the field is absent from a short buffer.
+    default_expr: Option<TokenStream2>,
 }
 
 fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
@@ -142,6 +147,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             optional,
             kind,
             count,
+            default_expr: field_default(f),
         });
     }
 
@@ -215,6 +221,27 @@ fn leaf_ident(ty: &Type) -> Option<Ident> {
     }
 }
 
+/// Extract a `smart_default` sentinel from a field: `#[default = <expr>]` or
+/// `#[default(<expr>)]`. A bare `#[default]` (type default) yields `None`.
+fn field_default(f: &syn::Field) -> Option<TokenStream2> {
+    for attr in &f.attrs {
+        if attr.path().is_ident("default") {
+            return match &attr.meta {
+                syn::Meta::NameValue(nv) => {
+                    let e = &nv.value;
+                    Some(quote!(#e))
+                }
+                syn::Meta::List(list) => {
+                    let ts = &list.tokens;
+                    Some(quote!(#ts))
+                }
+                syn::Meta::Path(_) => None,
+            };
+        }
+    }
+    None
+}
+
 fn classify(leaf: &Ident) -> Option<Kind> {
     Some(match leaf.to_string().as_str() {
         "U1" => Kind::ScalarNoOrder { read: format_ident!("read_uint8"), bytes: 1 },
@@ -227,6 +254,7 @@ fn classify(leaf: &Ident) -> Option<Kind> {
         "R4" => Kind::ScalarOrder { read: format_ident!("read_r4"), bytes: 4, float: true },
         "R8" => Kind::ScalarOrder { read: format_ident!("read_r8"), bytes: 8, float: true },
         "B1" => Kind::B1,
+        "C1" => Kind::C1,
         "Cn" => Kind::Cn,
         "KxN1" => Kind::KxN1,
         "KxR4" => Kind::KxOrder { read: format_ident!("read_kx_r4"), elem: 4 },
@@ -242,6 +270,7 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
         Kind::ScalarNoOrder { bytes, .. } => scan_fixed(id, *bytes),
         Kind::ScalarOrder { bytes, .. } => scan_fixed(id, *bytes),
         Kind::B1 => scan_fixed(id, 1),
+        Kind::C1 => scan_fixed(id, 1),
         Kind::Cn => quote! {
             let #id: u16 = if *pos < raw.len() {
                 let off = *pos as u16;
@@ -305,9 +334,18 @@ fn scan_fixed(id: &Ident, bytes: usize) -> TokenStream2 {
 fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
     let id = &fi.ident;
     match (&fi.kind, fi.optional) {
-        (Kind::ScalarNoOrder { read, .. }, false) => quote! {
-            self.#id = #read(raw_data, pos);
-        },
+        (Kind::ScalarNoOrder { read, bytes }, false) => {
+            if fi.default_expr.is_some() {
+                let b = *bytes;
+                quote! {
+                    if *pos + #b <= raw_data.len() {
+                        self.#id = #read(raw_data, pos);
+                    }
+                }
+            } else {
+                quote! { self.#id = #read(raw_data, pos); }
+            }
+        }
         (Kind::ScalarNoOrder { read, bytes }, true) => {
             let b = *bytes;
             quote! {
@@ -319,9 +357,18 @@ fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
                 }
             }
         }
-        (Kind::ScalarOrder { read, .. }, false) => quote! {
-            self.#id = #read(raw_data, pos, order);
-        },
+        (Kind::ScalarOrder { read, bytes, .. }, false) => {
+            if fi.default_expr.is_some() {
+                let b = *bytes;
+                quote! {
+                    if *pos + #b <= raw_data.len() {
+                        self.#id = #read(raw_data, pos, order);
+                    }
+                }
+            } else {
+                quote! { self.#id = #read(raw_data, pos, order); }
+            }
+        }
         (Kind::ScalarOrder { read, bytes, .. }, true) => {
             let b = *bytes;
             quote! {
@@ -341,6 +388,25 @@ fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
                 return;
             } else {
                 self.#id = Some([read_uint8(raw_data, pos)]);
+            }
+        },
+        (Kind::C1, false) => {
+            if fi.default_expr.is_some() {
+                quote! {
+                    if *pos + 1 <= raw_data.len() {
+                        self.#id = read_uint8(raw_data, pos) as char;
+                    }
+                }
+            } else {
+                quote! { self.#id = read_uint8(raw_data, pos) as char; }
+            }
+        }
+        (Kind::C1, true) => quote! {
+            if *pos + 1 > raw_data.len() {
+                self.#id = None;
+                return;
+            } else {
+                self.#id = Some(read_uint8(raw_data, pos) as char);
             }
         },
         (Kind::Cn, false) => quote! {
@@ -384,12 +450,15 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
     let id = &fi.ident;
     let ity = &fi.inner_ty;
     match (&fi.kind, fi.optional) {
-        (Kind::ScalarNoOrder { read, .. }, false) => quote! {
-            #[inline]
-            pub fn #id(&self) -> #ity {
-                stdf_view_opt(self.#id).map(|mut p| #read(self.raw, &mut p)).unwrap_or(0)
+        (Kind::ScalarNoOrder { read, .. }, false) => {
+            let dflt = fi.default_expr.clone().unwrap_or_else(|| quote!(0));
+            quote! {
+                #[inline]
+                pub fn #id(&self) -> #ity {
+                    stdf_view_opt(self.#id).map(|mut p| #read(self.raw, &mut p)).unwrap_or(#dflt)
+                }
             }
-        },
+        }
         (Kind::ScalarNoOrder { read, .. }, true) => quote! {
             #[inline]
             pub fn #id(&self) -> Option<#ity> {
@@ -397,7 +466,10 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             }
         },
         (Kind::ScalarOrder { read, float, .. }, false) => {
-            let dflt = if *float { quote!(0.0) } else { quote!(0) };
+            let dflt = fi
+                .default_expr
+                .clone()
+                .unwrap_or_else(|| if *float { quote!(0.0) } else { quote!(0) });
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
@@ -437,6 +509,23 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             #[inline]
             pub fn #id(&self) -> Option<CnRef<'a>> {
                 CnRef::read_at(self.raw, self.#id)
+            }
+        },
+        (Kind::C1, false) => {
+            let dflt = fi.default_expr.clone().unwrap_or_else(|| quote!('\u{0}'));
+            quote! {
+                #[inline]
+                pub fn #id(&self) -> C1 {
+                    stdf_view_opt(self.#id)
+                        .map(|p| self.raw.get(p).copied().unwrap_or(0) as char)
+                        .unwrap_or(#dflt)
+                }
+            }
+        }
+        (Kind::C1, true) => quote! {
+            #[inline]
+            pub fn #id(&self) -> Option<C1> {
+                stdf_view_opt(self.#id).map(|p| self.raw.get(p).copied().unwrap_or(0) as char)
             }
         },
         (Kind::KxN1, false) => {
