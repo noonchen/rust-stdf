@@ -8,6 +8,17 @@
 //! The two parsing paths are therefore generated from one source (the struct's
 //! field list) and cannot drift apart.
 //!
+//! ## Views
+//! A generated `*View` borrows the raw record bytes and exposes one getter per
+//! field. Instead of eagerly parsing every field into an owned `StdfRecord`
+//! (which allocates a `String`/`Vec` for every `Cn`/`Bn`/`Kx*` field), a view
+//! scans the record once to record each field's byte offset, then reads a field
+//! only when its getter is called. Scalar fields cost O(1) and zero allocation;
+//! string fields allocate only when you call `to_cn()`/`to_bn()`/`to_dn()`.
+//!
+//! The per-field byte offsets are stored in **private** fields of the view, so
+//! users only ever interact with the typed getters — never with the raw layout.
+//!
 //! ## Field kinds
 //! Each field's kind is inferred from its type alias: `U1 I1 U2 I2 U4 I4 U8 R4
 //! R8 B1 C1 Cn Sn Bn Dn` and the arrays `KxN1 KxU1 KxU2 KxU4 KxU8 KxR4 KxCn KxSn
@@ -21,7 +32,7 @@
 //!
 //! The generated code refers to items that must be in scope at the derive site
 //! (i.e. inside `rust_stdf::stdf_types`): the `read_*` leaf readers, `ByteOrder`,
-//! `CnRef`/`SnRef`/`BnRef`/`DnRef`, `stdf_view_opt`, and `STDF_VIEW_ABSENT`.
+//! `CnRef`/`SnRef`/`BnRef`/`DnRef`, `validate_offset`, and `VIEW_ABSENT_OFT`.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -361,10 +372,10 @@ fn scan_count_expr(fi: &FieldInfo) -> TokenStream2 {
     let c = fi.count.as_ref().unwrap();
     match fi.count_bytes {
         Some(1) => quote! {
-            stdf_view_opt(#c).map(|mut cp| read_uint8(raw, &mut cp) as u16).unwrap_or(0)
+            validate_offset(#c).map(|mut cp| read_uint8(raw, &mut cp) as u16).unwrap_or(0)
         },
         _ => quote! {
-            stdf_view_opt(#c).map(|mut cp| read_u2(raw, &mut cp, &order)).unwrap_or(0)
+            validate_offset(#c).map(|mut cp| read_u2(raw, &mut cp, &order)).unwrap_or(0)
         },
     }
 }
@@ -393,10 +404,10 @@ fn scan_width_expr(fi: &FieldInfo) -> TokenStream2 {
     let w = fi.width.as_ref().unwrap();
     match fi.width_bytes {
         Some(1) => quote! {
-            stdf_view_opt(#w).map(|mut cp| read_uint8(raw, &mut cp)).unwrap_or(0)
+            validate_offset(#w).map(|mut cp| read_uint8(raw, &mut cp)).unwrap_or(0)
         },
         _ => quote! {
-            stdf_view_opt(#w).map(|mut cp| read_u2(raw, &mut cp, &order) as u8).unwrap_or(0)
+            validate_offset(#w).map(|mut cp| read_u2(raw, &mut cp, &order) as u8).unwrap_or(0)
         },
     }
 }
@@ -434,7 +445,7 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                 *pos += 1 + raw[*pos] as usize;
                 off
             } else {
-                STDF_VIEW_ABSENT
+                VIEW_ABSENT_OFT
             };
         },
         Kind::Sn => quote! {
@@ -444,7 +455,7 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                 *pos += __l;
                 off
             } else {
-                STDF_VIEW_ABSENT
+                VIEW_ABSENT_OFT
             };
         },
         Kind::Dn => quote! {
@@ -454,7 +465,7 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                 *pos += __bits.div_ceil(8);
                 off
             } else {
-                STDF_VIEW_ABSENT
+                VIEW_ABSENT_OFT
             };
         },
         Kind::KxN1 => {
@@ -466,7 +477,7 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                     *pos += (__k / 2 + __k % 2) as usize;
                     off
                 } else {
-                    STDF_VIEW_ABSENT
+                    VIEW_ABSENT_OFT
                 };
             }
         }
@@ -480,7 +491,7 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                     *pos += (#elem as usize) * __k as usize;
                     off
                 } else {
-                    STDF_VIEW_ABSENT
+                    VIEW_ABSENT_OFT
                 };
             }
         }
@@ -511,7 +522,7 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                     }
                     off
                 } else {
-                    STDF_VIEW_ABSENT
+                    VIEW_ABSENT_OFT
                 };
             }
         }
@@ -527,13 +538,13 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                     *pos += (__f as usize) * __k as usize;
                     off
                 } else {
-                    STDF_VIEW_ABSENT
+                    VIEW_ABSENT_OFT
                 };
             }
         }
         // Terminal generic-data array: only its start offset is needed.
         Kind::Vn => quote! {
-            let #id: u16 = if *pos < raw.len() { *pos as u16 } else { STDF_VIEW_ABSENT };
+            let #id: u16 = if *pos < raw.len() { *pos as u16 } else { VIEW_ABSENT_OFT };
         },
     }
 }
@@ -545,7 +556,7 @@ fn scan_fixed(id: &Ident, bytes: usize) -> TokenStream2 {
             *pos += #bytes;
             off
         } else {
-            STDF_VIEW_ABSENT
+            VIEW_ABSENT_OFT
         };
     }
 }
@@ -764,14 +775,14 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
-                    stdf_view_opt(self.#id).map(|mut p| #read(self.raw, &mut p)).unwrap_or(#dflt)
+                    validate_offset(self.#id).map(|mut p| #read(self.raw, &mut p)).unwrap_or(#dflt)
                 }
             }
         }
         (Kind::ScalarNoOrder { read, .. }, true) => quote! {
             #[inline]
             pub fn #id(&self) -> Option<#ity> {
-                stdf_view_opt(self.#id).map(|mut p| #read(self.raw, &mut p))
+                validate_offset(self.#id).map(|mut p| #read(self.raw, &mut p))
             }
         },
         (Kind::ScalarOrder { read, float, .. }, false) => {
@@ -782,7 +793,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
-                    stdf_view_opt(self.#id)
+                    validate_offset(self.#id)
                         .map(|mut p| #read(self.raw, &mut p, &self.order))
                         .unwrap_or(#dflt)
                 }
@@ -791,13 +802,13 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
         (Kind::ScalarOrder { read, .. }, true) => quote! {
             #[inline]
             pub fn #id(&self) -> Option<#ity> {
-                stdf_view_opt(self.#id).map(|mut p| #read(self.raw, &mut p, &self.order))
+                validate_offset(self.#id).map(|mut p| #read(self.raw, &mut p, &self.order))
             }
         },
         (Kind::B1, false) => quote! {
             #[inline]
             pub fn #id(&self) -> B1 {
-                stdf_view_opt(self.#id)
+                validate_offset(self.#id)
                     .map(|p| [self.raw.get(p).copied().unwrap_or(0)])
                     .unwrap_or([0])
             }
@@ -805,7 +816,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
         (Kind::B1, true) => quote! {
             #[inline]
             pub fn #id(&self) -> Option<B1> {
-                stdf_view_opt(self.#id).map(|p| [self.raw.get(p).copied().unwrap_or(0)])
+                validate_offset(self.#id).map(|p| [self.raw.get(p).copied().unwrap_or(0)])
             }
         },
         (Kind::Cn, false) => quote! {
@@ -861,7 +872,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 #[inline]
                 pub fn #id(&self) -> C1 {
-                    stdf_view_opt(self.#id)
+                    validate_offset(self.#id)
                         .map(|p| self.raw.get(p).copied().unwrap_or(0) as char)
                         .unwrap_or(#dflt)
                 }
@@ -870,7 +881,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
         (Kind::C1, true) => quote! {
             #[inline]
             pub fn #id(&self) -> Option<C1> {
-                stdf_view_opt(self.#id).map(|p| self.raw.get(p).copied().unwrap_or(0) as char)
+                validate_offset(self.#id).map(|p| self.raw.get(p).copied().unwrap_or(0) as char)
             }
         },
         (Kind::KxN1, false) => {
@@ -878,7 +889,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
-                    stdf_view_opt(self.#id)
+                    validate_offset(self.#id)
                         .map(|mut p| read_kx_n1(self.raw, &mut p, #count))
                         .unwrap_or_default()
                 }
@@ -897,7 +908,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
-                    stdf_view_opt(self.#id).map(|mut p| #call).unwrap_or_default()
+                    validate_offset(self.#id).map(|mut p| #call).unwrap_or_default()
                 }
             }
         }
@@ -911,7 +922,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 #[inline]
                 pub fn #id(&self) -> Option<#ity> {
-                    stdf_view_opt(self.#id).map(|mut p| #call)
+                    validate_offset(self.#id).map(|mut p| #call)
                 }
             }
         }
@@ -925,7 +936,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
-                    stdf_view_opt(self.#id).map(|mut p| #call).unwrap_or_default()
+                    validate_offset(self.#id).map(|mut p| #call).unwrap_or_default()
                 }
             }
         }
@@ -938,7 +949,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
-                    stdf_view_opt(self.#id)
+                    validate_offset(self.#id)
                         .map(|mut p| read_kx_uf(self.raw, &mut p, &self.order, #count, #width))
                         .unwrap_or_default()
                 }
@@ -953,7 +964,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
-                    stdf_view_opt(self.#id)
+                    validate_offset(self.#id)
                         .map(|mut p| read_kx_cf(self.raw, &mut p, #count, #width))
                         .unwrap_or_default()
                 }
@@ -967,7 +978,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
-                    stdf_view_opt(self.#id)
+                    validate_offset(self.#id)
                         .map(|mut p| read_vn(self.raw, &mut p, &self.order, #count))
                         .unwrap_or_default()
                 }
