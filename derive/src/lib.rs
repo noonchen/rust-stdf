@@ -11,13 +11,13 @@
 //! ## Field kinds
 //! Each field's kind is inferred from its type alias: `U1 I1 U2 I2 U4 I4 U8 R4
 //! R8 B1 C1 Cn Sn Bn Dn` and the arrays `KxN1 KxU1 KxU2 KxU4 KxU8 KxR4 KxCn KxSn
-//! Vn`. Optional trailing fields are recognized by `Option<..>`.
+//! KxUf KxCf Vn`. Optional trailing fields are recognized by `Option<..>`.
 //!
 //! ## Attributes
-//!  - `#[stdf(view = <Ident>)]` (struct) — name of the generated view; defaults
-//!    to `<Name>View`.
 //!  - `#[stdf(count = <field>)]` (field) — required on `Kx*` arrays; names the
-//!    (earlier) field holding the element count.
+//!    (earlier) field holding the element count (`k`).
+//!  - `#[stdf(width = <field>)]` (field) — required on `KxUf`/`KxCf` arrays;
+//!    names the (earlier) field holding the per-element byte width (`f`).
 //!
 //! The generated code refers to items that must be in scope at the derive site
 //! (i.e. inside `rust_stdf::stdf_types`): the `read_*` leaf readers, `ByteOrder`,
@@ -64,6 +64,10 @@ enum Kind {
     /// Variable-length counted string array. `order == false`: `KxCn`;
     /// `order == true`: `KxSn`.
     KxStr { read: Ident, order: bool },
+    /// `KxUf` counted array of `f`-byte integers (`fn(raw, pos, order, k, f)`).
+    KxUf,
+    /// `KxCf` counted array of `f`-byte strings (`fn(raw, pos, k, f)`).
+    KxCf,
     /// `Vn` generic-data array (terminal, `fn(raw, pos, order, k)`).
     Vn,
 }
@@ -76,6 +80,9 @@ struct FieldInfo {
     count: Option<Ident>,
     /// Byte width (1 or 2) of the `count` field, resolved in a second pass.
     count_bytes: Option<usize>,
+    width: Option<Ident>,
+    /// Byte width (1 or 2) of the `width` field, resolved in a second pass.
+    width_bytes: Option<usize>,
     /// The `smart_default` sentinel (`#[default = ..]` / `#[default(..)]`), used
     /// as the view getter's fallback when the field is absent from a short buffer.
     default_expr: Option<TokenStream2>,
@@ -84,21 +91,7 @@ struct FieldInfo {
 fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     let name = input.ident.clone();
 
-    // struct-level `#[stdf(view = Ident)]`
-    let mut view_name: Option<Ident> = None;
-    for attr in &input.attrs {
-        if attr.path().is_ident("stdf") {
-            attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("view") {
-                    view_name = Some(meta.value()?.parse()?);
-                    Ok(())
-                } else {
-                    Err(meta.error("unknown `stdf` struct attribute (expected `view`)"))
-                }
-            })?;
-        }
-    }
-    let view = view_name.unwrap_or_else(|| format_ident!("{}View", name));
+    let view = format_ident!("{}View", name);
 
     let fields = match &input.data {
         Data::Struct(s) => match &s.fields {
@@ -126,16 +119,20 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             syn::Error::new_spanned(&f.ty, "unsupported field type for StdfRecordCodec")
         })?;
 
-        // field-level `#[stdf(count = ident)]`
+        // field-level `#[stdf(count = ident)]` / `#[stdf(width = ident)]`
         let mut count: Option<Ident> = None;
+        let mut width: Option<Ident> = None;
         for attr in &f.attrs {
             if attr.path().is_ident("stdf") {
                 attr.parse_nested_meta(|meta| {
                     if meta.path.is_ident("count") {
                         count = Some(meta.value()?.parse()?);
                         Ok(())
+                    } else if meta.path.is_ident("width") {
+                        width = Some(meta.value()?.parse()?);
+                        Ok(())
                     } else {
-                        Err(meta.error("unknown `stdf` field attribute (expected `count`)"))
+                        Err(meta.error("unknown `stdf` field attribute (expected `count` or `width`)"))
                     }
                 })?;
             }
@@ -148,14 +145,33 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             )
         })?;
 
-        if matches!(
+        let needs_count = matches!(
             kind,
-            Kind::KxN1 | Kind::KxFixed { .. } | Kind::KxStr { .. } | Kind::Vn
-        ) && count.is_none()
-        {
+            Kind::KxN1
+                | Kind::KxFixed { .. }
+                | Kind::KxStr { .. }
+                | Kind::Vn
+                | Kind::KxUf
+                | Kind::KxCf
+        );
+        let needs_width = matches!(kind, Kind::KxUf | Kind::KxCf);
+
+        if needs_count && count.is_none() {
             return Err(syn::Error::new_spanned(
                 &f.ty,
                 "array field requires `#[stdf(count = <field>)]`",
+            ));
+        }
+        if needs_width && width.is_none() {
+            return Err(syn::Error::new_spanned(
+                &f.ty,
+                "`KxUf`/`KxCf` field requires `#[stdf(width = <field>)]`",
+            ));
+        }
+        if width.is_some() && !needs_width {
+            return Err(syn::Error::new_spanned(
+                &f.ty,
+                "`#[stdf(width = <field>)]` is only valid on `KxUf`/`KxCf` fields",
             ));
         }
 
@@ -166,6 +182,8 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             kind,
             count,
             count_bytes: None,
+            width,
+            width_bytes: None,
             default_expr: field_default(f),
         });
     }
@@ -184,6 +202,9 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     for fi in &mut infos {
         if let Some(c) = &fi.count {
             fi.count_bytes = width_map.get(&c.to_string()).copied();
+        }
+        if let Some(w) = &fi.width {
+            fi.width_bytes = width_map.get(&w.to_string()).copied();
         }
     }
 
@@ -207,6 +228,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
                 | Kind::Vn
                 | Kind::KxFixed { order: true, .. }
                 | Kind::KxStr { order: true, .. }
+                | Kind::KxUf
         )
     });
     let eager_order = if eager_uses_order {
@@ -232,6 +254,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         }
 
         #[doc = #view_doc]
+        #[derive(Debug, Clone, Copy)]
         pub struct #view<'a> {
             raw: &'a [u8],
             // Some records never read `order` through the view; keep the field
@@ -325,6 +348,8 @@ fn classify(leaf: &Ident) -> Option<Kind> {
         "KxR4" => Kind::KxFixed { read: format_ident!("read_kx_r4"), elem: 4, order: true },
         "KxCn" => Kind::KxStr { read: format_ident!("read_kx_cn"), order: false },
         "KxSn" => Kind::KxStr { read: format_ident!("read_kx_sn"), order: true },
+        "KxUf" => Kind::KxUf,
+        "KxCf" => Kind::KxCf,
         "Vn" => Kind::Vn,
         _ => return None,
     })
@@ -359,6 +384,38 @@ fn getter_count_val(fi: &FieldInfo) -> TokenStream2 {
     match fi.count_bytes {
         Some(1) => quote!(self.#c() as u16),
         _ => quote!(self.#c()),
+    }
+}
+
+/// `__f` expression (a `u8`) that reads the width *value* from its stored
+/// offset var `#width` during the view scan, using the width field's own width.
+fn scan_width_expr(fi: &FieldInfo) -> TokenStream2 {
+    let w = fi.width.as_ref().unwrap();
+    match fi.width_bytes {
+        Some(1) => quote! {
+            stdf_view_opt(#w).map(|mut cp| read_uint8(raw, &mut cp)).unwrap_or(0)
+        },
+        _ => quote! {
+            stdf_view_opt(#w).map(|mut cp| read_u2(raw, &mut cp, &order) as u8).unwrap_or(0)
+        },
+    }
+}
+
+/// Width value (`u8`) for the eager reader, taken from the already-parsed field.
+fn eager_width_val(fi: &FieldInfo) -> TokenStream2 {
+    let w = fi.width.as_ref().unwrap();
+    match fi.width_bytes {
+        Some(1) => quote!(self.#w),
+        _ => quote!(self.#w as u8),
+    }
+}
+
+/// Width value (`u8`) for a view getter, read via the width field's getter.
+fn getter_width_val(fi: &FieldInfo) -> TokenStream2 {
+    let w = fi.width.as_ref().unwrap();
+    match fi.width_bytes {
+        Some(1) => quote!(self.#w()),
+        _ => quote!(self.#w() as u8),
     }
 }
 
@@ -458,6 +515,22 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                 };
             }
         }
+        // `KxUf`/`KxCf`: fixed `f`-byte elements; skip `f * k` bytes.
+        Kind::KxUf | Kind::KxCf => {
+            let count = scan_count_expr(fi);
+            let width = scan_width_expr(fi);
+            quote! {
+                let #id: u16 = if *pos < raw.len() {
+                    let off = *pos as u16;
+                    let __k = #count;
+                    let __f = #width;
+                    *pos += (__f as usize) * __k as usize;
+                    off
+                } else {
+                    STDF_VIEW_ABSENT
+                };
+            }
+        }
         // Terminal generic-data array: only its start offset is needed.
         Kind::Vn => quote! {
             let #id: u16 = if *pos < raw.len() { *pos as u16 } else { STDF_VIEW_ABSENT };
@@ -479,9 +552,10 @@ fn scan_fixed(id: &Ident, bytes: usize) -> TokenStream2 {
 
 /// One statement of the eager `read_from_bytes` body (writes `self.<field>`).
 ///
-/// Optionality mirrors the historical `read_optional!` semantics: readers that
-/// take no byte order (`B1`, `U1`, `I1`, `Cn`) `return` on truncation; readers
-/// that take a byte order (and `Kx*`) set `None` and continue.
+/// Optional fields are read greedily, in declaration order, until the buffer
+/// runs out: the first field that does not fit is set to `None` and parsing
+/// stops (`return`), so every later optional field keeps its `new()` default
+/// (`None`).
 fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
     let id = &fi.ident;
     match (&fi.kind, fi.optional) {
@@ -525,6 +599,7 @@ fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
             quote! {
                 if *pos + #b > raw_data.len() {
                     self.#id = None;
+                    return;
                 } else {
                     self.#id = Some(#read(raw_data, pos, order));
                 }
@@ -575,7 +650,7 @@ fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
             self.#id = read_sn(raw_data, pos, order);
         },
         (Kind::Sn, true) => quote! {
-            if *pos + 1 > raw_data.len() {
+            if *pos + 2 > raw_data.len() {
                 self.#id = None;
                 return;
             } else {
@@ -626,6 +701,7 @@ fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
                 quote! {
                     if *pos + (#elem as usize) * (#count) as usize > raw_data.len() {
                         self.#id = None;
+                        return;
                     } else {
                         self.#id = Some(#read(raw_data, pos, order, #count));
                     }
@@ -634,6 +710,7 @@ fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
                 quote! {
                     if *pos + (#elem as usize) * (#count) as usize > raw_data.len() {
                         self.#id = None;
+                        return;
                     } else {
                         self.#id = Some(#read(raw_data, pos, #count));
                     }
@@ -650,6 +727,22 @@ fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
         }
         (Kind::KxStr { .. }, true) => {
             syn::Error::new_spanned(id, "optional KxCn/KxSn is not supported").to_compile_error()
+        }
+        (Kind::KxUf, false) => {
+            let count = eager_count_val(fi);
+            let width = eager_width_val(fi);
+            quote! { self.#id = read_kx_uf(raw_data, pos, order, #count, #width); }
+        }
+        (Kind::KxUf, true) => {
+            syn::Error::new_spanned(id, "optional KxUf is not supported").to_compile_error()
+        }
+        (Kind::KxCf, false) => {
+            let count = eager_count_val(fi);
+            let width = eager_width_val(fi);
+            quote! { self.#id = read_kx_cf(raw_data, pos, #count, #width); }
+        }
+        (Kind::KxCf, true) => {
+            syn::Error::new_spanned(id, "optional KxCf is not supported").to_compile_error()
         }
         (Kind::Vn, false) => {
             let count = eager_count_val(fi);
@@ -838,6 +931,36 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
         }
         (Kind::KxStr { .. }, true) => {
             syn::Error::new_spanned(id, "optional KxCn/KxSn is not supported").to_compile_error()
+        }
+        (Kind::KxUf, false) => {
+            let count = getter_count_val(fi);
+            let width = getter_width_val(fi);
+            quote! {
+                #[inline]
+                pub fn #id(&self) -> #ity {
+                    stdf_view_opt(self.#id)
+                        .map(|mut p| read_kx_uf(self.raw, &mut p, &self.order, #count, #width))
+                        .unwrap_or_default()
+                }
+            }
+        }
+        (Kind::KxUf, true) => {
+            syn::Error::new_spanned(id, "optional KxUf is not supported").to_compile_error()
+        }
+        (Kind::KxCf, false) => {
+            let count = getter_count_val(fi);
+            let width = getter_width_val(fi);
+            quote! {
+                #[inline]
+                pub fn #id(&self) -> #ity {
+                    stdf_view_opt(self.#id)
+                        .map(|mut p| read_kx_cf(self.raw, &mut p, #count, #width))
+                        .unwrap_or_default()
+                }
+            }
+        }
+        (Kind::KxCf, true) => {
+            syn::Error::new_spanned(id, "optional KxCf is not supported").to_compile_error()
         }
         (Kind::Vn, false) => {
             let count = getter_count_val(fi);

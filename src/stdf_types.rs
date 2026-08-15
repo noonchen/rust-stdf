@@ -31,8 +31,8 @@ use struct_field_names_as_array::FieldNamesAsArray;
 // string fields allocate only if you call `to_cn()`.
 //
 // Both the eager parser (`read_from_bytes`) and the view are generated from a
-// single field list by the `stdf_record!` macro below, so the two parsing
-// paths can never drift apart.
+// single field list by `#[derive(StdfRecordCodec)]` (see the `rust-stdf-derive`
+// crate), so the two parsing paths can never drift apart.
 // ============================================================================
 
 /// Sentinel stored in a view when a (trailing/optional) field is absent.
@@ -1371,7 +1371,7 @@ pub struct FTR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct STR {
     pub cont_flg: B1,   // Continuation STR follows if not 0
     pub test_num: U4,   // Test number
@@ -1405,32 +1405,47 @@ pub struct STR {
     pub u3_size: U1,  // Size (f) of data (1,2,4 or 8 bytes) in USR3 field
     pub utx_size: U1, // Size (f) of each string entry in USER_TXT array
     pub cap_bgn: U2,  // Offset added to BIT_POS value to indicate capture cycles
+    #[stdf(count = lim_cnt)]
     pub lim_indx: KxU2, // Array of PMR indexes that require unique limit specifications
+    #[stdf(count = lim_cnt)]
     pub lim_spec: KxU4, // Array of fail datalogging limits for the PMRs listed in LIM_INDX
+    #[stdf(count = cond_cnt)]
     pub cond_lst: KxCn, // Array of test condition (Name=value) pairs
     pub cyc_cnt: U2,  // Count (k) of entries in CYC_OFST array
+    #[stdf(count = cyc_cnt, width = cyc_size)]
     pub cyc_ofst: KxUf, // Array of cycle numbers relative to CYC_BASE
     pub pmr_cnt: U2,  // Count (k) of entries in the PMR_INDX array
+    #[stdf(count = pmr_cnt, width = pmr_size)]
     pub pmr_indx: KxUf, // Array of PMR Indexes (All Formats)
     pub chn_cnt: U2,  // Count (k) of entries in the CHN_NUM array
+    #[stdf(count = chn_cnt, width = chn_size)]
     pub chn_num: KxUf, // Array of Chain No for FF Name Mapping
     pub exp_cnt: U2,  // Count (k) of EXP_DATA array entries
+    #[stdf(count = exp_cnt)]
     pub exp_data: KxU1, // Array of expected vector data
     pub cap_cnt: U2,  // Count (k) of CAP_DATA array entries
+    #[stdf(count = cap_cnt)]
     pub cap_data: KxU1, // Array of captured data
     pub new_cnt: U2,  // Count (k) of NEW_DATA array entries
+    #[stdf(count = new_cnt)]
     pub new_data: KxU1, // Array of new vector data
     pub pat_cnt: U2,  // Count (k) of PAT_NUM array entries
+    #[stdf(count = pat_cnt, width = pat_size)]
     pub pat_num: KxUf, // Array of pattern # (Ptn/Chn/Bit format)
     pub bpos_cnt: U2, // Count (k) of BIT_POS array entries
+    #[stdf(count = bpos_cnt, width = bit_size)]
     pub bit_pos: KxUf, // Array of chain bit positions (Ptn/Chn/Bit format)
     pub usr1_cnt: U2, // Count (k) of USR1 array entries
+    #[stdf(count = usr1_cnt, width = u1_size)]
     pub usr1: KxUf,   // Array of user defined data for each logged fail
     pub usr2_cnt: U2, // Count (k) of USR2 array entries
+    #[stdf(count = usr2_cnt, width = u2_size)]
     pub usr2: KxUf,   // Array of user defined data for each logged fail
     pub usr3_cnt: U2, // Count (k) of USR3 array entries
+    #[stdf(count = usr3_cnt, width = u3_size)]
     pub usr3: KxUf,   // Array of user defined data for each logged fail
     pub txt_cnt: U2,  // Count (k) of USER_TXT array entries
+    #[stdf(count = txt_cnt, width = utx_size)]
     pub user_txt: KxCf, // Array of user defined fixed length strings for each logged fail
 }
 
@@ -1534,91 +1549,6 @@ impl RecordHeader {
     /// return the type_code of current header
     pub fn get_type(&self) -> u64 {
         stdf_record_type::get_code_from_typ_sub(self.typ, self.sub)
-    }
-}
-
-impl STR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        STR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.cont_flg = [read_uint8(raw_data, pos)];
-        self.test_num = read_u4(raw_data, pos, order);
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        self.psr_ref = read_u2(raw_data, pos, order);
-        self.test_flg = [read_uint8(raw_data, pos)];
-        self.log_typ = read_cn(raw_data, pos);
-        self.test_txt = read_cn(raw_data, pos);
-        self.alarm_id = read_cn(raw_data, pos);
-        self.prog_txt = read_cn(raw_data, pos);
-        self.rslt_txt = read_cn(raw_data, pos);
-        self.z_val = read_uint8(raw_data, pos);
-        self.fmu_flg = [read_uint8(raw_data, pos)];
-        self.mask_map = read_dn(raw_data, pos, order);
-        self.fal_map = read_dn(raw_data, pos, order);
-        self.cyc_cnt_t = read_u8(raw_data, pos, order);
-        self.totf_cnt = read_u4(raw_data, pos, order);
-        self.totl_cnt = read_u4(raw_data, pos, order);
-        self.cyc_base = read_u8(raw_data, pos, order);
-        self.bit_base = read_u4(raw_data, pos, order);
-        self.cond_cnt = read_u2(raw_data, pos, order);
-        self.lim_cnt = read_u2(raw_data, pos, order);
-        self.cyc_size = read_uint8(raw_data, pos);
-        self.pmr_size = read_uint8(raw_data, pos);
-        self.chn_size = read_uint8(raw_data, pos);
-        self.pat_size = read_uint8(raw_data, pos);
-        self.bit_size = read_uint8(raw_data, pos);
-        self.u1_size = read_uint8(raw_data, pos);
-        self.u2_size = read_uint8(raw_data, pos);
-        self.u3_size = read_uint8(raw_data, pos);
-        self.utx_size = read_uint8(raw_data, pos);
-        self.cap_bgn = read_u2(raw_data, pos, order);
-        // k: LIM_CNT
-        self.lim_indx = read_kx_u2(raw_data, pos, order, self.lim_cnt);
-        self.lim_spec = read_kx_u4(raw_data, pos, order, self.lim_cnt);
-        // k: COND_CNT
-        self.cond_lst = read_kx_cn(raw_data, pos, self.cond_cnt);
-        self.cyc_cnt = read_u2(raw_data, pos, order);
-        // k: CYC_CNT, f: CYC_SIZE
-        self.cyc_ofst = read_kx_uf(raw_data, pos, order, self.cyc_cnt, self.cyc_size);
-        self.pmr_cnt = read_u2(raw_data, pos, order);
-        // k: PMR_CNT, f: PMR_SIZE
-        self.pmr_indx = read_kx_uf(raw_data, pos, order, self.pmr_cnt, self.pmr_size);
-        self.chn_cnt = read_u2(raw_data, pos, order);
-        // k: CHN_CNT, f: CHN_SIZE
-        self.chn_num = read_kx_uf(raw_data, pos, order, self.chn_cnt, self.chn_size);
-        self.exp_cnt = read_u2(raw_data, pos, order);
-        // k: EXP_CNT
-        self.exp_data = read_kx_u1(raw_data, pos, self.exp_cnt);
-        self.cap_cnt = read_u2(raw_data, pos, order);
-        // k: CAP_CNT
-        self.cap_data = read_kx_u1(raw_data, pos, self.cap_cnt);
-        self.new_cnt = read_u2(raw_data, pos, order);
-        // k: NEW_CNT
-        self.new_data = read_kx_u1(raw_data, pos, self.new_cnt);
-        self.pat_cnt = read_u2(raw_data, pos, order);
-        // k: PAT_CNT, f: PAT_SIZE
-        self.pat_num = read_kx_uf(raw_data, pos, order, self.pat_cnt, self.pat_size);
-        self.bpos_cnt = read_u2(raw_data, pos, order);
-        // k: BPOS_CNT, f: BIT_SIZE
-        self.bit_pos = read_kx_uf(raw_data, pos, order, self.bpos_cnt, self.bit_size);
-        self.usr1_cnt = read_u2(raw_data, pos, order);
-        // k: USR1_CNT, f: U1_SIZE
-        self.usr1 = read_kx_uf(raw_data, pos, order, self.usr1_cnt, self.u1_size);
-        self.usr2_cnt = read_u2(raw_data, pos, order);
-        // k: USR2_CNT, f: U2_SIZE
-        self.usr2 = read_kx_uf(raw_data, pos, order, self.usr2_cnt, self.u2_size);
-        self.usr3_cnt = read_u2(raw_data, pos, order);
-        // k: USR3_CNT, f: U3_SIZE
-        self.usr3 = read_kx_uf(raw_data, pos, order, self.usr3_cnt, self.u3_size);
-        self.txt_cnt = read_u2(raw_data, pos, order);
-        // k: TXT_CNT
-        self.user_txt = read_kx_cf(raw_data, pos, self.txt_cnt, self.utx_size);
     }
 }
 
