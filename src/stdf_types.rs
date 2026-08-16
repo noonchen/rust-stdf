@@ -13,6 +13,7 @@ use crate::stdf_error::StdfError;
 extern crate smart_default;
 use rust_stdf_derive::StdfRecordCodec;
 use smart_default::SmartDefault;
+use std::borrow::Cow;
 use std::convert::From;
 
 #[cfg(feature = "serialize")]
@@ -130,9 +131,9 @@ pub type Vn = Vec<V1>;
 
 // ----------------------------------------------------------------------------
 // Zero-copy borrows of the variable-length payload types, used by the generated
-// `*View` getters. Each borrows into the raw record buffer; the `to_*` method
-// reproduces the owned value with the same semantics as the eager `read_*`
-// helpers, so view and eager results match.
+// `*View` getters. Each borrows into the raw record buffer; the `to_owned`
+// method reproduces the owned value with the same semantics as the eager
+// `read_*` helpers, so view and eager results match.
 // ----------------------------------------------------------------------------
 
 /// Sentinel stored in a view when a (trailing/optional) field is absent.
@@ -1458,26 +1459,21 @@ impl<'a> CnRef<'a> {
         self.0
     }
 
+    /// Zero-copy borrow when the payload is valid UTF-8; otherwise an owned
+    /// `String` decoded byte → char (Latin-1). Same decoding as
+    /// [`to_owned`](Self::to_owned).
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+    pub fn as_str(&self) -> Cow<'a, str> {
+        match std::str::from_utf8(self.0) {
+            Ok(s) => Cow::Borrowed(s),
+            Err(_) => Cow::Owned(bytes_to_string(self.0)),
+        }
     }
 
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    /// Zero-copy `&str`, but `Some` only when the bytes are valid UTF-8 (ASCII).
-    #[inline]
-    pub fn as_str(&self) -> Option<&'a str> {
-        std::str::from_utf8(self.0).ok()
-    }
-
-    /// Allocating; reproduces the owned `Cn` (byte -> char) semantics used by
-    /// `StdfRecord`, so results match the eager parser.
-    pub fn to_cn(&self) -> Cn {
-        self.0.iter().map(|&b| b as char).collect()
+    /// Allocating; reproduces the owned `Cn` string (valid UTF-8 decoded as
+    /// UTF-8, otherwise byte → char Latin-1), matching the eager parser.
+    pub fn to_owned(&self) -> Cn {
+        bytes_to_string(self.0)
     }
 }
 
@@ -1500,26 +1496,21 @@ impl<'a> SnRef<'a> {
         self.0
     }
 
+    /// Zero-copy borrow when the payload is valid UTF-8; otherwise an owned
+    /// `String` decoded byte → char (Latin-1). Same decoding as
+    /// [`to_owned`](Self::to_owned).
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+    pub fn as_str(&self) -> Cow<'a, str> {
+        match std::str::from_utf8(self.0) {
+            Ok(s) => Cow::Borrowed(s),
+            Err(_) => Cow::Owned(bytes_to_string(self.0)),
+        }
     }
 
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    /// Zero-copy `&str`, but `Some` only when the bytes are valid UTF-8 (ASCII).
-    #[inline]
-    pub fn as_str(&self) -> Option<&'a str> {
-        std::str::from_utf8(self.0).ok()
-    }
-
-    /// Allocating; reproduces the owned `Sn` (byte -> char) semantics used by
-    /// `StdfRecord`, so results match the eager parser.
-    pub fn to_sn(&self) -> Sn {
-        self.0.iter().map(|&b| b as char).collect()
+    /// Allocating; reproduces the owned `Sn` string (valid UTF-8 decoded as
+    /// UTF-8, otherwise byte → char Latin-1), matching the eager parser.
+    pub fn to_owned(&self) -> Sn {
+        bytes_to_string(self.0)
     }
 }
 
@@ -1553,7 +1544,7 @@ impl<'a> BnRef<'a> {
 
     /// Allocating; reproduces the owned `Bn` (byte copy) semantics used by
     /// `StdfRecord`, so results match the eager parser.
-    pub fn to_bn(&self) -> Bn {
+    pub fn to_owned(&self) -> Bn {
         self.0.to_vec()
     }
 }
@@ -1590,7 +1581,7 @@ impl<'a> DnRef<'a> {
 
     /// Allocating; reproduces the owned `Dn` (byte copy) semantics used by
     /// `StdfRecord`, so results match the eager parser.
-    pub fn to_dn(&self) -> Dn {
+    pub fn to_owned(&self) -> Dn {
         self.0.to_vec()
     }
 }
@@ -2464,7 +2455,13 @@ pub(crate) fn read_vn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u1
     read_multi_element!(k, read_v1(raw_data, pos, order))
 }
 
+/// Decode STDF string bytes to `String`: valid UTF-8 is decoded as UTF-8,
+/// otherwise each byte is widened to a `char` (Latin-1). Shared by the eager
+/// `read_cn`/`read_sn`/`read_cf` helpers and the `CnRef`/`SnRef` views.
 #[inline(always)]
 pub(crate) fn bytes_to_string(data: &[u8]) -> String {
-    data.iter().map(|&x| x as char).collect()
+    match std::str::from_utf8(data) {
+        Ok(s) => s.to_owned(),
+        Err(_) => data.iter().map(|&x| x as char).collect(),
+    }
 }

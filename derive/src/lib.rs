@@ -14,7 +14,7 @@
 //! (which allocates a `String`/`Vec` for every `Cn`/`Bn`/`Kx*` field), a view
 //! scans the record once to record each field's byte offset, then reads a field
 //! only when its getter is called. Scalar fields cost O(1) and zero allocation;
-//! string fields allocate only when you call `to_cn()`/`to_bn()`/`to_dn()`.
+//! string fields allocate only when you call `to_owned()`.
 //!
 //! The per-field byte offsets are stored in **private** fields of the view, so
 //! users only ever interact with the typed getters — never with the raw layout.
