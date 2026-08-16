@@ -1000,3 +1000,349 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
         }
     }
 }
+
+// ----------------------------------------------------------------------------
+// `stdf_records!` / `stdf_match_expr!` — single-source STDF record table.
+//
+// `stdf_records!` emits the `REC_*` constants (`rec_codes`) or the two record
+// enums (`rec_enums`). `stdf_match_expr!` expands to a `match` expression body
+// inside a hand-written function, so every function keeps its visible
+// signature/doc.
+// ----------------------------------------------------------------------------
+
+/// (name, typ, sub). Order determines the `REC_*` bit index.
+const RECORDS: &[(&str, u8, u8)] = &[
+    // rec type 0
+    ("FAR", 0, 10),
+    ("ATR", 0, 20),
+    ("VUR", 0, 30),
+    // rec type 1
+    ("MIR", 1, 10),
+    ("MRR", 1, 20),
+    ("PCR", 1, 30),
+    ("HBR", 1, 40),
+    ("SBR", 1, 50),
+    ("PMR", 1, 60),
+    ("PGR", 1, 62),
+    ("PLR", 1, 63),
+    ("RDR", 1, 70),
+    ("SDR", 1, 80),
+    ("PSR", 1, 90),
+    ("NMR", 1, 91),
+    ("CNR", 1, 92),
+    ("SSR", 1, 93),
+    ("CDR", 1, 94),
+    // rec type 2
+    ("WIR", 2, 10),
+    ("WRR", 2, 20),
+    ("WCR", 2, 30),
+    // rec type 5
+    ("PIR", 5, 10),
+    ("PRR", 5, 20),
+    // rec type 10
+    ("TSR", 10, 30),
+    // rec type 15
+    ("PTR", 15, 10),
+    ("MPR", 15, 15),
+    ("FTR", 15, 20),
+    ("STR", 15, 30),
+    // rec type 20
+    ("BPS", 20, 10),
+    ("EPS", 20, 20),
+    // rec type 50
+    ("GDR", 50, 10),
+    ("DTR", 50, 30),
+];
+
+fn rec_name(s: &str) -> Ident {
+    format_ident!("{}", s)
+}
+
+fn rec_code(s: &str) -> Ident {
+    format_ident!("REC_{}", s)
+}
+
+fn rec_view(s: &str) -> Ident {
+    format_ident!("{}View", s)
+}
+
+fn rec_lit(s: &str) -> syn::LitStr {
+    syn::LitStr::new(s, proc_macro2::Span::call_site())
+}
+
+/// `EPS` is the only record without any fields, 
+/// so it doesn't have a view or read_* method, 
+/// treat it as special case.
+fn is_eps(name: &str) -> bool {
+    name == "EPS"
+}
+
+#[proc_macro]
+pub fn stdf_records(input: TokenStream) -> TokenStream {
+    let mode = parse_macro_input!(input as Ident);
+    match mode.to_string().as_str() {
+        "rec_codes" => {
+            let codes: Vec<Ident> = RECORDS.iter().map(|r| rec_code(r.0)).collect();
+            let bits: Vec<u32> = (0..RECORDS.len() as u32).collect();
+            let reserve_bit = RECORDS.len() as u32;
+            let invalid_bit = reserve_bit + 1;
+            quote! {
+                #( pub const #codes: u64 = 1 << #bits; )*
+                // rec type 180: Reserved
+                // rec type 181: Reserved
+                pub const REC_RESERVE: u64 = 1u64 << #reserve_bit;
+                pub const REC_INVALID: u64 = 1u64 << #invalid_bit;
+            }
+            .into()
+        }
+        "rec_enums" => {
+            let names: Vec<Ident> = RECORDS.iter().map(|r| rec_name(r.0)).collect();
+            let view_variants: Vec<TokenStream2> = RECORDS
+                .iter()
+                .map(|r| {
+                    let name = rec_name(r.0);
+                    if is_eps(r.0) {
+                        quote! { #name }
+                    } else {
+                        let view = rec_view(r.0);
+                        quote! { #name(#view<'a>) }
+                    }
+                })
+                .collect();
+            quote! {
+                /// `StdfRecord` is the data that returned from StdfReader iterator.
+                ///
+                /// it contains the actually structs
+                /// that contain STDF data.
+                ///
+                /// use `match` structure to access the nested data.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use rust_stdf::{StdfRecord, stdf_record_type::*};
+                ///
+                /// let mut rec = StdfRecord::new(REC_PTR);
+                /// if let StdfRecord::PTR(ref mut ptr_data) = rec {
+                ///     ptr_data.result = 100.0;
+                /// }
+                /// println!("{:?}", rec);
+                /// ```
+                #[derive(Debug, Clone, PartialEq)]
+                pub enum StdfRecord {
+                    #( #names(#names), )*
+                    // rec type 180: Reserved
+                    // rec type 181: Reserved
+                    ReservedRec(ReservedRec),
+                    InvalidRec(RecordHeader),
+                }
+
+                /// Zero-copy view over the field data of a single STDF record.
+                ///
+                /// Unlike [`StdfRecord`], which eagerly parses every field into owned
+                /// values, a `StdfRecordView` only records each field's byte offset and
+                /// reads a field on demand. It borrows the raw bytes it was built from
+                /// and never allocates for scalar fields.
+                ///
+                /// A view can be built from:
+                /// 1. A borrowed [`RawDataElement`] (`From<&RawDataElement>`),
+                /// 2. A header plus raw field data ([`StdfRecordView::read_from_bytes`]).
+                /// 3. A buffer that includes the 4-byte record header and the raw field
+                ///    data ([`StdfRecordView::read_from_bytes_with_header`]).
+                #[derive(Debug, Clone, Copy)]
+                pub enum StdfRecordView<'a> {
+                    #( #view_variants, )*
+                    // rec type 180: Reserved
+                    // rec type 181: Reserved
+                    ReservedRec { raw_data: &'a [u8] },
+                    InvalidRec(RecordHeader),
+                }
+            }
+            .into()
+        }
+        other => syn::Error::new(
+            mode.span(),
+            format!("unknown mode `{other}` (expected `rec_codes` or `rec_enums`)"),
+        )
+        .to_compile_error()
+        .into(),
+    }
+}
+
+#[proc_macro]
+pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
+    let kind = parse_macro_input!(input as Ident);
+    let kind_str = kind.to_string();
+
+    let names: Vec<Ident> = RECORDS.iter().map(|r| rec_name(r.0)).collect();
+    let codes: Vec<Ident> = RECORDS.iter().map(|r| rec_code(r.0)).collect();
+    let typs: Vec<u8> = RECORDS.iter().map(|r| r.1).collect();
+    let subs: Vec<u8> = RECORDS.iter().map(|r| r.2).collect();
+    let lits: Vec<syn::LitStr> = RECORDS.iter().map(|r| rec_lit(r.0)).collect();
+    let qcodes: Vec<TokenStream2> = codes.iter().map(|c| quote! { stdf_record_type::#c }).collect();
+
+    let out = match kind_str.as_str() {
+        // --- inside `stdf_record_type` (bare `REC_*`) ---
+        "typ_sub_from_code" => quote! {
+            match code {
+                #( #codes => Ok((#typs, #subs)), )*
+                _ => Err(StdfError { code: 2, msg: "unknown type constant".to_string() }),
+            }
+        },
+        "code_from_typ_sub" => quote! {
+            match (typ, sub) {
+                #( (#typs, #subs) => #codes, )*
+                // rec type 180: Reserved
+                // rec type 181: Reserved
+                (180 | 181, _) => REC_RESERVE,
+                // not matched
+                _ => REC_INVALID,
+            }
+        },
+        "name_from_code" => quote! {
+            match rec_type {
+                #( #codes => #lits, )*
+                // rec type 180: Reserved
+                // rec type 181: Reserved
+                REC_RESERVE => "ReservedRec",
+                // not matched
+                _ => "InvalidRec",
+            }
+        },
+        "code_from_name" => quote! {
+            match rec_name {
+                #( #lits => #codes, )*
+                _ => REC_INVALID,
+            }
+        },
+
+        // --- top level (`stdf_record_type::REC_*`) ---
+        "record_new" => quote! {
+            match rec_type {
+                #( #qcodes => StdfRecord::#names(#names::new()), )*
+                stdf_record_type::REC_RESERVE => StdfRecord::ReservedRec(ReservedRec::new()),
+                // not matched
+                _ => StdfRecord::InvalidRec(RecordHeader::new()),
+            }
+        },
+        "record_type" => quote! {
+            match self {
+                #( StdfRecord::#names(_) => #qcodes, )*
+                // rec type 180: Reserved
+                // rec type 181: Reserved
+                StdfRecord::ReservedRec(_) => stdf_record_type::REC_RESERVE,
+                // not matched
+                StdfRecord::InvalidRec(_) => stdf_record_type::REC_INVALID,
+            }
+        },
+        "record_read" => {
+            let arms: Vec<TokenStream2> = RECORDS
+                .iter()
+                .map(|r| {
+                    let name = rec_name(r.0);
+                    if is_eps(r.0) {
+                        quote! { StdfRecord::#name(_) => () }
+                    } else {
+                        quote! { StdfRecord::#name(rec) => rec.read_from_bytes(raw_data, order) }
+                    }
+                })
+                .collect();
+            quote! {
+                match self {
+                    #( #arms, )*
+                    // rec type 180: Reserved
+                    // rec type 181: Reserved
+                    StdfRecord::ReservedRec(rec) => rec.read_from_bytes(raw_data, order),
+                    // not matched, invalid rec do not parse anything
+                    StdfRecord::InvalidRec(_) => (),
+                }
+            }
+        },
+        "view_read" => {
+            let arms: Vec<TokenStream2> = RECORDS
+                .iter()
+                .map(|r| {
+                    let name = rec_name(r.0);
+                    let code = rec_code(r.0);
+                    if is_eps(r.0) {
+                        quote! { stdf_record_type::#code => StdfRecordView::#name }
+                    } else {
+                        let view = rec_view(r.0);
+                        quote! { stdf_record_type::#code => StdfRecordView::#name(#view::new(raw_data, byte_order)) }
+                    }
+                })
+                .collect();
+            quote! {
+                match stdf_record_type::get_code_from_typ_sub(header.typ, header.sub) {
+                    #( #arms, )*
+                    // rec type 180: Reserved
+                    // rec type 181: Reserved
+                    stdf_record_type::REC_RESERVE => StdfRecordView::ReservedRec { raw_data },
+                    // not matched
+                    _ => StdfRecordView::InvalidRec(header),
+                }
+            }
+        },
+        "view_type" => {
+            let arms: Vec<TokenStream2> = RECORDS
+                .iter()
+                .map(|r| {
+                    let name = rec_name(r.0);
+                    let code = rec_code(r.0);
+                    if is_eps(r.0) {
+                        quote! { StdfRecordView::#name => stdf_record_type::#code }
+                    } else {
+                        quote! { StdfRecordView::#name(_) => stdf_record_type::#code }
+                    }
+                })
+                .collect();
+            quote! {
+                match self {
+                    #( #arms, )*
+                    // rec type 180: Reserved
+                    // rec type 181: Reserved
+                    StdfRecordView::ReservedRec { .. } => stdf_record_type::REC_RESERVE,
+                    // not matched
+                    StdfRecordView::InvalidRec(_) => stdf_record_type::REC_INVALID,
+                }
+            }
+        },
+        "view_to_owned" => {
+            let arms: Vec<TokenStream2> = RECORDS
+                .iter()
+                .map(|r| {
+                    let name = rec_name(r.0);
+                    if is_eps(r.0) {
+                        quote! { StdfRecordView::#name => StdfRecord::#name(#name::new()) }
+                    } else {
+                        quote! { StdfRecordView::#name(v) => StdfRecord::#name(v.to_owned()) }
+                    }
+                })
+                .collect();
+            quote! {
+                match self {
+                    #( #arms, )*
+                    // rec type 180: Reserved
+                    // rec type 181: Reserved
+                    StdfRecordView::ReservedRec { raw_data } => {
+                        let mut rec = ReservedRec::new();
+                        rec.read_from_bytes(raw_data, &ByteOrder::LittleEndian);
+                        StdfRecord::ReservedRec(rec)
+                    }
+                    // not matched
+                    StdfRecordView::InvalidRec(h) => StdfRecord::InvalidRec(*h),
+                }
+            }
+        },
+        other => {
+            return syn::Error::new(
+                kind.span(),
+                format!("unknown `stdf_match_expr!` kind `{other}`"),
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+
+    out.into()
+}
