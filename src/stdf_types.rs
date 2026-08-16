@@ -2112,6 +2112,63 @@ impl<'a> StdfRecordView<'a> {
     pub fn is_type(&self, rec_type: u64) -> bool {
         (self.get_type() & rec_type) != 0
     }
+
+    /// Parse this borrowed view into an owned [`StdfRecord`], escaping the
+    /// borrow of the underlying buffer.
+    #[inline]
+    pub fn to_owned(&self) -> StdfRecord {
+        match self {
+            // rec type 0
+            StdfRecordView::FAR(v) => StdfRecord::FAR(v.to_owned()),
+            StdfRecordView::ATR(v) => StdfRecord::ATR(v.to_owned()),
+            StdfRecordView::VUR(v) => StdfRecord::VUR(v.to_owned()),
+            // rec type 1
+            StdfRecordView::MIR(v) => StdfRecord::MIR(v.to_owned()),
+            StdfRecordView::MRR(v) => StdfRecord::MRR(v.to_owned()),
+            StdfRecordView::PCR(v) => StdfRecord::PCR(v.to_owned()),
+            StdfRecordView::HBR(v) => StdfRecord::HBR(v.to_owned()),
+            StdfRecordView::SBR(v) => StdfRecord::SBR(v.to_owned()),
+            StdfRecordView::PMR(v) => StdfRecord::PMR(v.to_owned()),
+            StdfRecordView::PGR(v) => StdfRecord::PGR(v.to_owned()),
+            StdfRecordView::PLR(v) => StdfRecord::PLR(v.to_owned()),
+            StdfRecordView::RDR(v) => StdfRecord::RDR(v.to_owned()),
+            StdfRecordView::SDR(v) => StdfRecord::SDR(v.to_owned()),
+            StdfRecordView::PSR(v) => StdfRecord::PSR(v.to_owned()),
+            StdfRecordView::NMR(v) => StdfRecord::NMR(v.to_owned()),
+            StdfRecordView::CNR(v) => StdfRecord::CNR(v.to_owned()),
+            StdfRecordView::SSR(v) => StdfRecord::SSR(v.to_owned()),
+            StdfRecordView::CDR(v) => StdfRecord::CDR(v.to_owned()),
+            // rec type 2
+            StdfRecordView::WIR(v) => StdfRecord::WIR(v.to_owned()),
+            StdfRecordView::WRR(v) => StdfRecord::WRR(v.to_owned()),
+            StdfRecordView::WCR(v) => StdfRecord::WCR(v.to_owned()),
+            // rec type 5
+            StdfRecordView::PIR(v) => StdfRecord::PIR(v.to_owned()),
+            StdfRecordView::PRR(v) => StdfRecord::PRR(v.to_owned()),
+            // rec type 10
+            StdfRecordView::TSR(v) => StdfRecord::TSR(v.to_owned()),
+            // rec type 15
+            StdfRecordView::PTR(v) => StdfRecord::PTR(v.to_owned()),
+            StdfRecordView::MPR(v) => StdfRecord::MPR(v.to_owned()),
+            StdfRecordView::FTR(v) => StdfRecord::FTR(v.to_owned()),
+            StdfRecordView::STR(v) => StdfRecord::STR(v.to_owned()),
+            // rec type 20
+            StdfRecordView::BPS(v) => StdfRecord::BPS(v.to_owned()),
+            StdfRecordView::EPS => StdfRecord::EPS(EPS::new()),
+            // rec type 50
+            StdfRecordView::GDR(v) => StdfRecord::GDR(v.to_owned()),
+            StdfRecordView::DTR(v) => StdfRecord::DTR(v.to_owned()),
+            // rec type 180: Reserved
+            // rec type 181: Reserved
+            StdfRecordView::ReservedRec { raw_data } => {
+                let mut rec = ReservedRec::new();
+                rec.read_from_bytes(raw_data, &ByteOrder::LittleEndian);
+                StdfRecord::ReservedRec(rec)
+            }
+            // not matched
+            StdfRecordView::InvalidRec(h) => StdfRecord::InvalidRec(*h),
+        }
+    }
 }
 
 impl RawDataElement {
@@ -2140,6 +2197,14 @@ impl<'a> From<&'a RawDataElement> for StdfRecordView<'a> {
             &raw_element.raw_data,
             raw_element.byte_order,
         )
+    }
+}
+
+impl<'a> From<&StdfRecordView<'a>> for StdfRecord {
+    /// Parse the borrowed view into an owned record; does not consume the view.
+    #[inline(always)]
+    fn from(view: &StdfRecordView<'a>) -> Self {
+        view.to_owned()
     }
 }
 

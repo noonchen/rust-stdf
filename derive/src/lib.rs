@@ -248,7 +248,13 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         format_ident!("_order")
     };
 
-    let view_doc = format!("Zero-copy view over a raw `{name}` record.");
+    let view_doc = format!(
+        "Zero-copy view over the field data of a `{name}` record.\n\
+         \n\
+         Borrows the raw bytes and reads fields on demand via getters. Create one \
+         with [`Self::new`] or via [`StdfRecordView::read_from_bytes`]; convert \
+         back to an owned [`{name}`] with [`Self::to_owned`]."
+    );
 
     Ok(quote! {
         impl #name {
@@ -268,9 +274,6 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         #[derive(Debug, Clone, Copy)]
         pub struct #view<'a> {
             raw: &'a [u8],
-            // Some records never read `order` through the view; keep the field
-            // for a uniform constructor and silence the dead-code lint.
-            #[allow(dead_code)]
             order: ByteOrder,
             #(#view_fields)*
         }
@@ -282,6 +285,14 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
                 let pos = &mut 0usize;
                 #(#scan_stmts)*
                 #view { raw, order, #(#view_field_idents),* }
+            }
+
+            /// Re-parse the borrowed payload into the owned record.
+            #[inline]
+            pub fn to_owned(&self) -> #name {
+                let mut rec = #name::new();
+                rec.read_from_bytes(self.raw, &self.order);
+                rec
             }
 
             #(#getters)*
