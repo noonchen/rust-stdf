@@ -1423,7 +1423,7 @@ impl<'a> StdfRecordView<'a> {
     ///
     /// let header = RecordHeader { len: 0, typ: 15, sub: 10 }; // PTR
     /// let raw: [u8; 0] = []; // empty field data; getters fall back to defaults
-    /// let view = StdfRecordView::read_from_bytes(header, &raw, ByteOrder::LittleEndian);
+    /// let view = StdfRecordView::read_from_bytes(header, &raw, &ByteOrder::LittleEndian);
     ///
     /// if let StdfRecordView::PTR(ptr_view) = view {
     ///     assert_eq!(0, ptr_view.test_num());
@@ -1434,7 +1434,7 @@ impl<'a> StdfRecordView<'a> {
     pub fn read_from_bytes(
         header: RecordHeader,
         raw_data: &'a [u8],
-        byte_order: ByteOrder,
+        byte_order: &ByteOrder,
     ) -> Self {
         stdf_match_expr!(view_read)
     }
@@ -1480,7 +1480,7 @@ impl<'a> StdfRecordView<'a> {
         }
 
         let data_slice = &raw_data[4..expected_end_pos];
-        Ok(Self::read_from_bytes(header, data_slice, *order))
+        Ok(Self::read_from_bytes(header, data_slice, order))
     }
 
     /// Return the record type code (see `stdf_record_type::*`).
@@ -1527,7 +1527,7 @@ impl<'a> From<&'a RawDataElement> for StdfRecordView<'a> {
         Self::read_from_bytes(
             raw_element.header,
             &raw_element.raw_data,
-            raw_element.byte_order,
+            &raw_element.byte_order,
         )
     }
 }

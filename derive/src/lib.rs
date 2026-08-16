@@ -281,10 +281,10 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         impl<'a> #view<'a> {
             /// Scan the raw record once, recording each field's byte offset.
             #[inline]
-            pub fn new(raw: &'a [u8], order: ByteOrder) -> Self {
+            pub fn new(raw: &'a [u8], order: &ByteOrder) -> Self {
                 let pos = &mut 0usize;
                 #(#scan_stmts)*
-                #view { raw, order, #(#view_field_idents),* }
+                #view { raw, order: *order, #(#view_field_idents),* }
             }
 
             /// Re-parse the borrowed payload into the owned record.
