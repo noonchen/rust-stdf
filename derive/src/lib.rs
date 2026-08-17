@@ -1330,7 +1330,7 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
         "typ_sub_from_code" => quote! {
             match code {
                 #( #codes => Ok((#typs, #subs)), )*
-                _ => Err(StdfError { code: 2, msg: "unknown type constant".to_string() }),
+                _ => Err(StdfError { code: StdfErrorKind::InvalidRecordType as u8, msg: "unknown type constant".to_string() }),
             }
         },
         "code_from_typ_sub" => quote! {

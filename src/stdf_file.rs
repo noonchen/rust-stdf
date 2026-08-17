@@ -9,7 +9,7 @@
 // Copyright (c) 2022 noonchen
 //
 
-use crate::stdf_error::StdfError;
+use crate::stdf_error::{StdfError, StdfErrorKind};
 use crate::stdf_types::*;
 #[cfg(feature = "bzip")]
 use bzip2::bufread::BzDecoder;
@@ -166,20 +166,20 @@ impl<R: BufRead + Seek> StdfReader<R> {
         let endianness = match far_header.len {
             2 => Ok(ByteOrder::LittleEndian),
             512 => Ok(ByteOrder::BigEndian),
-            _ => Err(StdfError {
-                code: 1,
-                msg: String::from("Cannot determine endianness"),
-            }),
+            _ => Err(StdfError::new(
+                StdfErrorKind::InvalidStdfFile,
+                String::from("Cannot determine endianness"),
+            )),
         }?;
         // check if it's FAR
         if (far_header.typ, far_header.sub) != (0, 10) {
-            return Err(StdfError {
-                code: 1,
-                msg: format!(
+            return Err(StdfError::new(
+                StdfErrorKind::InvalidStdfFile,
+                format!(
                     "FAR header (0, 10) expected, but {:?} is found",
                     (far_header.typ, far_header.sub)
                 ),
-            });
+            ));
         }
         // restore file position
         // current flate2 does not support fseek, we need to consume
@@ -314,11 +314,10 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
         let header = match self.inner.read_header() {
             Ok(h) => h,
             Err(e) => {
-                return match e.code {
+                return match e.kind() {
                     // only 2 error will be returned by `read_header`
-                    // code = 4, indicates normal EOF
-                    4 => None,
-                    // code = 5, indicates unexpected EOF
+                    // Eof indicates normal EOF, UnexpectedEof indicates unexpected EOF
+                    Some(StdfErrorKind::Eof) => None,
                     _ => Some(Err(e)),
                 };
             }
@@ -330,10 +329,7 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
             self.buffer.resize(len, 0);
         }
         if let Err(io_e) = self.inner.stream.read_exact(&mut self.buffer[..len]) {
-            return Some(Err(StdfError {
-                code: 3,
-                msg: io_e.to_string(),
-            }));
+            return Some(Err(StdfError::new(StdfErrorKind::Io, io_e.to_string())));
         }
 
         let mut rec = StdfRecord::new_from_header(header);
@@ -350,10 +346,9 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
         let header = match self.inner.read_header() {
             Ok(h) => h,
             Err(e) => {
-                return match e.code {
-                    // code = 4, indicates normal EOF
-                    4 => None,
-                    // code = 5, indicates unexpected EOF
+                return match e.kind() {
+                    // Eof indicates normal EOF, UnexpectedEof indicates unexpected EOF
+                    Some(StdfErrorKind::Eof) => None,
                     _ => Some(Err(e)),
                 };
             }
@@ -364,10 +359,7 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
         // create a buffer to store record raw data
         let mut buffer = vec![0u8; header.len as usize];
         if let Err(io_e) = self.inner.stream.read_exact(&mut buffer) {
-            return Some(Err(StdfError {
-                code: 3,
-                msg: io_e.to_string(),
-            }));
+            return Some(Err(StdfError::new(StdfErrorKind::Io, io_e.to_string())));
         }
         self.offset += header.len as u64;
 

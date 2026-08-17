@@ -10,7 +10,7 @@
 //
 
 use crate::atdf_types::AtdfRecord;
-use crate::stdf_error::StdfError;
+use crate::stdf_error::{StdfError, StdfErrorKind};
 use crate::stdf_file::{rewind_stream_position, StdfStream};
 use crate::stdf_types::{bytes_to_string, CompressType};
 #[cfg(feature = "bzip")]
@@ -76,13 +76,13 @@ impl<R: BufRead + Seek> AtdfReader<R> {
         stream.read_until(b'\n', &mut far_bytes)?;
         let far_str = bytes_to_string(&far_bytes);
         if !far_str.starts_with("FAR:A") || far_bytes.len() < 9 {
-            return Err(StdfError {
-                code: 6,
-                msg: format!(
+            return Err(StdfError::new(
+                StdfErrorKind::NonAscii,
+                format!(
                     "FAR record pattern 'FAR:A' not detected or required fields missing, found {}",
                     far_str
                 ),
-            });
+            ));
         }
         // according to atdf spec, delimiter is the byte after 'A'
         let delimiter = far_bytes[5] as char;

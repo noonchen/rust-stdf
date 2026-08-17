@@ -9,7 +9,7 @@
 // Copyright (c) 2022 noonchen
 //
 
-use crate::stdf_error::StdfError;
+use crate::stdf_error::{StdfError, StdfErrorKind};
 extern crate smart_default;
 use rust_stdf_derive::{stdf_match_expr, stdf_records, StdfRecordCodec};
 use smart_default::SmartDefault;
@@ -275,7 +275,7 @@ pub struct KxCfRefIter<'a> {
 /// let is_t = rec.is_type(t);      // true
 /// ```
 pub mod stdf_record_type {
-    use crate::stdf_error::StdfError;
+    use crate::stdf_error::{StdfError, StdfErrorKind};
     use rust_stdf_derive::{stdf_match_expr, stdf_records};
 
     // Generates the `REC_*` record-type code constants.
@@ -1158,14 +1158,14 @@ impl RecordHeader {
         order: &ByteOrder,
     ) -> Result<Self, StdfError> {
         match raw_data.len() {
-            0 => Err(StdfError {
-                code: 4,
-                msg: String::from("No bytes to read"),
-            }),
-            1..=3 => Err(StdfError {
-                code: 5,
-                msg: String::from("Not enough data to construct record header"),
-            }),
+            0 => Err(StdfError::new(
+                StdfErrorKind::Eof,
+                String::from("No bytes to read"),
+            )),
+            1..=3 => Err(StdfError::new(
+                StdfErrorKind::UnexpectedEof,
+                String::from("Not enough data to construct record header"),
+            )),
             _ => {
                 let len_bytes = [raw_data[0], raw_data[1]];
                 self.len = match order {
@@ -1788,15 +1788,15 @@ impl StdfRecord {
 
         let expected_end_pos = 4 + header.len as usize;
         if raw_data.len() < expected_end_pos {
-            return Err(StdfError {
-                code: 5,
-                msg: format!(
+            return Err(StdfError::new(
+                StdfErrorKind::UnexpectedEof,
+                format!(
                     "Length of stdf field data ({} - 4 = {}) is less than what header specified ({})",
                     raw_data.len(),
                     raw_data.len() - 4,
                     header.len
                 ),
-            });
+            ));
         }
 
         let data_slice = &raw_data[4..expected_end_pos];
@@ -1859,15 +1859,15 @@ impl<'a> StdfRecordView<'a> {
 
         let expected_end_pos = 4 + header.len as usize;
         if raw_data.len() < expected_end_pos {
-            return Err(StdfError {
-                code: 5,
-                msg: format!(
+            return Err(StdfError::new(
+                StdfErrorKind::UnexpectedEof,
+                format!(
                     "Length of stdf field data ({} - 4 = {}) is less than what header specified ({})",
                     raw_data.len(),
                     raw_data.len() - 4,
                     header.len
                 ),
-            });
+            ));
         }
 
         let data_slice = &raw_data[4..expected_end_pos];
