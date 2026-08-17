@@ -3,17 +3,20 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 26th 2022
 // -----
-// Last Modified: Mon Nov 14 2022
+// Last Modified: Mon Aug 17 2026
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
 //
 
 use rand::prelude::*;
-use rust_stdf::{stdf_file::*, stdf_record_type::*, StdfRecord};
+use rust_stdf::{
+    stdf_file::*, stdf_record_type::*, ByteOrder, CompressType, StdfRecord, StdfRecordView,
+};
 use std::{
+    collections::HashMap,
     fs::{self, read_dir},
-    io::{Read, Seek, SeekFrom},
+    io::{Cursor, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
 };
 
@@ -46,6 +49,53 @@ fn get_test_stdf_files() -> Vec<PathBuf> {
         .filter(|p| supported_ext(p))
         .collect::<Vec<PathBuf>>()
 }
+
+// ---------------------------------------------------------------------------
+// helpers for synthetic in-memory STDF files
+// ---------------------------------------------------------------------------
+
+/// Serialize a record header (len/typ/sub) in the given byte order.
+fn write_header(buf: &mut Vec<u8>, len: u16, typ: u8, sub: u8, order: ByteOrder) {
+    match order {
+        ByteOrder::LittleEndian => {
+            buf.extend_from_slice(&len.to_le_bytes());
+            buf.push(typ);
+            buf.push(sub);
+        }
+        ByteOrder::BigEndian => {
+            buf.extend_from_slice(&len.to_be_bytes());
+            buf.push(typ);
+            buf.push(sub);
+        }
+    }
+}
+
+/// Build a tiny valid STDF file: FAR + one MIR whose `setup_t` is 0x01020304.
+///
+/// The FAR `REC_LEN` is always serialized little-endian (2 or 512) so that
+/// `StdfReader::from` can detect the file byte order before knowing it.
+fn minimal_stdf(order: ByteOrder) -> Vec<u8> {
+    let mut buf = Vec::new();
+    let far_len = match order {
+        ByteOrder::LittleEndian => 2u16,
+        ByteOrder::BigEndian => 512u16,
+    };
+    buf.extend_from_slice(&far_len.to_le_bytes()); // FAR REC_LEN (always LE)
+    buf.push(0); // typ = FAR
+    buf.push(10); // sub = FAR
+    buf.push(1); // cpu_type
+    buf.push(4); // stdf_ver
+    write_header(&mut buf, 4, 1, 10, order); // MIR, 4-byte body
+    match order {
+        ByteOrder::LittleEndian => buf.extend_from_slice(&0x01020304u32.to_le_bytes()),
+        ByteOrder::BigEndian => buf.extend_from_slice(&0x01020304u32.to_be_bytes()),
+    }
+    buf
+}
+
+// ---------------------------------------------------------------------------
+// demo files
+// ---------------------------------------------------------------------------
 
 #[test]
 fn supported_stdf_file_test() {
@@ -106,5 +156,245 @@ fn supported_stdf_file_test() {
                 assert_eq!(parsed_rec, rec);
             }
         }
+    }
+}
+
+// `get_record_iter` must produce exactly the same records as converting every
+// `RawDataElement`, for every demo file (including compressed variants).
+#[test]
+fn record_iter_matches_rawdata_iter() {
+    let files = get_test_stdf_files();
+    assert_ne!(files.len(), 0);
+
+    for file in &files {
+        let mut reader = StdfReader::new(file)
+            .unwrap_or_else(|e| panic!("open {}: {e}", file.display()));
+        let raw_records: Vec<StdfRecord> = reader
+            .get_rawdata_iter()
+            .map(|r| StdfRecord::from(r.unwrap()))
+            .collect();
+
+        let mut reader = StdfReader::new(file)
+            .unwrap_or_else(|e| panic!("open {}: {e}", file.display()));
+        let parsed_records: Vec<StdfRecord> = reader
+            .get_record_iter()
+            .map(|r| r.unwrap())
+            .collect();
+
+        assert_eq!(
+            raw_records, parsed_records,
+            "get_record_iter and get_rawdata_iter diverge for {}",
+            file.display()
+        );
+        assert_eq!(raw_records.first().map(|r| r.get_type()), Some(REC_FAR));
+        assert_eq!(raw_records.last().map(|r| r.get_type()), Some(REC_MRR));
+    }
+}
+
+// The gzip/bzip2/zip variants of a demo file must decode to the same record
+// sequence as the uncompressed original.
+#[test]
+fn compressed_files_match_uncompressed() {
+    let mut by_base: HashMap<String, Vec<PathBuf>> = HashMap::new();
+    for p in get_test_stdf_files() {
+        let base = p
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .split('.')
+            .next()
+            .unwrap()
+            .to_string();
+        by_base.entry(base).or_default().push(p);
+    }
+    assert!(!by_base.is_empty());
+
+    let record_types = |p: &PathBuf| -> Vec<u64> {
+        let mut reader = StdfReader::new(p)
+            .unwrap_or_else(|e| panic!("open {}: {e}", p.display()));
+        reader
+            .get_rawdata_iter()
+            .map(|r| r.unwrap().header.get_type())
+            .collect()
+    };
+
+    for (base, group) in &by_base {
+        assert!(group.len() > 1, "only one variant of {base} present: {group:?}");
+        let reference = record_types(&group[0]);
+        assert_eq!(reference.first(), Some(&REC_FAR));
+        for p in &group[1..] {
+            assert_eq!(
+                reference,
+                record_types(p),
+                "{base}: {} decodes to a different record sequence",
+                p.display()
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// StdfReader::from (stream constructor)
+// ---------------------------------------------------------------------------
+
+// The reader must detect the byte order from the FAR header and parse records
+// in that byte order.
+#[test]
+fn stream_constructor_detects_endianness() {
+    for order in [ByteOrder::LittleEndian, ByteOrder::BigEndian] {
+        let mut reader = StdfReader::from(Cursor::new(minimal_stdf(order)), &CompressType::Uncompressed)
+            .unwrap();
+
+        let raws: Vec<_> = reader.get_rawdata_iter().map(|r| r.unwrap()).collect();
+        assert_eq!(raws.len(), 2);
+        assert_eq!(raws[0].header.get_type(), REC_FAR);
+        assert_eq!(raws[1].header.get_type(), REC_MIR);
+        assert_eq!(raws[1].byte_order, order, "byte order not detected");
+
+        let mut reader = StdfReader::from(Cursor::new(minimal_stdf(order)), &CompressType::Uncompressed)
+            .unwrap();
+        let recs: Vec<_> = reader.get_record_iter().map(|r| r.unwrap()).collect();
+        assert_eq!(recs.len(), 2);
+        if let StdfRecord::MIR(mir) = &recs[1] {
+            assert_eq!(mir.setup_t, 0x01020304, "MIR parsed in wrong byte order");
+        } else {
+            panic!("expected MIR, got {:?}", recs[1].get_type());
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// error handling
+// ---------------------------------------------------------------------------
+
+#[test]
+fn reader_rejects_invalid_inputs() {
+    // empty stream: EOF while reading the FAR header
+    let err = match StdfReader::from(Cursor::new(Vec::<u8>::new()), &CompressType::Uncompressed) {
+        Ok(_) => panic!("empty stream should not open"),
+        Err(e) => e,
+    };
+    assert_eq!(err.code, 4);
+
+    // plausible little-endian length, but the first record is not FAR
+    let err = match StdfReader::from(Cursor::new(vec![2, 0, 9, 9]), &CompressType::Uncompressed) {
+        Ok(_) => panic!("non-FAR file should not open"),
+        Err(e) => e,
+    };
+    assert_eq!(err.code, 1);
+
+    // FAR record with an unrecognized REC_LEN: byte order cannot be determined
+    let err = match StdfReader::from(Cursor::new(vec![7, 0, 0, 10]), &CompressType::Uncompressed) {
+        Ok(_) => panic!("unknown endianness should not open"),
+        Err(e) => e,
+    };
+    assert_eq!(err.code, 1);
+
+    // opening a file that does not exist
+    let err = match StdfReader::new("definitely/not/a/real/stdf/file.stdf") {
+        Ok(_) => panic!("missing file should not open"),
+        Err(e) => e,
+    };
+    assert_eq!(err.code, 3);
+}
+
+// A header that claims more body bytes than are present must surface as an IO
+// error (code 3), not a silent clean EOF.
+#[test]
+fn truncated_body_yields_io_error() {
+    // FAR followed by a record whose header claims 100 body bytes but only 3
+    // are present.
+    let truncated = || {
+        let mut data = Vec::new();
+        data.extend_from_slice(&2u16.to_le_bytes());
+        data.push(0);
+        data.push(10); // FAR header
+        data.push(1);
+        data.push(4); // FAR body
+        write_header(&mut data, 100, 1, 10, ByteOrder::LittleEndian);
+        data.extend_from_slice(&[0u8; 3]);
+        data
+    };
+
+    let mut reader =
+        StdfReader::from(Cursor::new(truncated()), &CompressType::Uncompressed).unwrap();
+    let raw_items: Vec<_> = reader.get_rawdata_iter().collect();
+    assert_eq!(raw_items.len(), 2);
+    assert!(raw_items[0].is_ok(), "FAR should parse");
+    match &raw_items[1] {
+        Err(e) => assert_eq!(e.code, 3, "rawdata iterator should report IO error"),
+        Ok(_) => panic!("truncated body should error, got Ok"),
+    }
+
+    let mut reader =
+        StdfReader::from(Cursor::new(truncated()), &CompressType::Uncompressed).unwrap();
+    let rec_items: Vec<_> = reader.get_record_iter().collect();
+    assert_eq!(rec_items.len(), 2);
+    assert!(rec_items[0].is_ok(), "FAR should parse");
+    match &rec_items[1] {
+        Err(e) => assert_eq!(e.code, 3, "record iterator should report IO error"),
+        Ok(_) => panic!("truncated body should error, got Ok"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// iterator behaviour
+// ---------------------------------------------------------------------------
+
+// Once the stream is exhausted, a second iteration yields nothing; the
+// iterator does not wrap around to the start of the file.
+#[test]
+fn iterator_stops_at_eof() {
+    let mut reader = StdfReader::from(
+        Cursor::new(minimal_stdf(ByteOrder::LittleEndian)),
+        &CompressType::Uncompressed,
+    )
+    .unwrap();
+    assert_eq!(reader.get_rawdata_iter().count(), 2);
+    assert_eq!(reader.get_rawdata_iter().count(), 0);
+
+    let mut reader = StdfReader::from(
+        Cursor::new(minimal_stdf(ByteOrder::LittleEndian)),
+        &CompressType::Uncompressed,
+    )
+    .unwrap();
+    assert_eq!(reader.get_record_iter().count(), 2);
+    assert_eq!(reader.get_record_iter().count(), 0);
+}
+
+// ---------------------------------------------------------------------------
+// RawDataElement API
+// ---------------------------------------------------------------------------
+
+#[test]
+fn rawdata_element_conversions() {
+    let mut data = Vec::new();
+    data.extend_from_slice(&2u16.to_le_bytes());
+    data.push(0);
+    data.push(10); // FAR header
+    data.push(1);
+    data.push(4); // FAR body
+    write_header(&mut data, 4, 1, 10, ByteOrder::LittleEndian);
+    data.extend_from_slice(&0x01020304u32.to_le_bytes()); // MIR body
+
+    let mut reader = StdfReader::from(Cursor::new(data), &CompressType::Uncompressed).unwrap();
+    for raw in reader.get_rawdata_iter() {
+        let raw = raw.unwrap();
+        let code = raw.header.get_type();
+
+        // type checks
+        assert!(raw.is_type(code));
+        assert!(!raw.is_type(REC_INVALID));
+        assert_eq!(raw.header.get_type(), code);
+
+        // non-consuming conversions
+        let rec: StdfRecord = (&raw).into();
+        assert_eq!(rec.get_type(), code);
+        let view: StdfRecordView = (&raw).into();
+        assert_eq!(view.get_type(), code);
+
+        // consuming conversion
+        let rec_consumed: StdfRecord = raw.into();
+        assert_eq!(rec_consumed, rec);
     }
 }
