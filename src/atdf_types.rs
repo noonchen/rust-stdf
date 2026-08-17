@@ -10,7 +10,11 @@
 //
 
 use self::atdf_record_field::*;
-use crate::{stdf_error::StdfError, stdf_record_type::*, *};
+use crate::{
+    stdf_error::{StdfError, StdfErrorKind},
+    stdf_record_type::*,
+    *,
+};
 use chrono::DateTime;
 use std::collections::hash_map::HashMap;
 
@@ -356,29 +360,29 @@ impl AtdfRecord {
         let (rec_name, rec_data) = atdf_str.split_once(':').unwrap_or(("", atdf_str));
         let type_code = get_code_from_rec_name(rec_name);
         if type_code == REC_INVALID {
-            return Err(StdfError {
-                code: 2,
-                msg: format!(
+            return Err(StdfError::new(
+                StdfErrorKind::InvalidRecordType,
+                format!(
                     "Unrecognized record name {}, remaining data {}",
                     rec_name, rec_data
                 ),
-            });
+            ));
         }
         // map data to each atdf fields, use empty string as default field data
         let field_data: Vec<&str> = rec_data.split(delim).collect();
         let field_name = get_atdf_fields(type_code);
         // check required fields exist
         if field_data.len() < count_reqired(field_name) {
-            return Err(StdfError {
-                code: 2,
-                msg: format!(
+            return Err(StdfError::new(
+                StdfErrorKind::InvalidRecordType,
+                format!(
                     "{} record has {} required fields, only {} found in {:?}",
                     rec_name,
                     count_reqired(field_name),
                     field_data.len(),
                     field_data
                 ),
-            });
+            ));
         }
         let data_map = if type_code == REC_GDR {
             // GDR is a special case, data is split with delimiter

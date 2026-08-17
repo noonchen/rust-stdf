@@ -20,18 +20,62 @@ pub struct StdfError {
     pub msg: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub(crate) enum StdfErrorKind {
+    InvalidStdfFile = 1,
+    InvalidRecordType = 2,
+    Io = 3,
+    Eof = 4,
+    UnexpectedEof = 5,
+    NonAscii = 6,
+    InvalidAtdfFile = 7,
+    #[cfg(feature = "zipfile")]
+    Zip = 8,
+}
+
+impl StdfErrorKind {
+    pub(crate) fn from_u8(code: u8) -> Option<Self> {
+        Some(match code {
+            1 => Self::InvalidStdfFile,
+            2 => Self::InvalidRecordType,
+            3 => Self::Io,
+            4 => Self::Eof,
+            5 => Self::UnexpectedEof,
+            6 => Self::NonAscii,
+            7 => Self::InvalidAtdfFile,
+            #[cfg(feature = "zipfile")]
+            8 => Self::Zip,
+            _ => return None,
+        })
+    }
+}
+
+impl StdfError {
+    pub(crate) fn new(kind: StdfErrorKind, msg: impl Into<String>) -> Self {
+        Self {
+            code: kind as u8,
+            msg: msg.into(),
+        }
+    }
+
+    pub(crate) fn kind(&self) -> Option<StdfErrorKind> {
+        StdfErrorKind::from_u8(self.code)
+    }
+}
+
 impl fmt::Display for StdfError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let short_msg = match self.code {
-            1 => "Invalid STDF File",
-            2 => "Invalid Record Type",
-            3 => "IO Error",
-            4 => "EOF",
-            5 => "Unexpected EOF",
-            6 => "Non-ASCII Found",
-            7 => "Invalid ATDF File",
+        let short_msg = match StdfErrorKind::from_u8(self.code) {
+            Some(StdfErrorKind::InvalidStdfFile) => "Invalid STDF File",
+            Some(StdfErrorKind::InvalidRecordType) => "Invalid Record Type",
+            Some(StdfErrorKind::Io) => "IO Error",
+            Some(StdfErrorKind::Eof) => "EOF",
+            Some(StdfErrorKind::UnexpectedEof) => "Unexpected EOF",
+            Some(StdfErrorKind::NonAscii) => "Non-ASCII Found",
+            Some(StdfErrorKind::InvalidAtdfFile) => "Invalid ATDF File",
             #[cfg(feature = "zipfile")]
-            8 => "Zip related",
+            Some(StdfErrorKind::Zip) => "Zip related",
             _ => "Other error",
         };
         write!(f, "{}, {}", short_msg, self.msg)
@@ -41,14 +85,10 @@ impl fmt::Display for StdfError {
 impl From<io::Error> for StdfError {
     fn from(error: io::Error) -> Self {
         match error.kind() {
-            ErrorKind::UnexpectedEof => StdfError {
-                code: 4,
-                msg: String::from("End of file detected"),
-            },
-            _ => StdfError {
-                code: 3,
-                msg: format!("{}, {}", error.kind(), error),
-            },
+            ErrorKind::UnexpectedEof => {
+                StdfError::new(StdfErrorKind::Eof, String::from("End of file detected"))
+            }
+            _ => StdfError::new(StdfErrorKind::Io, format!("{}, {}", error.kind(), error)),
         }
     }
 }
@@ -57,14 +97,8 @@ impl From<io::Error> for StdfError {
 impl From<ZipError> for StdfError {
     fn from(error: ZipError) -> Self {
         match error {
-            ZipError::Io(err) => StdfError {
-                code: 3,
-                msg: err.to_string(),
-            },
-            _ => StdfError {
-                code: 8,
-                msg: error.to_string(),
-            },
+            ZipError::Io(err) => StdfError::new(StdfErrorKind::Io, err.to_string()),
+            _ => StdfError::new(StdfErrorKind::Zip, error.to_string()),
         }
     }
 }
