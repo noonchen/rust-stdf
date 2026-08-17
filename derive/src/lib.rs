@@ -1072,17 +1072,23 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
                 }
             }
         }
-        (Kind::KxStr { read, order }, false) => {
+        (Kind::KxStr { order, .. }, false) => {
             let count = getter_count_val(fi);
-            let call = if *order {
-                quote!(#read(self.raw, &mut p, &self.order, #count))
+            let (ref_ty, ctor) = if *order {
+                (
+                    quote!(KxSnRef<'a>),
+                    quote!(KxSnRef::new(self.raw, p, #count as usize, self.order)),
+                )
             } else {
-                quote!(#read(self.raw, &mut p, #count))
+                (
+                    quote!(KxCnRef<'a>),
+                    quote!(KxCnRef::new(self.raw, p, #count as usize)),
+                )
             };
             quote! {
                 #[inline]
-                pub fn #id(&self) -> #ity {
-                    validate_offset(self.#id).map(|mut p| #call).unwrap_or_default()
+                pub fn #id(&self) -> #ref_ty {
+                    validate_offset(self.#id).map(|p| #ctor).unwrap_or_default()
                 }
             }
         }
@@ -1109,9 +1115,9 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             let width = getter_width_val(fi);
             quote! {
                 #[inline]
-                pub fn #id(&self) -> #ity {
+                pub fn #id(&self) -> KxCfRef<'a> {
                     validate_offset(self.#id)
-                        .map(|mut p| read_kx_cf(self.raw, &mut p, #count, #width))
+                        .map(|p| KxCfRef::new(self.raw, p, #count as usize, #width as usize))
                         .unwrap_or_default()
                 }
             }

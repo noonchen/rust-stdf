@@ -846,7 +846,8 @@ fn record_view_eq_record_test() {
         let mut r = PLR::new();
         r.read_from_bytes(&raw, &order);
         let v = PLRView::new(&raw, &order);
-        eq!(r, v; grp_cnt, grp_indx, grp_mode, grp_radx, pgm_char, rtn_char, pgm_chal, rtn_chal);
+        eq!(r, v; grp_cnt, grp_indx, grp_mode, grp_radx);
+        eq_str!(r, v; pgm_char, rtn_char, pgm_chal, rtn_chal);
     }
 
     // --- RDR ---
@@ -922,7 +923,8 @@ fn record_view_eq_record_test() {
         let mut r = PSR::new();
         r.read_from_bytes(&raw, &order);
         let v = PSRView::new(&raw, &order);
-        eq!(r, v; cont_flg, psr_indx, opt_flg, totp_cnt, locp_cnt, pat_bgn, pat_end, pat_file, pat_lbl, file_uid, atpg_dsc, src_id);
+        eq!(r, v; cont_flg, psr_indx, opt_flg, totp_cnt, locp_cnt, pat_bgn, pat_end);
+        eq_str!(r, v; pat_file, pat_lbl, file_uid, atpg_dsc, src_id);
         eq_str!(r, v; psr_nam);
     }
 
@@ -939,7 +941,8 @@ fn record_view_eq_record_test() {
         let mut r = NMR::new();
         r.read_from_bytes(&raw, &order);
         let v = NMRView::new(&raw, &order);
-        eq!(r, v; cont_flg, totm_cnt, locm_cnt, pmr_indx, atpg_nam);
+        eq!(r, v; cont_flg, totm_cnt, locm_cnt, pmr_indx);
+        eq_str!(r, v; atpg_nam);
     }
 
     // --- CNR ---
@@ -989,7 +992,8 @@ fn record_view_eq_record_test() {
         let mut r = CDR::new();
         r.read_from_bytes(&raw, &order);
         let v = CDRView::new(&raw, &order);
-        eq!(r, v; cont_flg, cdr_indx, chn_len, sin_pin, sout_pin, mstr_cnt, m_clks, slav_cnt, s_clks, inv_val, lst_cnt, cell_lst);
+        eq!(r, v; cont_flg, cdr_indx, chn_len, sin_pin, sout_pin, mstr_cnt, m_clks, slav_cnt, s_clks, inv_val, lst_cnt);
+        eq_str!(r, v; cell_lst);
         eq_str!(r, v; chn_nam);
     }
 
@@ -1319,11 +1323,11 @@ fn record_view_eq_record_test() {
             cont_flg, test_num, head_num, site_num, psr_ref, test_flg, z_val, fmu_flg,
             cyc_cnt_t, totf_cnt, totl_cnt, cyc_base, bit_base, cond_cnt, lim_cnt, cyc_size,
             pmr_size, chn_size, pat_size, bit_size, u1_size, u2_size, u3_size, utx_size, cap_bgn,
-            lim_indx, lim_spec, cond_lst, cyc_cnt, cyc_ofst, pmr_cnt, pmr_indx, chn_cnt, chn_num,
+            lim_indx, lim_spec, cyc_cnt, cyc_ofst, pmr_cnt, pmr_indx, chn_cnt, chn_num,
             exp_cnt, exp_data, cap_cnt, cap_data, new_cnt, new_data, pat_cnt, pat_num, bpos_cnt,
-            bit_pos, usr1_cnt, usr1, usr2_cnt, usr2, usr3_cnt, usr3, txt_cnt, user_txt
+            bit_pos, usr1_cnt, usr1, usr2_cnt, usr2, usr3_cnt, usr3, txt_cnt
         );
-        eq_str!(r, v; log_typ, test_txt, alarm_id, prog_txt, rslt_txt);
+        eq_str!(r, v; log_typ, test_txt, alarm_id, prog_txt, rslt_txt, cond_lst, user_txt);
         assert_eq!(r.mask_map, v.mask_map().to_owned());
         assert_eq!(r.fal_map, v.fal_map().to_owned());
     }
@@ -1557,4 +1561,198 @@ fn record_cn_ref_str_test() {
     assert!(matches!(&lbl, Cow::Owned(_)));
     assert_eq!(lbl, "\u{00B0}C");
     assert_eq!(lbl.into_owned(), view.test_lbl().to_owned());
+}
+
+// `KxCnRef` (a PLR `pgm_char` array): element access borrows valid UTF-8
+// zero-copy, falls back to owned Latin-1 for invalid UTF-8, and `to_owned`
+// agrees with the eager parse.
+#[test]
+fn record_kx_cn_ref_test() {
+    use std::borrow::Cow;
+
+    let order = ByteOrder::LittleEndian;
+    let mut raw = Vec::new();
+    raw.extend_from_slice(&3u16.to_le_bytes()); // grp_cnt = 3
+    raw.extend_from_slice(&1u16.to_le_bytes()); // grp_indx[0]
+    raw.extend_from_slice(&2u16.to_le_bytes()); // grp_indx[1]
+    raw.extend_from_slice(&3u16.to_le_bytes()); // grp_indx[2]
+    raw.extend_from_slice(&4u16.to_le_bytes()); // grp_mode[0]
+    raw.extend_from_slice(&5u16.to_le_bytes()); // grp_mode[1]
+    raw.extend_from_slice(&6u16.to_le_bytes()); // grp_mode[2]
+    raw.push(7); // grp_radx[0]
+    raw.push(8); // grp_radx[1]
+    raw.push(9); // grp_radx[2]
+    cn(&mut raw, "AB"); // pgm_char[0] = "AB" (ASCII)
+    cn(&mut raw, "é"); // pgm_char[1] = "é" (valid UTF-8)
+    raw.push(2); // pgm_char[2] = "\u{00B0}C" (invalid UTF-8)
+    raw.push(0xB0);
+    raw.push(b'C');
+    cn(&mut raw, "X"); // rtn_char[0..2]
+    cn(&mut raw, "Y");
+    cn(&mut raw, "Z");
+    cn(&mut raw, "A"); // pgm_chal[0..2]
+    cn(&mut raw, "B");
+    cn(&mut raw, "C");
+    cn(&mut raw, "D"); // rtn_chal[0..2]
+    cn(&mut raw, "E");
+    cn(&mut raw, "F");
+
+    let mut r = PLR::new();
+    r.read_from_bytes(&raw, &order);
+    let v = PLRView::new(&raw, &order);
+
+    let kx = v.pgm_char();
+    assert_eq!(kx.len(), 3);
+
+    // ASCII: borrowed, zero-copy.
+    let s0 = kx.get_str(0).unwrap();
+    assert!(matches!(&s0, Cow::Borrowed(_)));
+    assert_eq!(s0, "AB");
+
+    // Valid non-ASCII UTF-8: borrowed, decoded as UTF-8.
+    let s1 = kx.get_str(1).unwrap();
+    assert!(matches!(&s1, Cow::Borrowed(_)));
+    assert_eq!(s1, "é");
+
+    // Invalid UTF-8: owned Latin-1, matching the eager parse.
+    let s2 = kx.get_str(2).unwrap();
+    assert!(matches!(&s2, Cow::Owned(_)));
+    assert_eq!(s2, "\u{00B0}C");
+
+    // Raw bytes and out-of-range access.
+    assert_eq!(kx.get_bytes(2), Some(&[0xB0, b'C'][..]));
+    assert_eq!(kx.get_str(3), None);
+    assert_eq!(kx.get_bytes(3), None);
+
+    // as_vec / IntoIterator agree with the eager parse.
+    assert_eq!(kx.as_vec().len(), 3);
+    assert_eq!(kx.to_owned(), r.pgm_char);
+    let mut seen = Vec::new();
+    for s in &kx {
+        seen.push(s);
+    }
+    assert_eq!(seen, kx.as_vec());
+}
+
+// `KxSnRef` (a CDR `cell_lst` array): same decoding rule, with the 2-byte
+// byte-order-dependent length prefix.
+#[test]
+fn record_kx_sn_ref_test() {
+    use std::borrow::Cow;
+
+    let order = ByteOrder::LittleEndian;
+    let mut raw = Vec::new();
+    raw.push(0); // cont_flg
+    raw.extend_from_slice(&1u16.to_le_bytes()); // cdr_indx
+    cn(&mut raw, "CHN"); // chn_nam
+    raw.extend_from_slice(&100u32.to_le_bytes()); // chn_len
+    raw.extend_from_slice(&2u16.to_le_bytes()); // sin_pin
+    raw.extend_from_slice(&3u16.to_le_bytes()); // sout_pin
+    raw.push(0); // mstr_cnt = 0
+    raw.push(0); // slav_cnt = 0
+    raw.push(0); // inv_val
+    raw.extend_from_slice(&3u16.to_le_bytes()); // lst_cnt = 3
+    sn(&mut raw, "AB"); // cell_lst[0] = "AB" (ASCII)
+    sn(&mut raw, "é"); // cell_lst[1] = "é" (valid UTF-8)
+    raw.extend_from_slice(&2u16.to_le_bytes()); // cell_lst[2] = "\u{00B0}C" (invalid UTF-8)
+    raw.push(0xB0);
+    raw.push(b'C');
+
+    let mut r = CDR::new();
+    r.read_from_bytes(&raw, &order);
+    let v = CDRView::new(&raw, &order);
+
+    let kx = v.cell_lst();
+    assert_eq!(kx.len(), 3);
+    assert!(matches!(&kx.get_str(0).unwrap(), Cow::Borrowed(_)));
+    assert_eq!(kx.get_str(0).unwrap(), "AB");
+    assert!(matches!(&kx.get_str(1).unwrap(), Cow::Borrowed(_)));
+    assert_eq!(kx.get_str(1).unwrap(), "é");
+    assert!(matches!(&kx.get_str(2).unwrap(), Cow::Owned(_)));
+    assert_eq!(kx.get_str(2).unwrap(), "\u{00B0}C");
+    assert_eq!(kx.get_bytes(2), Some(&[0xB0, b'C'][..]));
+    assert_eq!(kx.to_owned(), r.cell_lst);
+    let mut seen = Vec::new();
+    for s in &kx {
+        seen.push(s);
+    }
+    assert_eq!(seen, kx.as_vec());
+}
+
+// `KxCfRef` (an STR `user_txt` array): fixed-width `f`-byte elements, no
+// length prefix, same decoding rule.
+#[test]
+fn record_kx_cf_ref_test() {
+    use std::borrow::Cow;
+
+    let order = ByteOrder::LittleEndian;
+    let mut raw = Vec::new();
+    raw.push(0); // cont_flg
+    raw.extend_from_slice(&0u32.to_le_bytes()); // test_num
+    raw.push(1); // head_num
+    raw.push(2); // site_num
+    raw.extend_from_slice(&0u16.to_le_bytes()); // psr_ref
+    raw.push(0); // test_flg
+    cn(&mut raw, ""); // log_typ
+    cn(&mut raw, ""); // test_txt
+    cn(&mut raw, ""); // alarm_id
+    cn(&mut raw, ""); // prog_txt
+    cn(&mut raw, ""); // rslt_txt
+    raw.push(0); // z_val
+    raw.push(0); // fmu_flg
+    dn(&mut raw, 0, &[]); // mask_map
+    dn(&mut raw, 0, &[]); // fal_map
+    raw.extend_from_slice(&0u64.to_le_bytes()); // cyc_cnt_t
+    raw.extend_from_slice(&0u32.to_le_bytes()); // totf_cnt
+    raw.extend_from_slice(&0u32.to_le_bytes()); // totl_cnt
+    raw.extend_from_slice(&0u64.to_le_bytes()); // cyc_base
+    raw.extend_from_slice(&0u32.to_le_bytes()); // bit_base
+    raw.extend_from_slice(&0u16.to_le_bytes()); // cond_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // lim_cnt
+    raw.push(1); // cyc_size
+    raw.push(1); // pmr_size
+    raw.push(1); // chn_size
+    raw.push(1); // pat_size
+    raw.push(1); // bit_size
+    raw.push(1); // u1_size
+    raw.push(1); // u2_size
+    raw.push(1); // u3_size
+    raw.push(3); // utx_size = 3
+    raw.extend_from_slice(&0u16.to_le_bytes()); // cap_bgn
+                                                // lim_indx / lim_spec / cond_lst: empty (counts are 0)
+    raw.extend_from_slice(&0u16.to_le_bytes()); // cyc_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // pmr_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // chn_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // exp_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // cap_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // new_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // pat_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // bpos_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // usr1_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // usr2_cnt
+    raw.extend_from_slice(&0u16.to_le_bytes()); // usr3_cnt
+    raw.extend_from_slice(&3u16.to_le_bytes()); // txt_cnt = 3
+    raw.extend_from_slice(b"AB "); // user_txt[0] = "AB " (ASCII)
+    raw.extend_from_slice(&[0xC3, 0xA9, b'X']); // user_txt[1] = "éX" (valid UTF-8)
+    raw.extend_from_slice(&[0xB0, b'C', b' ']); // user_txt[2] = "\u{00B0}C " (invalid UTF-8)
+
+    let mut r = STR::new();
+    r.read_from_bytes(&raw, &order);
+    let v = STRView::new(&raw, &order);
+
+    let kx = v.user_txt();
+    assert_eq!(kx.len(), 3);
+    assert!(matches!(&kx.get_str(0).unwrap(), Cow::Borrowed(_)));
+    assert_eq!(kx.get_str(0).unwrap(), "AB ");
+    assert!(matches!(&kx.get_str(1).unwrap(), Cow::Borrowed(_)));
+    assert_eq!(kx.get_str(1).unwrap(), "éX");
+    assert!(matches!(&kx.get_str(2).unwrap(), Cow::Owned(_)));
+    assert_eq!(kx.get_str(2).unwrap(), "\u{00B0}C ");
+    assert_eq!(kx.get_bytes(2), Some(&[0xB0, b'C', b' '][..]));
+    assert_eq!(kx.to_owned(), r.user_txt);
+    let mut seen = Vec::new();
+    for s in &kx {
+        seen.push(s);
+    }
+    assert_eq!(seen, kx.as_vec());
 }

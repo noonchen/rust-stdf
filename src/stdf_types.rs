@@ -166,6 +166,98 @@ pub struct BnRef<'a>(&'a [u8]);
 #[derive(SmartDefault, Clone, Copy, Debug)]
 pub struct DnRef<'a>(&'a [u8]);
 
+/// Zero-copy view over the `k` elements of a `KxCn` array (each element is a
+/// 1-byte length prefix followed by the payload).
+///
+/// Elements are decoded with the same rule as [`CnRef::as_str`] and can be
+/// iterated directly:
+///
+/// ```
+/// use rust_stdf::KxCnRef;
+///
+/// let raw = [2, b'A', b'B', 2, b'C', b'D']; // two elements: "AB", "CD"
+/// let kx = KxCnRef::new(&raw, 0, 2);
+/// for s in &kx {
+///     println!("{s}");
+/// }
+/// ```
+#[derive(Clone, Copy, Default)]
+pub struct KxCnRef<'a> {
+    raw: &'a [u8],
+    start: usize,
+    k: usize,
+}
+
+/// Iterator over the elements of a [`KxCnRef`], one pass.
+pub struct KxCnRefIter<'a> {
+    raw: &'a [u8],
+    pos: usize,
+    remaining: usize,
+}
+
+/// Zero-copy view over the `k` elements of a `KxSn` array (each element is a
+/// 2-byte, byte-order-dependent length prefix followed by the payload).
+///
+/// Elements are decoded with the same rule as [`SnRef::as_str`] and can be
+/// iterated directly:
+///
+/// ```
+/// use rust_stdf::{ByteOrder, KxSnRef};
+///
+/// let raw = [2, 0, b'A', b'B', 2, 0, b'C', b'D']; // two elements: "AB", "CD"
+/// let kx = KxSnRef::new(&raw, 0, 2, ByteOrder::LittleEndian);
+/// for s in &kx {
+///     println!("{s}");
+/// }
+/// ```
+#[derive(SmartDefault, Clone, Copy)]
+pub struct KxSnRef<'a> {
+    raw: &'a [u8],
+    start: usize,
+    k: usize,
+    #[default(ByteOrder::LittleEndian)]
+    order: ByteOrder,
+}
+
+/// Iterator over the elements of a [`KxSnRef`], one pass.
+pub struct KxSnRefIter<'a> {
+    raw: &'a [u8],
+    pos: usize,
+    remaining: usize,
+    order: ByteOrder,
+}
+
+/// Zero-copy view over the `k` elements of a `KxCf` array (each element is a
+/// fixed-width `f`-byte string, no length prefix).
+///
+/// Elements are decoded with the same rule as [`CnRef::as_str`] and can be
+/// iterated directly:
+///
+/// ```
+/// use rust_stdf::KxCfRef;
+///
+/// let raw = [b'A', b'B', b'C', b'D']; // two fixed 2-byte elements: "AB", "CD"
+/// let kx = KxCfRef::new(&raw, 0, 2, 2);
+/// for s in &kx {
+///     println!("{s}");
+/// }
+/// ```
+#[derive(Clone, Copy, Default)]
+pub struct KxCfRef<'a> {
+    raw: &'a [u8],
+    start: usize,
+    k: usize,
+    f: usize,
+}
+
+/// Iterator over the elements of a [`KxCfRef`], one pass.
+pub struct KxCfRefIter<'a> {
+    raw: &'a [u8],
+    pos: usize,
+    remaining: usize,
+    f: usize,
+}
+
 // Record Types
 
 /// This module contains constants
@@ -1117,10 +1209,7 @@ impl<'a> CnRef<'a> {
     /// [`to_owned`](Self::to_owned).
     #[inline]
     pub fn as_str(&self) -> Cow<'a, str> {
-        match std::str::from_utf8(self.0) {
-            Ok(s) => Cow::Borrowed(s),
-            Err(_) => Cow::Owned(bytes_to_string(self.0)),
-        }
+        bytes_to_cow_str(self.0)
     }
 
     /// Allocating; reproduces the owned `Cn` string (valid UTF-8 decoded as
@@ -1154,10 +1243,7 @@ impl<'a> SnRef<'a> {
     /// [`to_owned`](Self::to_owned).
     #[inline]
     pub fn as_str(&self) -> Cow<'a, str> {
-        match std::str::from_utf8(self.0) {
-            Ok(s) => Cow::Borrowed(s),
-            Err(_) => Cow::Owned(bytes_to_string(self.0)),
-        }
+        bytes_to_cow_str(self.0)
     }
 
     /// Allocating; reproduces the owned `Sn` string (valid UTF-8 decoded as
@@ -1236,6 +1322,311 @@ impl<'a> DnRef<'a> {
     /// `StdfRecord`, so results match the eager parser.
     pub fn to_owned(&self) -> Dn {
         self.0.to_vec()
+    }
+}
+
+impl<'a> KxCnRef<'a> {
+    /// Construct a view over `k` elements starting at byte offset `start`.
+    ///
+    /// Normally obtained from a generated `*View` getter; only needed when
+    /// parsing a known raw layout directly.
+    #[inline]
+    pub fn new(raw: &'a [u8], start: usize, k: usize) -> Self {
+        KxCnRef { raw, start, k }
+    }
+
+    /// Number of string elements in the array.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.k
+    }
+
+    /// `true` when the array has no elements.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.k == 0
+    }
+
+    /// Decoded `i`-th element; `None` when `i` is out of range.
+    ///
+    /// Valid UTF-8 payloads are borrowed zero-copy; other payloads are decoded
+    /// byte → char (Latin-1) into an owned `String`.
+    #[inline]
+    pub fn get_str(&self, i: usize) -> Option<Cow<'a, str>> {
+        self.get_bytes(i).map(bytes_to_cow_str)
+    }
+
+    /// Raw payload bytes of the `i`-th element (without the length prefix);
+    /// `None` when `i` is out of range.
+    #[inline]
+    pub fn get_bytes(&self, i: usize) -> Option<&'a [u8]> {
+        if i >= self.k {
+            return None;
+        }
+        // Walk to the start of element `i`: each previous element advances by
+        // 1 (length byte) + clamped payload.
+        let mut pos = self.start;
+        for _ in 0..i {
+            let cnt = *self.raw.get(pos)? as usize;
+            pos = std::cmp::min(pos + 1 + cnt, self.raw.len());
+        }
+        let cnt = *self.raw.get(pos)? as usize;
+        let start = pos + 1;
+        let end = std::cmp::min(start + cnt, self.raw.len());
+        Some(&self.raw[start..end])
+    }
+
+    /// Iterator over the decoded elements, one pass.
+    #[inline]
+    pub fn iter(&self) -> KxCnRefIter<'a> {
+        KxCnRefIter {
+            raw: self.raw,
+            pos: self.start,
+            remaining: self.k,
+        }
+    }
+
+    /// Allocating; collects all elements into `Vec<Cow<'a, str>>`.
+    #[inline]
+    pub fn as_vec(&self) -> Vec<Cow<'a, str>> {
+        self.iter().collect()
+    }
+
+    /// Allocating; reproduces the owned `KxCn` (`Vec<String>`), matching the
+    /// eager parser.
+    #[inline]
+    pub fn to_owned(&self) -> KxCn {
+        self.iter().map(Cow::into_owned).collect()
+    }
+}
+
+impl<'a> Iterator for KxCnRefIter<'a> {
+    type Item = Cow<'a, str>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        let cnt = *self.raw.get(self.pos)? as usize;
+        self.pos += 1;
+        let end = std::cmp::min(self.pos + cnt, self.raw.len());
+        let slice = &self.raw[self.pos..end];
+        self.pos = end;
+        Some(bytes_to_cow_str(slice))
+    }
+}
+
+impl<'a> IntoIterator for &'a KxCnRef<'a> {
+    type Item = Cow<'a, str>;
+    type IntoIter = KxCnRefIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a> KxSnRef<'a> {
+    /// Construct a view over `k` elements starting at byte offset `start`,
+    /// using `order` for the 2-byte length prefixes.
+    ///
+    /// Normally obtained from a generated `*View` getter; only needed when
+    /// parsing a known raw layout directly.
+    #[inline]
+    pub fn new(raw: &'a [u8], start: usize, k: usize, order: ByteOrder) -> Self {
+        KxSnRef {
+            raw,
+            start,
+            k,
+            order,
+        }
+    }
+
+    /// Number of string elements in the array.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.k
+    }
+
+    /// `true` when the array has no elements.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.k == 0
+    }
+
+    /// Decoded `i`-th element; `None` when `i` is out of range.
+    ///
+    /// Valid UTF-8 payloads are borrowed zero-copy; other payloads are decoded
+    /// byte → char (Latin-1) into an owned `String`.
+    #[inline]
+    pub fn get_str(&self, i: usize) -> Option<Cow<'a, str>> {
+        self.get_bytes(i).map(bytes_to_cow_str)
+    }
+
+    /// Raw payload bytes of the `i`-th element (without the length prefix);
+    /// `None` when `i` is out of range.
+    #[inline]
+    pub fn get_bytes(&self, i: usize) -> Option<&'a [u8]> {
+        if i >= self.k {
+            return None;
+        }
+        // Walk to the start of element `i`: each previous element advances by
+        // 2 (length prefix) + clamped payload.
+        let mut pos = self.start;
+        for _ in 0..i {
+            let mut cp = pos;
+            let cnt = read_u2(self.raw, &mut cp, &self.order) as usize;
+            pos = std::cmp::min(cp + cnt, self.raw.len());
+        }
+        let mut cp = pos;
+        let cnt = read_u2(self.raw, &mut cp, &self.order) as usize;
+        let start = cp;
+        let end = std::cmp::min(start + cnt, self.raw.len());
+        Some(self.raw.get(start..end).unwrap_or(&[]))
+    }
+
+    /// Iterator over the decoded elements, one pass.
+    #[inline]
+    pub fn iter(&self) -> KxSnRefIter<'a> {
+        KxSnRefIter {
+            raw: self.raw,
+            pos: self.start,
+            remaining: self.k,
+            order: self.order,
+        }
+    }
+
+    /// Allocating; collects all elements into `Vec<Cow<'a, str>>`.
+    #[inline]
+    pub fn as_vec(&self) -> Vec<Cow<'a, str>> {
+        self.iter().collect()
+    }
+
+    /// Allocating; reproduces the owned `KxSn` (`Vec<String>`), matching the
+    /// eager parser.
+    #[inline]
+    pub fn to_owned(&self) -> KxSn {
+        self.iter().map(Cow::into_owned).collect()
+    }
+}
+
+impl<'a> Iterator for KxSnRefIter<'a> {
+    type Item = Cow<'a, str>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        let mut cp = self.pos;
+        let cnt = read_u2(self.raw, &mut cp, &self.order) as usize;
+        self.pos = cp;
+        let end = std::cmp::min(self.pos + cnt, self.raw.len());
+        let slice = self.raw.get(self.pos..end).unwrap_or(&[]);
+        self.pos = end;
+        Some(bytes_to_cow_str(slice))
+    }
+}
+
+impl<'a> IntoIterator for &'a KxSnRef<'a> {
+    type Item = Cow<'a, str>;
+    type IntoIter = KxSnRefIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a> KxCfRef<'a> {
+    /// Construct a view over `k` fixed `f`-byte elements starting at byte
+    /// offset `start`.
+    ///
+    /// Normally obtained from a generated `*View` getter; only needed when
+    /// parsing a known raw layout directly.
+    #[inline]
+    pub fn new(raw: &'a [u8], start: usize, k: usize, f: usize) -> Self {
+        KxCfRef { raw, start, k, f }
+    }
+
+    /// Number of string elements in the array.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.k
+    }
+
+    /// `true` when the array has no elements.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.k == 0
+    }
+
+    /// Decoded `i`-th element; `None` when `i` is out of range.
+    ///
+    /// Valid UTF-8 payloads are borrowed zero-copy; other payloads are decoded
+    /// byte → char (Latin-1) into an owned `String`.
+    #[inline]
+    pub fn get_str(&self, i: usize) -> Option<Cow<'a, str>> {
+        self.get_bytes(i).map(bytes_to_cow_str)
+    }
+
+    /// Raw payload bytes of the `i`-th element; `None` when `i` is out of
+    /// range or lies past the end of the buffer.
+    #[inline]
+    pub fn get_bytes(&self, i: usize) -> Option<&'a [u8]> {
+        if i >= self.k {
+            return None;
+        }
+        let start = self.start + i * self.f;
+        let end = std::cmp::min(start + self.f, self.raw.len());
+        self.raw.get(start..end)
+    }
+
+    /// Iterator over the decoded elements, one pass.
+    #[inline]
+    pub fn iter(&self) -> KxCfRefIter<'a> {
+        KxCfRefIter {
+            raw: self.raw,
+            pos: self.start,
+            remaining: self.k,
+            f: self.f,
+        }
+    }
+
+    /// Allocating; collects all elements into `Vec<Cow<'a, str>>`.
+    #[inline]
+    pub fn as_vec(&self) -> Vec<Cow<'a, str>> {
+        self.iter().collect()
+    }
+
+    /// Allocating; reproduces the owned `KxCf` (`Vec<String>`), matching the
+    /// eager parser.
+    #[inline]
+    pub fn to_owned(&self) -> KxCf {
+        self.iter().map(Cow::into_owned).collect()
+    }
+}
+
+impl<'a> Iterator for KxCfRefIter<'a> {
+    type Item = Cow<'a, str>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        let end = std::cmp::min(self.pos + self.f, self.raw.len());
+        let slice = self.raw.get(self.pos..end).unwrap_or(&[]);
+        self.pos = end;
+        Some(bytes_to_cow_str(slice))
+    }
+}
+
+impl<'a> IntoIterator for &'a KxCfRef<'a> {
+    type Item = Cow<'a, str>;
+    type IntoIter = KxCfRefIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
@@ -1852,13 +2243,19 @@ pub(crate) fn read_vn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u1
     read_multi_element!(k, read_v1(raw_data, pos, order))
 }
 
-/// Decode STDF string bytes to `String`: valid UTF-8 is decoded as UTF-8,
-/// otherwise each byte is widened to a `char` (Latin-1). Shared by the eager
-/// `read_cn`/`read_sn`/`read_cf` helpers and the `CnRef`/`SnRef` views.
+/// Decode STDF string bytes to `Cow<'a, str>`: valid UTF-8 is borrowed as-is,
+/// otherwise each byte is widened to a `char` (Latin-1) into an owned `String`.
+/// Shared by the eager `read_*` helpers and the `*Ref`/`Kx*Ref` views.
+#[inline(always)]
+pub(crate) fn bytes_to_cow_str(data: &[u8]) -> Cow<'_, str> {
+    match std::str::from_utf8(data) {
+        Ok(s) => Cow::Borrowed(s),
+        Err(_) => Cow::Owned(data.iter().map(|&x| x as char).collect()),
+    }
+}
+
+/// Decode STDF string bytes to `String`; same rule as [`bytes_to_cow_str`].
 #[inline(always)]
 pub(crate) fn bytes_to_string(data: &[u8]) -> String {
-    match std::str::from_utf8(data) {
-        Ok(s) => s.to_owned(),
-        Err(_) => data.iter().map(|&x| x as char).collect(),
-    }
+    bytes_to_cow_str(data).into_owned()
 }
