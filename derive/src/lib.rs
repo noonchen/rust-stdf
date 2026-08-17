@@ -445,40 +445,72 @@ fn getter_width_val(fi: &FieldInfo) -> TokenStream2 {
 fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
     let id = &fi.ident;
     match &fi.kind {
-        Kind::ScalarNoOrder { bytes, .. } => scan_fixed(id, *bytes),
-        Kind::ScalarOrder { bytes, .. } => scan_fixed(id, *bytes),
-        Kind::B1 => scan_fixed(id, 1),
-        Kind::C1 => scan_fixed(id, 1),
-        // `Cn` and `Bn` share the 1-byte length prefix.
-        Kind::Cn | Kind::Bn => quote! {
-            let #id: u16 = if *pos < raw.len() {
-                let off = *pos as u16;
-                *pos += 1 + raw[*pos] as usize;
-                off
+        Kind::ScalarNoOrder { bytes, .. } => scan_fixed(id, *bytes, fi.optional),
+        Kind::ScalarOrder { bytes, .. } => scan_fixed(id, *bytes, fi.optional),
+        Kind::B1 => scan_fixed(id, 1, fi.optional),
+        Kind::C1 => scan_fixed(id, 1, fi.optional),
+        // `Cn` and `Bn` share the 1-byte length prefix. For an optional field
+        // the length byte must be present (eager returns `None` otherwise).
+        Kind::Cn | Kind::Bn => {
+            let else_body = if fi.optional {
+                quote! { *pos = raw.len() + 1; VIEW_ABSENT_OFT }
             } else {
-                VIEW_ABSENT_OFT
+                quote! { VIEW_ABSENT_OFT }
             };
-        },
-        Kind::Sn => quote! {
-            let #id: u16 = if *pos < raw.len() {
-                let off = *pos as u16;
-                let __l = read_u2(raw, pos, &order) as usize;
-                *pos += __l;
-                off
+            quote! {
+                let #id: u16 = if *pos < raw.len() {
+                    let off = *pos as u16;
+                    *pos += 1 + raw[*pos] as usize;
+                    off
+                } else {
+                    #else_body
+                };
+            }
+        }
+        Kind::Sn => {
+            let guard = if fi.optional {
+                quote! { *pos + 2 <= raw.len() }
             } else {
-                VIEW_ABSENT_OFT
+                quote! { *pos < raw.len() }
             };
-        },
-        Kind::Dn => quote! {
-            let #id: u16 = if *pos < raw.len() {
-                let off = *pos as u16;
-                let __bits = read_u2(raw, pos, &order) as usize;
-                *pos += __bits.div_ceil(8);
-                off
+            let else_body = if fi.optional {
+                quote! { *pos = raw.len() + 1; VIEW_ABSENT_OFT }
             } else {
-                VIEW_ABSENT_OFT
+                quote! { VIEW_ABSENT_OFT }
             };
-        },
+            quote! {
+                let #id: u16 = if #guard {
+                    let off = *pos as u16;
+                    let __l = read_u2(raw, pos, &order) as usize;
+                    *pos += __l;
+                    off
+                } else {
+                    #else_body
+                };
+            }
+        }
+        Kind::Dn => {
+            let guard = if fi.optional {
+                quote! { *pos + 2 <= raw.len() }
+            } else {
+                quote! { *pos < raw.len() }
+            };
+            let else_body = if fi.optional {
+                quote! { *pos = raw.len() + 1; VIEW_ABSENT_OFT }
+            } else {
+                quote! { VIEW_ABSENT_OFT }
+            };
+            quote! {
+                let #id: u16 = if #guard {
+                    let off = *pos as u16;
+                    let __bits = read_u2(raw, pos, &order) as usize;
+                    *pos += __bits.div_ceil(8);
+                    off
+                } else {
+                    #else_body
+                };
+            }
+        }
         Kind::KxN1 => {
             let count = scan_count_expr(fi);
             quote! {
@@ -495,15 +527,31 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
         Kind::KxFixed { elem, .. } => {
             let elem = *elem;
             let count = scan_count_expr(fi);
-            quote! {
-                let #id: u16 = if *pos < raw.len() {
-                    let off = *pos as u16;
-                    let __k = #count;
-                    *pos += (#elem as usize) * __k as usize;
-                    off
-                } else {
-                    VIEW_ABSENT_OFT
-                };
+            if fi.optional {
+                quote! {
+                    let #id: u16 = {
+                        let __k = #count;
+                        if *pos + (#elem as usize) * __k as usize <= raw.len() {
+                            let off = *pos as u16;
+                            *pos += (#elem as usize) * __k as usize;
+                            off
+                        } else {
+                            *pos = raw.len() + 1;
+                            VIEW_ABSENT_OFT
+                        }
+                    };
+                }
+            } else {
+                quote! {
+                    let #id: u16 = if *pos < raw.len() {
+                        let off = *pos as u16;
+                        let __k = #count;
+                        *pos += (#elem as usize) * __k as usize;
+                        off
+                    } else {
+                        VIEW_ABSENT_OFT
+                    };
+                }
             }
         }
         Kind::KxStr { order, .. } => {
@@ -560,15 +608,28 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
     }
 }
 
-fn scan_fixed(id: &Ident, bytes: usize) -> TokenStream2 {
-    quote! {
-        let #id: u16 = if *pos < raw.len() {
-            let off = *pos as u16;
-            *pos += #bytes;
-            off
-        } else {
-            VIEW_ABSENT_OFT
-        };
+fn scan_fixed(id: &Ident, bytes: usize, optional: bool) -> TokenStream2 {
+    if optional {
+        quote! {
+            let #id: u16 = if *pos + #bytes <= raw.len() {
+                let off = *pos as u16;
+                *pos += #bytes;
+                off
+            } else {
+                *pos = raw.len() + 1;
+                VIEW_ABSENT_OFT
+            };
+        }
+    } else {
+        quote! {
+            let #id: u16 = if *pos < raw.len() {
+                let off = *pos as u16;
+                *pos += #bytes;
+                off
+            } else {
+                VIEW_ABSENT_OFT
+            };
+        }
     }
 }
 
