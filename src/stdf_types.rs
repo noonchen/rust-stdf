@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Wed Nov 16 2022
+// Last Modified: Tue Aug 18 2026
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -11,46 +11,15 @@
 
 use crate::stdf_error::StdfError;
 extern crate smart_default;
+use rust_stdf_derive::{stdf_match_expr, stdf_records, StdfRecordCodec};
 use smart_default::SmartDefault;
+use std::borrow::Cow;
 use std::convert::From;
 
 #[cfg(feature = "serialize")]
 use serde::Serialize;
 #[cfg(feature = "serialize")]
 use struct_field_names_as_array::FieldNamesAsArray;
-
-macro_rules! read_optional {
-    ($var:expr, [$func:ident($raw:expr, $pos:expr)], $min_bytes:expr) => {{
-        if *$pos + $min_bytes > $raw.len() {
-            $var = None;
-            return;
-        } else {
-            $var = Some([$func($raw, $pos)]);
-        }
-    }};
-    ($var:expr, $func:ident($raw:expr, $pos:expr), $min_bytes:expr) => {{
-        if *$pos + $min_bytes > $raw.len() {
-            $var = None;
-            return;
-        } else {
-            $var = Some($func($raw, $pos));
-        }
-    }};
-    ($var:expr, $func:ident($raw:expr, $pos:expr, $order:expr), $min_bytes:expr) => {{
-        if *$pos + $min_bytes > $raw.len() {
-            $var = None;
-        } else {
-            $var = Some($func($raw, $pos, $order));
-        }
-    }};
-    ($var:expr, $func:ident($raw:expr, $pos:expr, $order:expr, $cnt:expr), $element_bytes:expr) => {{
-        if *$pos + $element_bytes * $cnt as usize > $raw.len() {
-            $var = None;
-        } else {
-            $var = Some($func($raw, $pos, $order, $cnt));
-        }
-    }};
-}
 
 // Common Type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -159,13 +128,141 @@ pub enum V1 {
 
 pub type Vn = Vec<V1>;
 
+// ----------------------------------------------------------------------------
+// Zero-copy borrows of the variable-length payload types, used by the generated
+// `*View` getters. Each borrows into the raw record buffer; the `to_owned`
+// method reproduces the owned value with the same semantics as the eager
+// `read_*` helpers, so view and eager results match.
+// ----------------------------------------------------------------------------
+
+/// Sentinel stored in a view when a (trailing/optional) field is absent.
+const VIEW_ABSENT_OFT: u16 = u16::MAX;
+
+/// Validate a stored offset, turning it into `Some(pos)`, or `None` when the field is absent.
+#[inline]
+fn validate_offset(off: u16) -> Option<usize> {
+    if off == VIEW_ABSENT_OFT {
+        None
+    } else {
+        Some(off as usize)
+    }
+}
+
+/// Zero-copy borrow of a `Cn` payload (the bytes *after* the 1-byte length prefix).
+#[derive(SmartDefault, Clone, Copy, Debug)]
+pub struct CnRef<'a>(&'a [u8]);
+
+/// Zero-copy borrow of an `Sn` payload (the bytes *after* the 2-byte,
+/// byte-order-dependent length prefix).
+#[derive(SmartDefault, Clone, Copy, Debug)]
+pub struct SnRef<'a>(&'a [u8]);
+
+/// Zero-copy borrow of a `Bn` payload (the bytes *after* the 1-byte length prefix).
+#[derive(SmartDefault, Clone, Copy, Debug)]
+pub struct BnRef<'a>(&'a [u8]);
+
+/// Zero-copy borrow of a `Dn` payload (the bytes *after* the 2-byte,
+/// byte-order-dependent bit-count prefix).
+#[derive(SmartDefault, Clone, Copy, Debug)]
+pub struct DnRef<'a>(&'a [u8]);
+
+/// Zero-copy view over the `k` elements of a `KxCn` array (each element is a
+/// 1-byte length prefix followed by the payload).
+///
+/// Elements are decoded with the same rule as [`CnRef::as_str`] and can be
+/// iterated directly:
+///
+/// ```
+/// use rust_stdf::KxCnRef;
+///
+/// let raw = [2, b'A', b'B', 2, b'C', b'D']; // two elements: "AB", "CD"
+/// let kx = KxCnRef::new(&raw, 0, 2);
+/// for s in &kx {
+///     println!("{s}");
+/// }
+/// ```
+#[derive(Clone, Copy, Default)]
+pub struct KxCnRef<'a> {
+    raw: &'a [u8],
+    start: usize,
+    k: usize,
+}
+
+/// Iterator over the elements of a [`KxCnRef`], one pass.
+pub struct KxCnRefIter<'a> {
+    raw: &'a [u8],
+    pos: usize,
+    remaining: usize,
+}
+
+/// Zero-copy view over the `k` elements of a `KxSn` array (each element is a
+/// 2-byte, byte-order-dependent length prefix followed by the payload).
+///
+/// Elements are decoded with the same rule as [`SnRef::as_str`] and can be
+/// iterated directly:
+///
+/// ```
+/// use rust_stdf::{ByteOrder, KxSnRef};
+///
+/// let raw = [2, 0, b'A', b'B', 2, 0, b'C', b'D']; // two elements: "AB", "CD"
+/// let kx = KxSnRef::new(&raw, 0, 2, ByteOrder::LittleEndian);
+/// for s in &kx {
+///     println!("{s}");
+/// }
+/// ```
+#[derive(SmartDefault, Clone, Copy)]
+pub struct KxSnRef<'a> {
+    raw: &'a [u8],
+    start: usize,
+    k: usize,
+    #[default(ByteOrder::LittleEndian)]
+    order: ByteOrder,
+}
+
+/// Iterator over the elements of a [`KxSnRef`], one pass.
+pub struct KxSnRefIter<'a> {
+    raw: &'a [u8],
+    pos: usize,
+    remaining: usize,
+    order: ByteOrder,
+}
+
+/// Zero-copy view over the `k` elements of a `KxCf` array (each element is a
+/// fixed-width `f`-byte string, no length prefix).
+///
+/// Elements are decoded with the same rule as [`CnRef::as_str`] and can be
+/// iterated directly:
+///
+/// ```
+/// use rust_stdf::KxCfRef;
+///
+/// let raw = [b'A', b'B', b'C', b'D']; // two fixed 2-byte elements: "AB", "CD"
+/// let kx = KxCfRef::new(&raw, 0, 2, 2);
+/// for s in &kx {
+///     println!("{s}");
+/// }
+/// ```
+#[derive(Clone, Copy, Default)]
+pub struct KxCfRef<'a> {
+    raw: &'a [u8],
+    start: usize,
+    k: usize,
+    f: usize,
+}
+
+/// Iterator over the elements of a [`KxCfRef`], one pass.
+pub struct KxCfRefIter<'a> {
+    raw: &'a [u8],
+    pos: usize,
+    remaining: usize,
+    f: usize,
+}
+
 // Record Types
 
 /// This module contains constants
 /// for STDF Record type check and
 /// some help functions
-///
-/// # Example
 ///
 /// ```
 /// use rust_stdf::{StdfRecord, stdf_record_type::*};
@@ -179,51 +276,10 @@ pub type Vn = Vec<V1>;
 /// ```
 pub mod stdf_record_type {
     use crate::stdf_error::StdfError;
+    use rust_stdf_derive::{stdf_match_expr, stdf_records};
 
-    // rec type 0
-    pub const REC_FAR: u64 = 1;
-    pub const REC_ATR: u64 = 1 << 1;
-    pub const REC_VUR: u64 = 1 << 2;
-    // rec type 1
-    pub const REC_MIR: u64 = 1 << 3;
-    pub const REC_MRR: u64 = 1 << 4;
-    pub const REC_PCR: u64 = 1 << 5;
-    pub const REC_HBR: u64 = 1 << 6;
-    pub const REC_SBR: u64 = 1 << 7;
-    pub const REC_PMR: u64 = 1 << 8;
-    pub const REC_PGR: u64 = 1 << 9;
-    pub const REC_PLR: u64 = 1 << 10;
-    pub const REC_RDR: u64 = 1 << 11;
-    pub const REC_SDR: u64 = 1 << 12;
-    pub const REC_PSR: u64 = 1 << 13;
-    pub const REC_NMR: u64 = 1 << 14;
-    pub const REC_CNR: u64 = 1 << 15;
-    pub const REC_SSR: u64 = 1 << 16;
-    pub const REC_CDR: u64 = 1 << 17;
-    // rec type 2
-    pub const REC_WIR: u64 = 1 << 18;
-    pub const REC_WRR: u64 = 1 << 19;
-    pub const REC_WCR: u64 = 1 << 20;
-    // rec type 5
-    pub const REC_PIR: u64 = 1 << 21;
-    pub const REC_PRR: u64 = 1 << 22;
-    // rec type 10
-    pub const REC_TSR: u64 = 1 << 23;
-    // rec type 15
-    pub const REC_PTR: u64 = 1 << 24;
-    pub const REC_MPR: u64 = 1 << 25;
-    pub const REC_FTR: u64 = 1 << 26;
-    pub const REC_STR: u64 = 1 << 27;
-    // rec type 20
-    pub const REC_BPS: u64 = 1 << 28;
-    pub const REC_EPS: u64 = 1 << 29;
-    // rec type 50
-    pub const REC_GDR: u64 = 1 << 30;
-    pub const REC_DTR: u64 = 1 << 31;
-    // rec type 180: Reserved
-    // rec type 181: Reserved
-    pub const REC_RESERVE: u64 = 1 << 32;
-    pub const REC_INVALID: u64 = 1 << 33;
+    // Generates the `REC_*` record-type code constants.
+    stdf_records!(rec_codes);
 
     /// This function convert record type constant to
     /// STDF record (typ, sub)
@@ -236,57 +292,7 @@ pub mod stdf_record_type {
     /// ```
     #[inline(always)]
     pub fn get_typ_sub_from_code(code: u64) -> Result<(u8, u8), StdfError> {
-        match code {
-            // rec type 15
-            REC_PTR => Ok((15, 10)),
-            REC_MPR => Ok((15, 15)),
-            REC_FTR => Ok((15, 20)),
-            REC_STR => Ok((15, 30)),
-            // rec type 5
-            REC_PIR => Ok((5, 10)),
-            REC_PRR => Ok((5, 20)),
-            // rec type 2
-            REC_WIR => Ok((2, 10)),
-            REC_WRR => Ok((2, 20)),
-            REC_WCR => Ok((2, 30)),
-            // rec type 50
-            REC_GDR => Ok((50, 10)),
-            REC_DTR => Ok((50, 30)),
-            // rec type 0
-            REC_FAR => Ok((0, 10)),
-            REC_ATR => Ok((0, 20)),
-            REC_VUR => Ok((0, 30)),
-            // rec type 1
-            REC_MIR => Ok((1, 10)),
-            REC_MRR => Ok((1, 20)),
-            REC_PCR => Ok((1, 30)),
-            REC_HBR => Ok((1, 40)),
-            REC_SBR => Ok((1, 50)),
-            REC_PMR => Ok((1, 60)),
-            REC_PGR => Ok((1, 62)),
-            REC_PLR => Ok((1, 63)),
-            REC_RDR => Ok((1, 70)),
-            REC_SDR => Ok((1, 80)),
-            REC_PSR => Ok((1, 90)),
-            REC_NMR => Ok((1, 91)),
-            REC_CNR => Ok((1, 92)),
-            REC_SSR => Ok((1, 93)),
-            REC_CDR => Ok((1, 94)),
-            // rec type 10
-            REC_TSR => Ok((10, 30)),
-            // rec type 20
-            REC_BPS => Ok((20, 10)),
-            REC_EPS => Ok((20, 20)),
-            // rec type 180: Reserved
-            // rec type 181: Reserved
-            // REC_RESERVE,(180 | 181, _)
-            // not matched
-            // REC_INVALID,(_, _)
-            _ => Err(StdfError {
-                code: 2,
-                msg: "unknown type constant".to_string(),
-            }),
-        }
+        stdf_match_expr!(typ_sub_from_code)
     }
 
     /// This function convert (typ, sub) to
@@ -300,53 +306,7 @@ pub mod stdf_record_type {
     /// ```
     #[inline(always)]
     pub fn get_code_from_typ_sub(typ: u8, sub: u8) -> u64 {
-        match (typ, sub) {
-            // rec type 15
-            (15, 10) => REC_PTR,
-            (15, 15) => REC_MPR,
-            (15, 20) => REC_FTR,
-            (15, 30) => REC_STR,
-            // rec type 5
-            (5, 10) => REC_PIR,
-            (5, 20) => REC_PRR,
-            // rec type 2
-            (2, 10) => REC_WIR,
-            (2, 20) => REC_WRR,
-            (2, 30) => REC_WCR,
-            // rec type 50
-            (50, 10) => REC_GDR,
-            (50, 30) => REC_DTR,
-            // rec type 0
-            (0, 10) => REC_FAR,
-            (0, 20) => REC_ATR,
-            (0, 30) => REC_VUR,
-            // rec type 1
-            (1, 10) => REC_MIR,
-            (1, 20) => REC_MRR,
-            (1, 30) => REC_PCR,
-            (1, 40) => REC_HBR,
-            (1, 50) => REC_SBR,
-            (1, 60) => REC_PMR,
-            (1, 62) => REC_PGR,
-            (1, 63) => REC_PLR,
-            (1, 70) => REC_RDR,
-            (1, 80) => REC_SDR,
-            (1, 90) => REC_PSR,
-            (1, 91) => REC_NMR,
-            (1, 92) => REC_CNR,
-            (1, 93) => REC_SSR,
-            (1, 94) => REC_CDR,
-            // rec type 10
-            (10, 30) => REC_TSR,
-            // rec type 20
-            (20, 10) => REC_BPS,
-            (20, 20) => REC_EPS,
-            // rec type 180: Reserved
-            // rec type 181: Reserved
-            (180 | 181, _) => REC_RESERVE,
-            // not matched
-            (_, _) => REC_INVALID,
-        }
+        stdf_match_expr!(code_from_typ_sub)
     }
 
     /// This function convert record type constant to
@@ -360,53 +320,7 @@ pub mod stdf_record_type {
     /// ```
     #[inline(always)]
     pub fn get_rec_name_from_code(rec_type: u64) -> &'static str {
-        match rec_type {
-            // rec type 15
-            REC_PTR => "PTR",
-            REC_MPR => "MPR",
-            REC_FTR => "FTR",
-            REC_STR => "STR",
-            // rec type 5
-            REC_PIR => "PIR",
-            REC_PRR => "PRR",
-            // rec type 2
-            REC_WIR => "WIR",
-            REC_WRR => "WRR",
-            REC_WCR => "WCR",
-            // rec type 50
-            REC_GDR => "GDR",
-            REC_DTR => "DTR",
-            // rec type 0
-            REC_FAR => "FAR",
-            REC_ATR => "ATR",
-            REC_VUR => "VUR",
-            // rec type 1
-            REC_MIR => "MIR",
-            REC_MRR => "MRR",
-            REC_PCR => "PCR",
-            REC_HBR => "HBR",
-            REC_SBR => "SBR",
-            REC_PMR => "PMR",
-            REC_PGR => "PGR",
-            REC_PLR => "PLR",
-            REC_RDR => "RDR",
-            REC_SDR => "SDR",
-            REC_PSR => "PSR",
-            REC_NMR => "NMR",
-            REC_CNR => "CNR",
-            REC_SSR => "SSR",
-            REC_CDR => "CDR",
-            // rec type 10
-            REC_TSR => "TSR",
-            // rec type 20
-            REC_BPS => "BPS",
-            REC_EPS => "EPS",
-            // rec type 180: Reserved
-            // rec type 181: Reserved
-            REC_RESERVE => "ReservedRec",
-            // not matched
-            _ => "InvalidRec",
-        }
+        stdf_match_expr!(name_from_code)
     }
 
     /// This function convert record name string to
@@ -421,118 +335,17 @@ pub mod stdf_record_type {
     ///
     #[inline(always)]
     pub fn get_code_from_rec_name(rec_name: &str) -> u64 {
-        match rec_name {
-            "FAR" => REC_FAR,
-            "ATR" => REC_ATR,
-            "VUR" => REC_VUR,
-            "MIR" => REC_MIR,
-            "MRR" => REC_MRR,
-            "PCR" => REC_PCR,
-            "HBR" => REC_HBR,
-            "SBR" => REC_SBR,
-            "PMR" => REC_PMR,
-            "PGR" => REC_PGR,
-            "PLR" => REC_PLR,
-            "RDR" => REC_RDR,
-            "SDR" => REC_SDR,
-            "PSR" => REC_PSR,
-            "NMR" => REC_NMR,
-            "CNR" => REC_CNR,
-            "SSR" => REC_SSR,
-            "CDR" => REC_CDR,
-            "WIR" => REC_WIR,
-            "WRR" => REC_WRR,
-            "WCR" => REC_WCR,
-            "PIR" => REC_PIR,
-            "PRR" => REC_PRR,
-            "TSR" => REC_TSR,
-            "PTR" => REC_PTR,
-            "MPR" => REC_MPR,
-            "FTR" => REC_FTR,
-            "STR" => REC_STR,
-            "BPS" => REC_BPS,
-            "EPS" => REC_EPS,
-            "GDR" => REC_GDR,
-            "DTR" => REC_DTR,
-            _ => REC_INVALID,
-        }
+        stdf_match_expr!(code_from_name)
     }
 }
 
-/// `StdfRecord` is the data that returned from StdfReader iterator.
-///
-/// it contains the actually structs
-/// that contain STDF data.
-///
-/// use `match` structure to access the nested data.
-///
-/// # Example
-///
-/// ```
-/// use rust_stdf::{StdfRecord, stdf_record_type::*};
-///
-/// let mut rec = StdfRecord::new(REC_PTR);
-/// if let StdfRecord::PTR(ref mut ptr_data) = rec {
-///     ptr_data.result = 100.0;
-/// }
-/// println!("{:?}", rec);
-/// ```
-#[derive(Debug, Clone, PartialEq)]
-pub enum StdfRecord {
-    // rec type 0
-    FAR(FAR),
-    ATR(ATR),
-    VUR(VUR),
-    // rec type 1
-    MIR(MIR),
-    MRR(MRR),
-    PCR(PCR),
-    HBR(HBR),
-    SBR(SBR),
-    PMR(PMR),
-    PGR(PGR),
-    PLR(PLR),
-    RDR(RDR),
-    SDR(SDR),
-    PSR(PSR),
-    NMR(NMR),
-    CNR(CNR),
-    SSR(SSR),
-    CDR(CDR),
-    // rec type 2
-    WIR(WIR),
-    WRR(WRR),
-    WCR(WCR),
-    // rec type 5
-    PIR(PIR),
-    PRR(PRR),
-    // rec type 10
-    TSR(TSR),
-    // rec type 15
-    PTR(PTR),
-    MPR(MPR),
-    FTR(FTR),
-    STR(STR),
-    // rec type 20
-    BPS(BPS),
-    EPS(EPS),
-    // rec type 50
-    GDR(GDR),
-    DTR(DTR),
-    // rec type 180: Reserved
-    // rec type 181: Reserved
-    ReservedRec(ReservedRec),
-    InvalidRec(RecordHeader),
-}
+// Generates the `StdfRecord` and `StdfRecordView` enums.
+stdf_records!(rec_enums);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-/// unprocessed STDF record data, contains:
-///  - offset
-///  - type_code
-///  - raw_data
-///  - byte_order
+/// Element yielded by [`RawDataIter`](crate::stdf_file::RawDataIter). It owns unprocessed STDF record data,
+/// and can be converted to [`StdfRecord`], or borrowed as [`StdfRecordView`].
 ///
-/// it can be converted back to `StdfRecord`
 /// ```
 /// use rust_stdf::{RawDataElement, ByteOrder, StdfRecord, RecordHeader, stdf_record_type::REC_FAR};
 ///
@@ -574,7 +387,7 @@ pub struct RawDataElement {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct FAR {
     pub cpu_type: U1, // CPU type that wrote this file
     pub stdf_ver: U1, // STDF version number
@@ -586,7 +399,7 @@ pub struct FAR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct ATR {
     pub mod_tim: U4,  //Date and time of STDF file modification
     pub cmd_line: Cn, //Command line of program
@@ -598,7 +411,7 @@ pub struct ATR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct VUR {
     pub upd_nam: Cn, //Update Version Name
 }
@@ -609,7 +422,7 @@ pub struct VUR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct MIR {
     pub setup_t: U4,  // Date and time of job setup
     pub start_t: U4,  // Date and time first part tested
@@ -662,7 +475,7 @@ pub struct MIR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct MRR {
     pub finish_t: U4, // Date and time last part tested
     #[default = ' ']
@@ -677,7 +490,7 @@ pub struct MRR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PCR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -698,7 +511,7 @@ pub struct PCR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct HBR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -715,7 +528,7 @@ pub struct HBR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct SBR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -732,7 +545,7 @@ pub struct SBR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PMR {
     pub pmr_indx: U2, // Unique index associated with pin
     #[default = 0]
@@ -752,11 +565,12 @@ pub struct PMR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PGR {
-    pub grp_indx: U2,   // Unique index associated with pin group
-    pub grp_nam: Cn,    // Name of pin group
-    pub indx_cnt: U2,   // Count of PMR indexes
+    pub grp_indx: U2, // Unique index associated with pin group
+    pub grp_nam: Cn,  // Name of pin group
+    pub indx_cnt: U2, // Count of PMR indexes
+    #[stdf(count = indx_cnt)]
     pub pmr_indx: KxU2, // Array of indexes for pins in the group
 }
 
@@ -766,15 +580,22 @@ pub struct PGR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PLR {
-    pub grp_cnt: U2,    // Count (k) of pins or pin groups
+    pub grp_cnt: U2, // Count (k) of pins or pin groups
+    #[stdf(count = grp_cnt)]
     pub grp_indx: KxU2, // Array of pin or pin group indexes
+    #[stdf(count = grp_cnt)]
     pub grp_mode: KxU2, // Operating mode of pin group
+    #[stdf(count = grp_cnt)]
     pub grp_radx: KxU1, // Display radix of pin group
+    #[stdf(count = grp_cnt)]
     pub pgm_char: KxCn, // Program state encoding characters
+    #[stdf(count = grp_cnt)]
     pub rtn_char: KxCn, // Return state encoding characters
+    #[stdf(count = grp_cnt)]
     pub pgm_chal: KxCn, // Program state encoding characters
+    #[stdf(count = grp_cnt)]
     pub rtn_chal: KxCn, // Return state encoding characters
 }
 
@@ -784,9 +605,10 @@ pub struct PLR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct RDR {
-    pub num_bins: U2,   // Number (k) of bins being retested
+    pub num_bins: U2, // Number (k) of bins being retested
+    #[stdf(count = num_bins)]
     pub rtst_bin: KxU2, // Array of retest bin numbers
 }
 
@@ -796,28 +618,29 @@ pub struct RDR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct SDR {
-    pub head_num: U1,   // Test head number
-    pub site_grp: U1,   // Site group number
-    pub site_cnt: U1,   // Number (k) of test sites in site group
+    pub head_num: U1, // Test head number
+    pub site_grp: U1, // Site group number
+    pub site_cnt: U1, // Number (k) of test sites in site group
+    #[stdf(count = site_cnt)]
     pub site_num: KxU1, // Array of test site numbers
-    pub hand_typ: Cn,   // Handler or prober type
-    pub hand_id: Cn,    // Handler or prober ID
-    pub card_typ: Cn,   // Probe card type
-    pub card_id: Cn,    // Probe card ID
-    pub load_typ: Cn,   // Load board type
-    pub load_id: Cn,    // Load board ID
-    pub dib_typ: Cn,    // DIB board type
-    pub dib_id: Cn,     // DIB board ID
-    pub cabl_typ: Cn,   // Interface cable type
-    pub cabl_id: Cn,    // Interface cable ID
-    pub cont_typ: Cn,   // Handler contactor type
-    pub cont_id: Cn,    // Handler contactor ID
-    pub lasr_typ: Cn,   // Laser type
-    pub lasr_id: Cn,    // Laser ID
-    pub extr_typ: Cn,   // Extra equipment type field
-    pub extr_id: Cn,    // Extra equipment ID
+    pub hand_typ: Cn, // Handler or prober type
+    pub hand_id: Cn,  // Handler or prober ID
+    pub card_typ: Cn, // Probe card type
+    pub card_id: Cn,  // Probe card ID
+    pub load_typ: Cn, // Load board type
+    pub load_id: Cn,  // Load board ID
+    pub dib_typ: Cn,  // DIB board type
+    pub dib_id: Cn,   // DIB board ID
+    pub cabl_typ: Cn, // Interface cable type
+    pub cabl_id: Cn,  // Interface cable ID
+    pub cont_typ: Cn, // Handler contactor type
+    pub cont_id: Cn,  // Handler contactor ID
+    pub lasr_typ: Cn, // Laser type
+    pub lasr_id: Cn,  // Laser ID
+    pub extr_typ: Cn, // Extra equipment type field
+    pub extr_id: Cn,  // Extra equipment ID
 }
 
 #[cfg_attr(
@@ -826,20 +649,27 @@ pub struct SDR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PSR {
-    pub cont_flg: B1,   // Continuation PSR record exist
-    pub psr_indx: U2,   // PSR Record Index (used by STR records)
-    pub psr_nam: Cn,    // Symbolic name of PSR record
-    pub opt_flg: B1, // Contains PAT_LBL, FILE_UID, ATPG_DSC, and SRC_ID field missing flag bits and flag for start index for first cycle number.
+    pub cont_flg: B1, // Continuation PSR record exist
+    pub psr_indx: U2, // PSR Record Index (used by STR records)
+    pub psr_nam: Cn,  // Symbolic name of PSR record
+    pub opt_flg: B1,  // Optional data flag
     pub totp_cnt: U2, // Count of total pattern file information sets in the complete PSR data set
     pub locp_cnt: U2, // Count (k) of pattern file information sets in this record
+    #[stdf(count = locp_cnt)]
     pub pat_bgn: KxU8, // Array of Cycle #’s patterns begins on
+    #[stdf(count = locp_cnt)]
     pub pat_end: KxU8, // Array of Cycle #’s patterns stops at
+    #[stdf(count = locp_cnt)]
     pub pat_file: KxCn, // Array of Pattern File Names
+    #[stdf(count = locp_cnt)]
     pub pat_lbl: KxCn, // Optional pattern symbolic name
+    #[stdf(count = locp_cnt)]
     pub file_uid: KxCn, // Optional array of file identifier code
+    #[stdf(count = locp_cnt)]
     pub atpg_dsc: KxCn, // Optional array of ATPG information
+    #[stdf(count = locp_cnt)]
     pub src_id: KxCn, // Optional array of PatternInSrcFileID
 }
 
@@ -849,12 +679,14 @@ pub struct PSR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct NMR {
-    pub cont_flg: B1,   // Continuation NMR record follows if not 0
-    pub totm_cnt: U2,   // Count of PMR indexes and ATPG_NAM entries
-    pub locm_cnt: U2,   // Count of (k) PMR indexes and ATPG_NAM entries in this record
+    pub cont_flg: B1, // Continuation NMR record follows if not 0
+    pub totm_cnt: U2, // Count of PMR indexes and ATPG_NAM entries
+    pub locm_cnt: U2, // Count of (k) PMR indexes and ATPG_NAM entries in this record
+    #[stdf(count = locm_cnt)]
     pub pmr_indx: KxU2, // Array of PMR indexes
+    #[stdf(count = locm_cnt)]
     pub atpg_nam: KxCn, // Array of ATPG signal names
 }
 
@@ -864,7 +696,7 @@ pub struct NMR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct CNR {
     pub chn_num: U2,  // Chain number. Referenced by the CHN_NUM array in an STR record
     pub bit_pos: U4,  // Bit position in the chain
@@ -877,10 +709,11 @@ pub struct CNR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct SSR {
-    pub ssr_nam: Cn,    // Name of the STIL Scan pub structure for reference
-    pub chn_cnt: U2,    // Count (k) of number of Chains listed in CHN_LIST
+    pub ssr_nam: Cn, // Name of the STIL Scan pub structure for reference
+    pub chn_cnt: U2, // Count (k) of number of Chains listed in CHN_LIST
+    #[stdf(count = chn_cnt)]
     pub chn_list: KxU2, // Array of CDR Indexes
 }
 
@@ -890,7 +723,7 @@ pub struct SSR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct CDR {
     pub cont_flg: B1, // Continuation CDR record follows if not 0
     pub cdr_indx: U2, // SCR Index
@@ -899,12 +732,15 @@ pub struct CDR {
     pub sin_pin: U2,  // PMR index of the chain's Scan In Signal
     pub sout_pin: U2, // PMR index of the chain's Scan Out Signal
     pub mstr_cnt: U1, // Count (m) of master clock pins specified for this scan chain
+    #[stdf(count = mstr_cnt)]
     pub m_clks: KxU2, // Array of PMR indexes for the master clocks assigned to this chain
     pub slav_cnt: U1, // Count (n) of slave clock pins specified for this scan chain
+    #[stdf(count = slav_cnt)]
     pub s_clks: KxU2, // Array of PMR indexes for the slave clocks assigned to this chain
     #[default = 255]
     pub inv_val: U1, // 0: No Inversion, 1: Inversion
     pub lst_cnt: U2,  // Count (k) of scan cells listed in this record
+    #[stdf(count = lst_cnt)]
     pub cell_lst: KxSn, // Array of Scan Cell Names
 }
 
@@ -914,7 +750,7 @@ pub struct CDR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct WIR {
     pub head_num: U1, // Test head number
     #[default = 255]
@@ -929,7 +765,7 @@ pub struct WIR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct WRR {
     pub head_num: U1, // Test head number
     #[default = 255]
@@ -958,7 +794,7 @@ pub struct WRR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, StdfRecordCodec)]
 pub struct WCR {
     #[default = 0.0]
     pub wafr_siz: R4, // Diameter of wafer in WF_UNITS
@@ -986,7 +822,7 @@ pub struct WCR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PIR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -998,24 +834,24 @@ pub struct PIR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PRR {
-    pub head_num: U1, //Test head number
-    pub site_num: U1, //Test site number
-    pub part_flg: B1, //Part information flag
-    pub num_test: U2, //Number of tests executed
-    pub hard_bin: U2, //Hardware bin number
+    pub head_num: U1, // Test head number
+    pub site_num: U1, // Test site number
+    pub part_flg: B1, // Part information flag
+    pub num_test: U2, // Number of tests executed
+    pub hard_bin: U2, // Hardware bin number
     #[default = 65535]
-    pub soft_bin: U2, //Software bin number
+    pub soft_bin: U2, // Software bin number
     #[default(-32768)]
-    pub x_coord: I2, //(Wafer) X coordinate
+    pub x_coord: I2, // (Wafer) X coordinate
     #[default(-32768)]
-    pub y_coord: I2, //(Wafer) Y coordinate
+    pub y_coord: I2, // (Wafer) Y coordinate
     #[default = 0]
-    pub test_t: U4, //Elapsed test time in milliseconds
-    pub part_id: Cn,  //Part identification
-    pub part_txt: Cn, //Part description text
-    pub part_fix: Bn, //Part repair information
+    pub test_t: U4, // Elapsed test time in milliseconds
+    pub part_id: Cn,  // Part identification
+    pub part_txt: Cn, // Part description text
+    pub part_fix: Bn, // Part repair information
 }
 
 #[cfg_attr(
@@ -1024,7 +860,7 @@ pub struct PRR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, StdfRecordCodec)]
 pub struct TSR {
     pub head_num: U1, // Test head number
     pub site_num: U1, // Test site number
@@ -1048,13 +884,15 @@ pub struct TSR {
     pub tst_sqrs: R4, // Sum of squares of test result values
 }
 
+// PTR (15, 10): the struct, its eager `read_from_bytes`, and `PTRView`
+// are all generated from this single field list by `#[derive(StdfRecordCodec)]`.
 #[cfg_attr(
     feature = "serialize",
     derive(Serialize, FieldNamesAsArray),
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, StdfRecordCodec)]
 pub struct PTR {
     pub test_num: U4,         // Test number
     pub head_num: U1,         // Test head number
@@ -1084,35 +922,38 @@ pub struct PTR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, StdfRecordCodec)]
 pub struct MPR {
-    pub test_num: U4,           // Test number
-    pub head_num: U1,           // Test head number
-    pub site_num: U1,           // Test site number
-    pub test_flg: B1,           // Test flags (fail, alarm, etc.)
-    pub parm_flg: B1,           // Parametric test flags (drift, etc.)
-    pub rtn_icnt: U2,           // Count of PMR indexes
-    pub rslt_cnt: U2,           // Count of returned results
-    pub rtn_stat: KxN1,         // Array of returned states
-    pub rtn_rslt: KxR4,         // Array of returned results
-    pub test_txt: Cn,           // Descriptive text or label
-    pub alarm_id: Cn,           // Name of alarm
-    pub opt_flag: Option<B1>,   // Optional data flag
-    pub res_scal: Option<I1>,   // Test result scaling exponent
-    pub llm_scal: Option<I1>,   // Test low limit scaling exponent
-    pub hlm_scal: Option<I1>,   // Test high limit scaling exponent
-    pub lo_limit: Option<R4>,   // Test low limit value
-    pub hi_limit: Option<R4>,   // Test high limit value
-    pub start_in: Option<R4>,   // Starting input value (condition)
-    pub incr_in: Option<R4>,    // Increment of input condition
+    pub test_num: U4, // Test number
+    pub head_num: U1, // Test head number
+    pub site_num: U1, // Test site number
+    pub test_flg: B1, // Test flags (fail, alarm, etc.)
+    pub parm_flg: B1, // Parametric test flags (drift, etc.)
+    pub rtn_icnt: U2, // Count of PMR indexes
+    pub rslt_cnt: U2, // Count of returned results
+    #[stdf(count = rtn_icnt)]
+    pub rtn_stat: KxN1, // Array of returned states
+    #[stdf(count = rslt_cnt)]
+    pub rtn_rslt: KxR4, // Array of returned results
+    pub test_txt: Cn, // Descriptive text or label
+    pub alarm_id: Cn, // Name of alarm
+    pub opt_flag: Option<B1>, // Optional data flag
+    pub res_scal: Option<I1>, // Test result scaling exponent
+    pub llm_scal: Option<I1>, // Test low limit scaling exponent
+    pub hlm_scal: Option<I1>, // Test high limit scaling exponent
+    pub lo_limit: Option<R4>, // Test low limit value
+    pub hi_limit: Option<R4>, // Test high limit value
+    pub start_in: Option<R4>, // Starting input value (condition)
+    pub incr_in: Option<R4>, // Increment of input condition
+    #[stdf(count = rtn_icnt)]
     pub rtn_indx: Option<KxU2>, // Array of PMR indexes
-    pub units: Option<Cn>,      // Units of returned results
-    pub units_in: Option<Cn>,   // Input condition units
-    pub c_resfmt: Option<Cn>,   // ANSI C result format string
-    pub c_llmfmt: Option<Cn>,   // ANSI C low limit format string
-    pub c_hlmfmt: Option<Cn>,   // ANSI C high limit format string
-    pub lo_spec: Option<R4>,    // Low specification limit value
-    pub hi_spec: Option<R4>,    // High specification limit value
+    pub units: Option<Cn>, // Units of returned results
+    pub units_in: Option<Cn>, // Input condition units
+    pub c_resfmt: Option<Cn>, // ANSI C result format string
+    pub c_llmfmt: Option<Cn>, // ANSI C low limit format string
+    pub c_hlmfmt: Option<Cn>, // ANSI C high limit format string
+    pub lo_spec: Option<R4>, // Low specification limit value
+    pub hi_spec: Option<R4>, // High specification limit value
 }
 
 #[cfg_attr(
@@ -1121,37 +962,41 @@ pub struct MPR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct FTR {
-    pub test_num: U4,   // Test number
-    pub head_num: U1,   // Test head number
-    pub site_num: U1,   // Test site number
-    pub test_flg: B1,   // Test flags (fail, alarm, etc.)
-    pub opt_flag: B1,   // Optional data flag
-    pub cycl_cnt: U4,   // Cycle count of vector
-    pub rel_vadr: U4,   // Relative vector address
-    pub rept_cnt: U4,   // Repeat count of vector
-    pub num_fail: U4,   // Number of pins with 1 or more failures
-    pub xfail_ad: I4,   // X logical device failure address
-    pub yfail_ad: I4,   // Y logical device failure address
-    pub vect_off: I2,   // Offset from vector of interest
-    pub rtn_icnt: U2,   // Count j of return data PMR indexes
-    pub pgm_icnt: U2,   // Count k of programmed state indexes
+    pub test_num: U4, // Test number
+    pub head_num: U1, // Test head number
+    pub site_num: U1, // Test site number
+    pub test_flg: B1, // Test flags (fail, alarm, etc.)
+    pub opt_flag: B1, // Optional data flag
+    pub cycl_cnt: U4, // Cycle count of vector
+    pub rel_vadr: U4, // Relative vector address
+    pub rept_cnt: U4, // Repeat count of vector
+    pub num_fail: U4, // Number of pins with 1 or more failures
+    pub xfail_ad: I4, // X logical device failure address
+    pub yfail_ad: I4, // Y logical device failure address
+    pub vect_off: I2, // Offset from vector of interest
+    pub rtn_icnt: U2, // Count j of return data PMR indexes
+    pub pgm_icnt: U2, // Count k of programmed state indexes
+    #[stdf(count = rtn_icnt)]
     pub rtn_indx: KxU2, // Array j of return data PMR indexes
+    #[stdf(count = rtn_icnt)]
     pub rtn_stat: KxN1, // Array j of returned states
+    #[stdf(count = pgm_icnt)]
     pub pgm_indx: KxU2, // Array k of programmed state indexes
+    #[stdf(count = pgm_icnt)]
     pub pgm_stat: KxN1, // Array k of programmed states
-    pub fail_pin: Dn,   // Failing pin bitfield
-    pub vect_nam: Cn,   // Vector module pattern name
-    pub time_set: Cn,   // Time set name
-    pub op_code: Cn,    // Vector Op Code
-    pub test_txt: Cn,   // Descriptive text or label
-    pub alarm_id: Cn,   // Name of alarm
-    pub prog_txt: Cn,   // Additional programmed information
-    pub rslt_txt: Cn,   // Additional result information
+    pub fail_pin: Dn, // Failing pin bitfield
+    pub vect_nam: Cn, // Vector module pattern name
+    pub time_set: Cn, // Time set name
+    pub op_code: Cn,  // Vector Op Code
+    pub test_txt: Cn, // Descriptive text or label
+    pub alarm_id: Cn, // Name of alarm
+    pub prog_txt: Cn, // Additional programmed information
+    pub rslt_txt: Cn, // Additional result information
     #[default = 255]
     pub patg_num: U1, // Pattern generator number
-    pub spin_map: Dn,   // Bit map of enabled comparators
+    pub spin_map: Dn, // Bit map of enabled comparators
 }
 
 #[cfg_attr(
@@ -1160,28 +1005,28 @@ pub struct FTR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct STR {
-    pub cont_flg: B1,   // Continuation STR follows if not 0
-    pub test_num: U4,   // Test number
-    pub head_num: U1,   // Test head number
-    pub site_num: U1,   // Test site number
-    pub psr_ref: U2,    // PSR Index (Pattern Sequence Record)
-    pub test_flg: B1,   // Test flags (fail, alarm, etc.)
-    pub log_typ: Cn,    // User defined description of datalog
-    pub test_txt: Cn,   // Descriptive text or label
-    pub alarm_id: Cn,   // Name of alarm
-    pub prog_txt: Cn,   // Additional Programmed information
-    pub rslt_txt: Cn,   // Additional result information
-    pub z_val: U1,      // Z Handling Flag
-    pub fmu_flg: B1,    // MASK_MAP & FAL_MAP field status & Pattern Changed flag
-    pub mask_map: Dn,   // Bit map of Globally Masked Pins
-    pub fal_map: Dn,    // Bit map of failures after buffer full
-    pub cyc_cnt_t: U8,  // Total cycles executed in test
-    pub totf_cnt: U4,   // Total failures (pin x cycle) detected in test execution
-    pub totl_cnt: U4,   // Total fails logged across the complete STR data set
-    pub cyc_base: U8,   // Cycle offset to apply for the values in the CYCL_NUM array
-    pub bit_base: U4,   // Offset to apply for the values in the BIT_POS array
+    pub cont_flg: B1,  // Continuation STR follows if not 0
+    pub test_num: U4,  // Test number
+    pub head_num: U1,  // Test head number
+    pub site_num: U1,  // Test site number
+    pub psr_ref: U2,   // PSR Index (Pattern Sequence Record)
+    pub test_flg: B1,  // Test flags (fail, alarm, etc.)
+    pub log_typ: Cn,   // User defined description of datalog
+    pub test_txt: Cn,  // Descriptive text or label
+    pub alarm_id: Cn,  // Name of alarm
+    pub prog_txt: Cn,  // Additional Programmed information
+    pub rslt_txt: Cn,  // Additional result information
+    pub z_val: U1,     // Z Handling Flag
+    pub fmu_flg: B1,   // MASK_MAP & FAL_MAP field status & Pattern Changed flag
+    pub mask_map: Dn,  // Bit map of Globally Masked Pins
+    pub fal_map: Dn,   // Bit map of failures after buffer full
+    pub cyc_cnt_t: U8, // Total cycles executed in test
+    pub totf_cnt: U4,  // Total failures (pin x cycle) detected in test execution
+    pub totl_cnt: U4,  // Total fails logged across the complete STR data set
+    pub cyc_base: U8,  // Cycle offset to apply for the values in the CYCL_NUM array
+    pub bit_base: U4,  // Offset to apply for the values in the BIT_POS array
     pub cond_cnt: U2, // Count (g) of Test Conditions and optional data specifications in present record
     pub lim_cnt: U2,  // Count (j) of LIM Arrays in present record, 1 for global specification
     pub cyc_size: U1, // Size (f) of data (1,2,4, or 8 byes) in CYC_OFST field
@@ -1194,32 +1039,47 @@ pub struct STR {
     pub u3_size: U1,  // Size (f) of data (1,2,4 or 8 bytes) in USR3 field
     pub utx_size: U1, // Size (f) of each string entry in USER_TXT array
     pub cap_bgn: U2,  // Offset added to BIT_POS value to indicate capture cycles
+    #[stdf(count = lim_cnt)]
     pub lim_indx: KxU2, // Array of PMR indexes that require unique limit specifications
+    #[stdf(count = lim_cnt)]
     pub lim_spec: KxU4, // Array of fail datalogging limits for the PMRs listed in LIM_INDX
+    #[stdf(count = cond_cnt)]
     pub cond_lst: KxCn, // Array of test condition (Name=value) pairs
     pub cyc_cnt: U2,  // Count (k) of entries in CYC_OFST array
+    #[stdf(count = cyc_cnt, width = cyc_size)]
     pub cyc_ofst: KxUf, // Array of cycle numbers relative to CYC_BASE
     pub pmr_cnt: U2,  // Count (k) of entries in the PMR_INDX array
+    #[stdf(count = pmr_cnt, width = pmr_size)]
     pub pmr_indx: KxUf, // Array of PMR Indexes (All Formats)
     pub chn_cnt: U2,  // Count (k) of entries in the CHN_NUM array
+    #[stdf(count = chn_cnt, width = chn_size)]
     pub chn_num: KxUf, // Array of Chain No for FF Name Mapping
     pub exp_cnt: U2,  // Count (k) of EXP_DATA array entries
+    #[stdf(count = exp_cnt)]
     pub exp_data: KxU1, // Array of expected vector data
     pub cap_cnt: U2,  // Count (k) of CAP_DATA array entries
+    #[stdf(count = cap_cnt)]
     pub cap_data: KxU1, // Array of captured data
     pub new_cnt: U2,  // Count (k) of NEW_DATA array entries
+    #[stdf(count = new_cnt)]
     pub new_data: KxU1, // Array of new vector data
     pub pat_cnt: U2,  // Count (k) of PAT_NUM array entries
+    #[stdf(count = pat_cnt, width = pat_size)]
     pub pat_num: KxUf, // Array of pattern # (Ptn/Chn/Bit format)
     pub bpos_cnt: U2, // Count (k) of BIT_POS array entries
+    #[stdf(count = bpos_cnt, width = bit_size)]
     pub bit_pos: KxUf, // Array of chain bit positions (Ptn/Chn/Bit format)
     pub usr1_cnt: U2, // Count (k) of USR1 array entries
-    pub usr1: KxUf,   // Array of user defined data for each logged fail
+    #[stdf(count = usr1_cnt, width = u1_size)]
+    pub usr1: KxUf, // Array of user defined data for each logged fail
     pub usr2_cnt: U2, // Count (k) of USR2 array entries
-    pub usr2: KxUf,   // Array of user defined data for each logged fail
+    #[stdf(count = usr2_cnt, width = u2_size)]
+    pub usr2: KxUf, // Array of user defined data for each logged fail
     pub usr3_cnt: U2, // Count (k) of USR3 array entries
-    pub usr3: KxUf,   // Array of user defined data for each logged fail
+    #[stdf(count = usr3_cnt, width = u3_size)]
+    pub usr3: KxUf, // Array of user defined data for each logged fail
     pub txt_cnt: U2,  // Count (k) of USER_TXT array entries
+    #[stdf(count = txt_cnt, width = utx_size)]
     pub user_txt: KxCf, // Array of user defined fixed length strings for each logged fail
 }
 
@@ -1229,7 +1089,7 @@ pub struct STR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct BPS {
     pub seq_name: Cn, // Program section (or sequencer) name length byte = 0
 }
@@ -1249,9 +1109,10 @@ pub struct EPS {}
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, StdfRecordCodec)]
 pub struct GDR {
-    pub fld_cnt: U2,  // Count of data fields in record
+    pub fld_cnt: U2, // Count of data fields in record
+    #[stdf(count = fld_cnt)]
     pub gen_data: Vn, // Data type code and data for one field(Repeat GEN_DATA for each data field)
 }
 
@@ -1261,7 +1122,7 @@ pub struct GDR {
     serde(rename_all = "UPPERCASE"),
     field_names_as_array(rename_all = "UPPERCASE")
 )]
-#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct DTR {
     pub text_dat: Cn, // ASCII text string
 }
@@ -1325,814 +1186,453 @@ impl RecordHeader {
     }
 }
 
-impl FAR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        FAR::default()
+impl<'a> CnRef<'a> {
+    /// Read a `Cn` starting at the stored offset `off` (which points at the
+    /// length byte). Returns `None` if the field is absent.
+    #[inline]
+    fn read_at(raw: &'a [u8], off: u16) -> Option<Self> {
+        let p = validate_offset(off)?;
+        let cnt = *raw.get(p)? as usize;
+        let start = p + 1;
+        let end = std::cmp::min(start + cnt, raw.len()); // clamp truncated payloads
+        Some(CnRef(&raw[start..end]))
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], _order: &ByteOrder) {
-        let pos = &mut 0;
-        self.cpu_type = read_uint8(raw_data, pos);
-        self.stdf_ver = read_uint8(raw_data, pos);
-    }
-}
-
-impl ATR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        ATR::default()
+    /// Raw bytes of the string, always zero-copy.
+    #[inline]
+    pub fn as_bytes(&self) -> &'a [u8] {
+        self.0
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.mod_tim = read_u4(raw_data, pos, order);
-        self.cmd_line = read_cn(raw_data, pos);
-    }
-}
-
-impl VUR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        VUR::default()
+    /// Zero-copy borrow when the payload is valid UTF-8; otherwise an owned
+    /// `String` decoded byte → char (Latin-1). Same decoding as
+    /// [`to_owned`](Self::to_owned).
+    #[inline]
+    pub fn as_str(&self) -> Cow<'a, str> {
+        bytes_to_cow_str(self.0)
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], _order: &ByteOrder) {
-        let pos = &mut 0;
-        self.upd_nam = read_cn(raw_data, pos);
+    /// Allocating; reproduces the owned `Cn` string (valid UTF-8 decoded as
+    /// UTF-8, otherwise byte → char Latin-1), matching the eager parser.
+    pub fn to_owned(&self) -> Cn {
+        bytes_to_string(self.0)
     }
 }
 
-impl MIR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        MIR::default()
+impl<'a> SnRef<'a> {
+    /// Read an `Sn` starting at the stored offset `off` (which points at the
+    /// 2-byte length prefix). Returns `None` if the field is absent.
+    #[inline]
+    fn read_at(raw: &'a [u8], off: u16, order: &ByteOrder) -> Option<Self> {
+        let p = validate_offset(off)?;
+        let mut cp = p;
+        let cnt = read_u2(raw, &mut cp, order) as usize;
+        let start = cp;
+        let end = std::cmp::min(start + cnt, raw.len());
+        Some(SnRef(raw.get(start..end).unwrap_or(&[])))
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.setup_t = read_u4(raw_data, pos, order);
-        self.start_t = read_u4(raw_data, pos, order);
-        self.stat_num = read_uint8(raw_data, pos);
-        // if raw_data is completely parsed,
-        // don't overwrite fields with default data
-        if *pos < raw_data.len() {
-            self.mode_cod = read_uint8(raw_data, pos) as char;
-        }
-        if *pos < raw_data.len() {
-            self.rtst_cod = read_uint8(raw_data, pos) as char;
-        }
-        if *pos < raw_data.len() {
-            self.prot_cod = read_uint8(raw_data, pos) as char;
-        }
-        if *pos + 2 <= raw_data.len() {
-            self.burn_tim = read_u2(raw_data, pos, order);
-        }
-        if *pos < raw_data.len() {
-            self.cmod_cod = read_uint8(raw_data, pos) as char;
-        }
-        self.lot_id = read_cn(raw_data, pos);
-        self.part_typ = read_cn(raw_data, pos);
-        self.node_nam = read_cn(raw_data, pos);
-        self.tstr_typ = read_cn(raw_data, pos);
-        self.job_nam = read_cn(raw_data, pos);
-        self.job_rev = read_cn(raw_data, pos);
-        self.sblot_id = read_cn(raw_data, pos);
-        self.oper_nam = read_cn(raw_data, pos);
-        self.exec_typ = read_cn(raw_data, pos);
-        self.exec_ver = read_cn(raw_data, pos);
-        self.test_cod = read_cn(raw_data, pos);
-        self.tst_temp = read_cn(raw_data, pos);
-        self.user_txt = read_cn(raw_data, pos);
-        self.aux_file = read_cn(raw_data, pos);
-        self.pkg_typ = read_cn(raw_data, pos);
-        self.famly_id = read_cn(raw_data, pos);
-        self.date_cod = read_cn(raw_data, pos);
-        self.facil_id = read_cn(raw_data, pos);
-        self.floor_id = read_cn(raw_data, pos);
-        self.proc_id = read_cn(raw_data, pos);
-        self.oper_frq = read_cn(raw_data, pos);
-        self.spec_nam = read_cn(raw_data, pos);
-        self.spec_ver = read_cn(raw_data, pos);
-        self.flow_id = read_cn(raw_data, pos);
-        self.setup_id = read_cn(raw_data, pos);
-        self.dsgn_rev = read_cn(raw_data, pos);
-        self.eng_id = read_cn(raw_data, pos);
-        self.rom_cod = read_cn(raw_data, pos);
-        self.serl_num = read_cn(raw_data, pos);
-        self.supr_nam = read_cn(raw_data, pos);
+    /// Raw bytes of the string, always zero-copy.
+    #[inline]
+    pub fn as_bytes(&self) -> &'a [u8] {
+        self.0
+    }
+
+    /// Zero-copy borrow when the payload is valid UTF-8; otherwise an owned
+    /// `String` decoded byte → char (Latin-1). Same decoding as
+    /// [`to_owned`](Self::to_owned).
+    #[inline]
+    pub fn as_str(&self) -> Cow<'a, str> {
+        bytes_to_cow_str(self.0)
+    }
+
+    /// Allocating; reproduces the owned `Sn` string (valid UTF-8 decoded as
+    /// UTF-8, otherwise byte → char Latin-1), matching the eager parser.
+    pub fn to_owned(&self) -> Sn {
+        bytes_to_string(self.0)
     }
 }
 
-impl MRR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        MRR::default()
+impl<'a> BnRef<'a> {
+    /// Read a `Bn` starting at the stored offset `off` (which points at the
+    /// length byte). Returns `None` if the field is absent.
+    #[inline]
+    fn read_at(raw: &'a [u8], off: u16) -> Option<Self> {
+        let p = validate_offset(off)?;
+        let cnt = *raw.get(p)? as usize;
+        let start = p + 1;
+        let end = std::cmp::min(start + cnt, raw.len());
+        Some(BnRef(&raw[start..end]))
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.finish_t = read_u4(raw_data, pos, order);
-        if *pos < raw_data.len() {
-            self.disp_cod = read_uint8(raw_data, pos) as char;
-        }
-        self.usr_desc = read_cn(raw_data, pos);
-        self.exc_desc = read_cn(raw_data, pos);
-    }
-}
-
-impl PCR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        PCR::default()
+    /// Raw bytes, always zero-copy.
+    #[inline]
+    pub fn as_bytes(&self) -> &'a [u8] {
+        self.0
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        self.part_cnt = read_u4(raw_data, pos, order);
-        if *pos + 4 <= raw_data.len() {
-            self.rtst_cnt = read_u4(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.abrt_cnt = read_u4(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.good_cnt = read_u4(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.func_cnt = read_u4(raw_data, pos, order);
-        }
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Allocating; reproduces the owned `Bn` (byte copy) semantics used by
+    /// `StdfRecord`, so results match the eager parser.
+    pub fn to_owned(&self) -> Bn {
+        self.0.to_vec()
     }
 }
 
-impl HBR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        HBR::default()
+impl<'a> DnRef<'a> {
+    /// Read a `Dn` starting at the stored offset `off` (which points at the
+    /// 2-byte bit-count prefix). Returns `None` if the field is absent.
+    #[inline]
+    fn read_at(raw: &'a [u8], off: u16, order: &ByteOrder) -> Option<Self> {
+        let p = validate_offset(off)?;
+        let mut cp = p;
+        let bitcount = read_u2(raw, &mut cp, order) as usize;
+        let bytecount = bitcount.div_ceil(8);
+        let start = cp;
+        let end = std::cmp::min(start + bytecount, raw.len());
+        Some(DnRef(raw.get(start..end).unwrap_or(&[])))
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        self.hbin_num = read_u2(raw_data, pos, order);
-        self.hbin_cnt = read_u4(raw_data, pos, order);
-        if *pos < raw_data.len() {
-            self.hbin_pf = read_uint8(raw_data, pos) as char;
-        }
-        self.hbin_nam = read_cn(raw_data, pos);
-    }
-}
-
-impl SBR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        SBR::default()
+    /// Raw bytes, always zero-copy.
+    #[inline]
+    pub fn as_bytes(&self) -> &'a [u8] {
+        self.0
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        self.sbin_num = read_u2(raw_data, pos, order);
-        self.sbin_cnt = read_u4(raw_data, pos, order);
-        if *pos < raw_data.len() {
-            self.sbin_pf = read_uint8(raw_data, pos) as char;
-        }
-        self.sbin_nam = read_cn(raw_data, pos);
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Allocating; reproduces the owned `Dn` (byte copy) semantics used by
+    /// `StdfRecord`, so results match the eager parser.
+    pub fn to_owned(&self) -> Dn {
+        self.0.to_vec()
     }
 }
 
-impl PMR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        PMR::default()
+impl<'a> KxCnRef<'a> {
+    /// Construct a view over `k` elements starting at byte offset `start`.
+    ///
+    /// Normally obtained from a generated `*View` getter; only needed when
+    /// parsing a known raw layout directly.
+    #[inline]
+    pub fn new(raw: &'a [u8], start: usize, k: usize) -> Self {
+        KxCnRef { raw, start, k }
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.pmr_indx = read_u2(raw_data, pos, order);
-        if *pos + 2 <= raw_data.len() {
-            self.chan_typ = read_u2(raw_data, pos, order);
+    /// Number of string elements in the array.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.k
+    }
+
+    /// `true` when the array has no elements.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.k == 0
+    }
+
+    /// Decoded `i`-th element; `None` when `i` is out of range.
+    ///
+    /// Valid UTF-8 payloads are borrowed zero-copy; other payloads are decoded
+    /// byte → char (Latin-1) into an owned `String`.
+    #[inline]
+    pub fn get_str(&self, i: usize) -> Option<Cow<'a, str>> {
+        self.get_bytes(i).map(bytes_to_cow_str)
+    }
+
+    /// Raw payload bytes of the `i`-th element (without the length prefix);
+    /// `None` when `i` is out of range.
+    #[inline]
+    pub fn get_bytes(&self, i: usize) -> Option<&'a [u8]> {
+        if i >= self.k {
+            return None;
         }
-        self.chan_nam = read_cn(raw_data, pos);
-        self.phy_nam = read_cn(raw_data, pos);
-        self.log_nam = read_cn(raw_data, pos);
-        if *pos < raw_data.len() {
-            self.head_num = read_uint8(raw_data, pos)
-        };
-        if *pos < raw_data.len() {
-            self.site_num = read_uint8(raw_data, pos)
-        };
+        // Walk to the start of element `i`: each previous element advances by
+        // 1 (length byte) + clamped payload.
+        let mut pos = self.start;
+        for _ in 0..i {
+            let cnt = *self.raw.get(pos)? as usize;
+            pos = std::cmp::min(pos + 1 + cnt, self.raw.len());
+        }
+        let cnt = *self.raw.get(pos)? as usize;
+        let start = pos + 1;
+        let end = std::cmp::min(start + cnt, self.raw.len());
+        Some(&self.raw[start..end])
+    }
+
+    /// Iterator over the decoded elements, one pass.
+    #[inline]
+    pub fn iter(&self) -> KxCnRefIter<'a> {
+        KxCnRefIter {
+            raw: self.raw,
+            pos: self.start,
+            remaining: self.k,
+        }
+    }
+
+    /// Allocating; collects all elements into `Vec<Cow<'a, str>>`.
+    #[inline]
+    pub fn as_vec(&self) -> Vec<Cow<'a, str>> {
+        self.iter().collect()
+    }
+
+    /// Allocating; reproduces the owned `KxCn` (`Vec<String>`), matching the
+    /// eager parser.
+    #[inline]
+    pub fn to_owned(&self) -> KxCn {
+        self.iter().map(Cow::into_owned).collect()
     }
 }
 
-impl PGR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        PGR::default()
-    }
+impl<'a> Iterator for KxCnRefIter<'a> {
+    type Item = Cow<'a, str>;
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.grp_indx = read_u2(raw_data, pos, order);
-        self.grp_nam = read_cn(raw_data, pos);
-        self.indx_cnt = read_u2(raw_data, pos, order);
-        self.pmr_indx = read_kx_u2(raw_data, pos, order, self.indx_cnt);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        let cnt = *self.raw.get(self.pos)? as usize;
+        self.pos += 1;
+        let end = std::cmp::min(self.pos + cnt, self.raw.len());
+        let slice = &self.raw[self.pos..end];
+        self.pos = end;
+        Some(bytes_to_cow_str(slice))
     }
 }
 
-impl PLR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        PLR::default()
-    }
+impl<'a> IntoIterator for &'a KxCnRef<'a> {
+    type Item = Cow<'a, str>;
+    type IntoIter = KxCnRefIter<'a>;
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.grp_cnt = read_u2(raw_data, pos, order);
-        self.grp_indx = read_kx_u2(raw_data, pos, order, self.grp_cnt);
-        self.grp_mode = read_kx_u2(raw_data, pos, order, self.grp_cnt);
-        self.grp_radx = read_kx_u1(raw_data, pos, self.grp_cnt);
-        self.pgm_char = read_kx_cn(raw_data, pos, self.grp_cnt);
-        self.rtn_char = read_kx_cn(raw_data, pos, self.grp_cnt);
-        self.pgm_chal = read_kx_cn(raw_data, pos, self.grp_cnt);
-        self.rtn_chal = read_kx_cn(raw_data, pos, self.grp_cnt);
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
-impl RDR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        RDR::default()
+impl<'a> KxSnRef<'a> {
+    /// Construct a view over `k` elements starting at byte offset `start`,
+    /// using `order` for the 2-byte length prefixes.
+    ///
+    /// Normally obtained from a generated `*View` getter; only needed when
+    /// parsing a known raw layout directly.
+    #[inline]
+    pub fn new(raw: &'a [u8], start: usize, k: usize, order: ByteOrder) -> Self {
+        KxSnRef {
+            raw,
+            start,
+            k,
+            order,
+        }
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.num_bins = read_u2(raw_data, pos, order);
-        self.rtst_bin = read_kx_u2(raw_data, pos, order, self.num_bins);
+    /// Number of string elements in the array.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.k
+    }
+
+    /// `true` when the array has no elements.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.k == 0
+    }
+
+    /// Decoded `i`-th element; `None` when `i` is out of range.
+    ///
+    /// Valid UTF-8 payloads are borrowed zero-copy; other payloads are decoded
+    /// byte → char (Latin-1) into an owned `String`.
+    #[inline]
+    pub fn get_str(&self, i: usize) -> Option<Cow<'a, str>> {
+        self.get_bytes(i).map(bytes_to_cow_str)
+    }
+
+    /// Raw payload bytes of the `i`-th element (without the length prefix);
+    /// `None` when `i` is out of range.
+    #[inline]
+    pub fn get_bytes(&self, i: usize) -> Option<&'a [u8]> {
+        if i >= self.k {
+            return None;
+        }
+        // Walk to the start of element `i`: each previous element advances by
+        // 2 (length prefix) + clamped payload.
+        let mut pos = self.start;
+        for _ in 0..i {
+            let mut cp = pos;
+            let cnt = read_u2(self.raw, &mut cp, &self.order) as usize;
+            pos = std::cmp::min(cp + cnt, self.raw.len());
+        }
+        let mut cp = pos;
+        let cnt = read_u2(self.raw, &mut cp, &self.order) as usize;
+        let start = cp;
+        let end = std::cmp::min(start + cnt, self.raw.len());
+        Some(self.raw.get(start..end).unwrap_or(&[]))
+    }
+
+    /// Iterator over the decoded elements, one pass.
+    #[inline]
+    pub fn iter(&self) -> KxSnRefIter<'a> {
+        KxSnRefIter {
+            raw: self.raw,
+            pos: self.start,
+            remaining: self.k,
+            order: self.order,
+        }
+    }
+
+    /// Allocating; collects all elements into `Vec<Cow<'a, str>>`.
+    #[inline]
+    pub fn as_vec(&self) -> Vec<Cow<'a, str>> {
+        self.iter().collect()
+    }
+
+    /// Allocating; reproduces the owned `KxSn` (`Vec<String>`), matching the
+    /// eager parser.
+    #[inline]
+    pub fn to_owned(&self) -> KxSn {
+        self.iter().map(Cow::into_owned).collect()
     }
 }
 
-impl SDR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        SDR::default()
-    }
+impl<'a> Iterator for KxSnRefIter<'a> {
+    type Item = Cow<'a, str>;
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], _order: &ByteOrder) {
-        let pos = &mut 0;
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_grp = read_uint8(raw_data, pos);
-        self.site_cnt = read_uint8(raw_data, pos);
-        self.site_num = read_kx_u1(raw_data, pos, self.site_cnt as u16);
-        self.hand_typ = read_cn(raw_data, pos);
-        self.hand_id = read_cn(raw_data, pos);
-        self.card_typ = read_cn(raw_data, pos);
-        self.card_id = read_cn(raw_data, pos);
-        self.load_typ = read_cn(raw_data, pos);
-        self.load_id = read_cn(raw_data, pos);
-        self.dib_typ = read_cn(raw_data, pos);
-        self.dib_id = read_cn(raw_data, pos);
-        self.cabl_typ = read_cn(raw_data, pos);
-        self.cabl_id = read_cn(raw_data, pos);
-        self.cont_typ = read_cn(raw_data, pos);
-        self.cont_id = read_cn(raw_data, pos);
-        self.lasr_typ = read_cn(raw_data, pos);
-        self.lasr_id = read_cn(raw_data, pos);
-        self.extr_typ = read_cn(raw_data, pos);
-        self.extr_id = read_cn(raw_data, pos);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        let mut cp = self.pos;
+        let cnt = read_u2(self.raw, &mut cp, &self.order) as usize;
+        self.pos = cp;
+        let end = std::cmp::min(self.pos + cnt, self.raw.len());
+        let slice = self.raw.get(self.pos..end).unwrap_or(&[]);
+        self.pos = end;
+        Some(bytes_to_cow_str(slice))
     }
 }
 
-impl PSR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        PSR::default()
-    }
+impl<'a> IntoIterator for &'a KxSnRef<'a> {
+    type Item = Cow<'a, str>;
+    type IntoIter = KxSnRefIter<'a>;
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.cont_flg = [read_uint8(raw_data, pos)];
-        self.psr_indx = read_u2(raw_data, pos, order);
-        self.psr_nam = read_cn(raw_data, pos);
-        self.opt_flg = [read_uint8(raw_data, pos)];
-        self.totp_cnt = read_u2(raw_data, pos, order);
-        self.locp_cnt = read_u2(raw_data, pos, order);
-        self.pat_bgn = read_kx_u8(raw_data, pos, order, self.locp_cnt);
-        self.pat_end = read_kx_u8(raw_data, pos, order, self.locp_cnt);
-        self.pat_file = read_kx_cn(raw_data, pos, self.locp_cnt);
-        self.pat_lbl = read_kx_cn(raw_data, pos, self.locp_cnt);
-        self.file_uid = read_kx_cn(raw_data, pos, self.locp_cnt);
-        self.atpg_dsc = read_kx_cn(raw_data, pos, self.locp_cnt);
-        self.src_id = read_kx_cn(raw_data, pos, self.locp_cnt);
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
-impl NMR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        NMR::default()
+impl<'a> KxCfRef<'a> {
+    /// Construct a view over `k` fixed `f`-byte elements starting at byte
+    /// offset `start`.
+    ///
+    /// Normally obtained from a generated `*View` getter; only needed when
+    /// parsing a known raw layout directly.
+    #[inline]
+    pub fn new(raw: &'a [u8], start: usize, k: usize, f: usize) -> Self {
+        KxCfRef { raw, start, k, f }
     }
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.cont_flg = [read_uint8(raw_data, pos)];
-        self.totm_cnt = read_u2(raw_data, pos, order);
-        self.locm_cnt = read_u2(raw_data, pos, order);
-        self.pmr_indx = read_kx_u2(raw_data, pos, order, self.locm_cnt);
-        self.atpg_nam = read_kx_cn(raw_data, pos, self.locm_cnt);
+    /// Number of string elements in the array.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.k
+    }
+
+    /// `true` when the array has no elements.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.k == 0
+    }
+
+    /// Decoded `i`-th element; `None` when `i` is out of range.
+    ///
+    /// Valid UTF-8 payloads are borrowed zero-copy; other payloads are decoded
+    /// byte → char (Latin-1) into an owned `String`.
+    #[inline]
+    pub fn get_str(&self, i: usize) -> Option<Cow<'a, str>> {
+        self.get_bytes(i).map(bytes_to_cow_str)
+    }
+
+    /// Raw payload bytes of the `i`-th element; `None` when `i` is out of
+    /// range or lies past the end of the buffer.
+    #[inline]
+    pub fn get_bytes(&self, i: usize) -> Option<&'a [u8]> {
+        if i >= self.k {
+            return None;
+        }
+        let start = self.start + i * self.f;
+        let end = std::cmp::min(start + self.f, self.raw.len());
+        self.raw.get(start..end)
+    }
+
+    /// Iterator over the decoded elements, one pass.
+    #[inline]
+    pub fn iter(&self) -> KxCfRefIter<'a> {
+        KxCfRefIter {
+            raw: self.raw,
+            pos: self.start,
+            remaining: self.k,
+            f: self.f,
+        }
+    }
+
+    /// Allocating; collects all elements into `Vec<Cow<'a, str>>`.
+    #[inline]
+    pub fn as_vec(&self) -> Vec<Cow<'a, str>> {
+        self.iter().collect()
+    }
+
+    /// Allocating; reproduces the owned `KxCf` (`Vec<String>`), matching the
+    /// eager parser.
+    #[inline]
+    pub fn to_owned(&self) -> KxCf {
+        self.iter().map(Cow::into_owned).collect()
     }
 }
 
-impl CNR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        CNR::default()
-    }
+impl<'a> Iterator for KxCfRefIter<'a> {
+    type Item = Cow<'a, str>;
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.chn_num = read_u2(raw_data, pos, order);
-        self.bit_pos = read_u4(raw_data, pos, order);
-        self.cell_nam = read_sn(raw_data, pos, order);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        let end = std::cmp::min(self.pos + self.f, self.raw.len());
+        let slice = self.raw.get(self.pos..end).unwrap_or(&[]);
+        self.pos = end;
+        Some(bytes_to_cow_str(slice))
     }
 }
 
-impl SSR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        SSR::default()
-    }
+impl<'a> IntoIterator for &'a KxCfRef<'a> {
+    type Item = Cow<'a, str>;
+    type IntoIter = KxCfRefIter<'a>;
 
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.ssr_nam = read_cn(raw_data, pos);
-        self.chn_cnt = read_u2(raw_data, pos, order);
-        self.chn_list = read_kx_u2(raw_data, pos, order, self.chn_cnt);
-    }
-}
-
-impl CDR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        CDR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.cont_flg = [read_uint8(raw_data, pos)];
-        self.cdr_indx = read_u2(raw_data, pos, order);
-        self.chn_nam = read_cn(raw_data, pos);
-        self.chn_len = read_u4(raw_data, pos, order);
-        self.sin_pin = read_u2(raw_data, pos, order);
-        self.sout_pin = read_u2(raw_data, pos, order);
-        self.mstr_cnt = read_uint8(raw_data, pos);
-        self.m_clks = read_kx_u2(raw_data, pos, order, self.mstr_cnt as u16);
-        self.slav_cnt = read_uint8(raw_data, pos);
-        self.s_clks = read_kx_u2(raw_data, pos, order, self.slav_cnt as u16);
-        if *pos < raw_data.len() {
-            self.inv_val = read_uint8(raw_data, pos);
-        }
-        self.lst_cnt = read_u2(raw_data, pos, order);
-        self.cell_lst = read_kx_sn(raw_data, pos, order, self.lst_cnt);
-    }
-}
-
-impl WIR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        WIR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.head_num = read_uint8(raw_data, pos);
-        if *pos < raw_data.len() {
-            self.site_grp = read_uint8(raw_data, pos);
-        }
-        self.start_t = read_u4(raw_data, pos, order);
-        self.wafer_id = read_cn(raw_data, pos);
-    }
-}
-
-impl WRR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        WRR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.head_num = read_uint8(raw_data, pos);
-        if *pos < raw_data.len() {
-            self.site_grp = read_uint8(raw_data, pos);
-        }
-        self.finish_t = read_u4(raw_data, pos, order);
-        self.part_cnt = read_u4(raw_data, pos, order);
-        if *pos + 4 <= raw_data.len() {
-            self.rtst_cnt = read_u4(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.abrt_cnt = read_u4(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.good_cnt = read_u4(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.func_cnt = read_u4(raw_data, pos, order);
-        }
-        self.wafer_id = read_cn(raw_data, pos);
-        self.fabwf_id = read_cn(raw_data, pos);
-        self.frame_id = read_cn(raw_data, pos);
-        self.mask_id = read_cn(raw_data, pos);
-        self.usr_desc = read_cn(raw_data, pos);
-        self.exc_desc = read_cn(raw_data, pos);
-    }
-}
-
-impl WCR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        WCR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.wafr_siz = read_r4(raw_data, pos, order);
-        self.die_ht = read_r4(raw_data, pos, order);
-        self.die_wid = read_r4(raw_data, pos, order);
-        self.wf_units = read_uint8(raw_data, pos);
-        if *pos < raw_data.len() {
-            self.wf_flat = read_uint8(raw_data, pos) as char;
-        }
-        if *pos + 2 <= raw_data.len() {
-            self.center_x = read_i2(raw_data, pos, order);
-        }
-        if *pos + 2 <= raw_data.len() {
-            self.center_y = read_i2(raw_data, pos, order);
-        }
-        if *pos < raw_data.len() {
-            self.pos_x = read_uint8(raw_data, pos) as char;
-        }
-        if *pos < raw_data.len() {
-            self.pos_y = read_uint8(raw_data, pos) as char;
-        }
-    }
-}
-
-impl PIR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        PIR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], _order: &ByteOrder) {
-        let pos = &mut 0;
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-    }
-}
-
-impl PRR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        PRR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        self.part_flg = [read_uint8(raw_data, pos)];
-        self.num_test = read_u2(raw_data, pos, order);
-        self.hard_bin = read_u2(raw_data, pos, order);
-        if *pos + 2 <= raw_data.len() {
-            self.soft_bin = read_u2(raw_data, pos, order);
-        }
-        if *pos + 2 <= raw_data.len() {
-            self.x_coord = read_i2(raw_data, pos, order);
-        }
-        if *pos + 2 <= raw_data.len() {
-            self.y_coord = read_i2(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.test_t = read_u4(raw_data, pos, order);
-        }
-        self.part_id = read_cn(raw_data, pos);
-        self.part_txt = read_cn(raw_data, pos);
-        self.part_fix = read_bn(raw_data, pos);
-    }
-}
-
-impl TSR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        TSR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        if *pos < raw_data.len() {
-            self.test_typ = read_uint8(raw_data, pos) as char;
-        }
-        self.test_num = read_u4(raw_data, pos, order);
-        if *pos + 4 <= raw_data.len() {
-            self.exec_cnt = read_u4(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.fail_cnt = read_u4(raw_data, pos, order);
-        }
-        if *pos + 4 <= raw_data.len() {
-            self.alrm_cnt = read_u4(raw_data, pos, order);
-        }
-        self.test_nam = read_cn(raw_data, pos);
-        self.seq_name = read_cn(raw_data, pos);
-        self.test_lbl = read_cn(raw_data, pos);
-        self.opt_flag = [read_uint8(raw_data, pos)];
-        self.test_tim = read_r4(raw_data, pos, order);
-        self.test_min = read_r4(raw_data, pos, order);
-        self.test_max = read_r4(raw_data, pos, order);
-        self.tst_sums = read_r4(raw_data, pos, order);
-        self.tst_sqrs = read_r4(raw_data, pos, order);
-    }
-}
-
-impl PTR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        PTR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.test_num = read_u4(raw_data, pos, order);
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        self.test_flg = [read_uint8(raw_data, pos)];
-        self.parm_flg = [read_uint8(raw_data, pos)];
-        self.result = read_r4(raw_data, pos, order);
-        self.test_txt = read_cn(raw_data, pos);
-        self.alarm_id = read_cn(raw_data, pos);
-        read_optional!(self.opt_flag, [read_uint8(raw_data, pos)], 1);
-        read_optional!(self.res_scal, read_i1(raw_data, pos), 1);
-        read_optional!(self.llm_scal, read_i1(raw_data, pos), 1);
-        read_optional!(self.hlm_scal, read_i1(raw_data, pos), 1);
-        read_optional!(self.lo_limit, read_r4(raw_data, pos, order), 4);
-        read_optional!(self.hi_limit, read_r4(raw_data, pos, order), 4);
-        read_optional!(self.units, read_cn(raw_data, pos), 1);
-        read_optional!(self.c_resfmt, read_cn(raw_data, pos), 1);
-        read_optional!(self.c_llmfmt, read_cn(raw_data, pos), 1);
-        read_optional!(self.c_hlmfmt, read_cn(raw_data, pos), 1);
-        read_optional!(self.lo_spec, read_r4(raw_data, pos, order), 4);
-        read_optional!(self.hi_spec, read_r4(raw_data, pos, order), 4);
-    }
-}
-
-impl MPR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        MPR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.test_num = read_u4(raw_data, pos, order);
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        self.test_flg = [read_uint8(raw_data, pos)];
-        self.parm_flg = [read_uint8(raw_data, pos)];
-        self.rtn_icnt = read_u2(raw_data, pos, order);
-        self.rslt_cnt = read_u2(raw_data, pos, order);
-        self.rtn_stat = read_kx_n1(raw_data, pos, self.rtn_icnt);
-        self.rtn_rslt = read_kx_r4(raw_data, pos, order, self.rslt_cnt);
-        self.test_txt = read_cn(raw_data, pos);
-        self.alarm_id = read_cn(raw_data, pos);
-        read_optional!(self.opt_flag, [read_uint8(raw_data, pos)], 1);
-        read_optional!(self.res_scal, read_i1(raw_data, pos), 1);
-        read_optional!(self.llm_scal, read_i1(raw_data, pos), 1);
-        read_optional!(self.hlm_scal, read_i1(raw_data, pos), 1);
-        read_optional!(self.lo_limit, read_r4(raw_data, pos, order), 4);
-        read_optional!(self.hi_limit, read_r4(raw_data, pos, order), 4);
-        read_optional!(self.start_in, read_r4(raw_data, pos, order), 4);
-        read_optional!(self.incr_in, read_r4(raw_data, pos, order), 4);
-        read_optional!(
-            self.rtn_indx,
-            read_kx_u2(raw_data, pos, order, self.rtn_icnt),
-            2
-        );
-        read_optional!(self.units, read_cn(raw_data, pos), 1);
-        read_optional!(self.units_in, read_cn(raw_data, pos), 1);
-        read_optional!(self.c_resfmt, read_cn(raw_data, pos), 1);
-        read_optional!(self.c_llmfmt, read_cn(raw_data, pos), 1);
-        read_optional!(self.c_hlmfmt, read_cn(raw_data, pos), 1);
-        read_optional!(self.lo_spec, read_r4(raw_data, pos, order), 4);
-        read_optional!(self.hi_spec, read_r4(raw_data, pos, order), 4);
-    }
-}
-
-impl FTR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        FTR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.test_num = read_u4(raw_data, pos, order);
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        self.test_flg = [read_uint8(raw_data, pos)];
-        self.opt_flag = [read_uint8(raw_data, pos)];
-        self.cycl_cnt = read_u4(raw_data, pos, order);
-        self.rel_vadr = read_u4(raw_data, pos, order);
-        self.rept_cnt = read_u4(raw_data, pos, order);
-        self.num_fail = read_u4(raw_data, pos, order);
-        self.xfail_ad = read_i4(raw_data, pos, order);
-        self.yfail_ad = read_i4(raw_data, pos, order);
-        self.vect_off = read_i2(raw_data, pos, order);
-        self.rtn_icnt = read_u2(raw_data, pos, order);
-        self.pgm_icnt = read_u2(raw_data, pos, order);
-        self.rtn_indx = read_kx_u2(raw_data, pos, order, self.rtn_icnt);
-        self.rtn_stat = read_kx_n1(raw_data, pos, self.rtn_icnt);
-        self.pgm_indx = read_kx_u2(raw_data, pos, order, self.pgm_icnt);
-        self.pgm_stat = read_kx_n1(raw_data, pos, self.pgm_icnt);
-        self.fail_pin = read_dn(raw_data, pos, order);
-        self.vect_nam = read_cn(raw_data, pos);
-        self.time_set = read_cn(raw_data, pos);
-        self.op_code = read_cn(raw_data, pos);
-        self.test_txt = read_cn(raw_data, pos);
-        self.alarm_id = read_cn(raw_data, pos);
-        self.prog_txt = read_cn(raw_data, pos);
-        self.rslt_txt = read_cn(raw_data, pos);
-        if *pos < raw_data.len() {
-            self.patg_num = read_uint8(raw_data, pos);
-        }
-        self.spin_map = read_dn(raw_data, pos, order);
-    }
-}
-
-impl STR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        STR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.cont_flg = [read_uint8(raw_data, pos)];
-        self.test_num = read_u4(raw_data, pos, order);
-        self.head_num = read_uint8(raw_data, pos);
-        self.site_num = read_uint8(raw_data, pos);
-        self.psr_ref = read_u2(raw_data, pos, order);
-        self.test_flg = [read_uint8(raw_data, pos)];
-        self.log_typ = read_cn(raw_data, pos);
-        self.test_txt = read_cn(raw_data, pos);
-        self.alarm_id = read_cn(raw_data, pos);
-        self.prog_txt = read_cn(raw_data, pos);
-        self.rslt_txt = read_cn(raw_data, pos);
-        self.z_val = read_uint8(raw_data, pos);
-        self.fmu_flg = [read_uint8(raw_data, pos)];
-        self.mask_map = read_dn(raw_data, pos, order);
-        self.fal_map = read_dn(raw_data, pos, order);
-        self.cyc_cnt_t = read_u8(raw_data, pos, order);
-        self.totf_cnt = read_u4(raw_data, pos, order);
-        self.totl_cnt = read_u4(raw_data, pos, order);
-        self.cyc_base = read_u8(raw_data, pos, order);
-        self.bit_base = read_u4(raw_data, pos, order);
-        self.cond_cnt = read_u2(raw_data, pos, order);
-        self.lim_cnt = read_u2(raw_data, pos, order);
-        self.cyc_size = read_uint8(raw_data, pos);
-        self.pmr_size = read_uint8(raw_data, pos);
-        self.chn_size = read_uint8(raw_data, pos);
-        self.pat_size = read_uint8(raw_data, pos);
-        self.bit_size = read_uint8(raw_data, pos);
-        self.u1_size = read_uint8(raw_data, pos);
-        self.u2_size = read_uint8(raw_data, pos);
-        self.u3_size = read_uint8(raw_data, pos);
-        self.utx_size = read_uint8(raw_data, pos);
-        self.cap_bgn = read_u2(raw_data, pos, order);
-        // k: LIM_CNT
-        self.lim_indx = read_kx_u2(raw_data, pos, order, self.lim_cnt);
-        self.lim_spec = read_kx_u4(raw_data, pos, order, self.lim_cnt);
-        // k: COND_CNT
-        self.cond_lst = read_kx_cn(raw_data, pos, self.cond_cnt);
-        self.cyc_cnt = read_u2(raw_data, pos, order);
-        // k: CYC_CNT, f: CYC_SIZE
-        self.cyc_ofst = read_kx_uf(raw_data, pos, order, self.cyc_cnt, self.cyc_size);
-        self.pmr_cnt = read_u2(raw_data, pos, order);
-        // k: PMR_CNT, f: PMR_SIZE
-        self.pmr_indx = read_kx_uf(raw_data, pos, order, self.pmr_cnt, self.pmr_size);
-        self.chn_cnt = read_u2(raw_data, pos, order);
-        // k: CHN_CNT, f: CHN_SIZE
-        self.chn_num = read_kx_uf(raw_data, pos, order, self.chn_cnt, self.chn_size);
-        self.exp_cnt = read_u2(raw_data, pos, order);
-        // k: EXP_CNT
-        self.exp_data = read_kx_u1(raw_data, pos, self.exp_cnt);
-        self.cap_cnt = read_u2(raw_data, pos, order);
-        // k: CAP_CNT
-        self.cap_data = read_kx_u1(raw_data, pos, self.cap_cnt);
-        self.new_cnt = read_u2(raw_data, pos, order);
-        // k: NEW_CNT
-        self.new_data = read_kx_u1(raw_data, pos, self.new_cnt);
-        self.pat_cnt = read_u2(raw_data, pos, order);
-        // k: PAT_CNT, f: PAT_SIZE
-        self.pat_num = read_kx_uf(raw_data, pos, order, self.pat_cnt, self.pat_size);
-        self.bpos_cnt = read_u2(raw_data, pos, order);
-        // k: BPOS_CNT, f: BIT_SIZE
-        self.bit_pos = read_kx_uf(raw_data, pos, order, self.bpos_cnt, self.bit_size);
-        self.usr1_cnt = read_u2(raw_data, pos, order);
-        // k: USR1_CNT, f: U1_SIZE
-        self.usr1 = read_kx_uf(raw_data, pos, order, self.usr1_cnt, self.u1_size);
-        self.usr2_cnt = read_u2(raw_data, pos, order);
-        // k: USR2_CNT, f: U2_SIZE
-        self.usr2 = read_kx_uf(raw_data, pos, order, self.usr2_cnt, self.u2_size);
-        self.usr3_cnt = read_u2(raw_data, pos, order);
-        // k: USR3_CNT, f: U3_SIZE
-        self.usr3 = read_kx_uf(raw_data, pos, order, self.usr3_cnt, self.u3_size);
-        self.txt_cnt = read_u2(raw_data, pos, order);
-        // k: TXT_CNT
-        self.user_txt = read_kx_cf(raw_data, pos, self.txt_cnt, self.utx_size);
-    }
-}
-
-impl BPS {
-    #[inline(always)]
-    pub fn new() -> Self {
-        BPS::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], _order: &ByteOrder) {
-        let pos = &mut 0;
-        self.seq_name = read_cn(raw_data, pos);
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
 impl EPS {
     pub fn new() -> Self {
         EPS::default()
-    }
-
-    pub fn read_from_bytes(&mut self, _raw_data: &[u8], _order: &ByteOrder) {}
-}
-
-impl GDR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        GDR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        let pos = &mut 0;
-        self.fld_cnt = read_u2(raw_data, pos, order);
-        self.gen_data = read_vn(raw_data, pos, order, self.fld_cnt);
-    }
-}
-
-impl DTR {
-    #[inline(always)]
-    pub fn new() -> Self {
-        DTR::default()
-    }
-
-    #[inline(always)]
-    pub fn read_from_bytes(&mut self, raw_data: &[u8], _order: &ByteOrder) {
-        let pos = &mut 0;
-        self.text_dat = read_cn(raw_data, pos);
     }
 }
 
@@ -2166,53 +1666,7 @@ impl StdfRecord {
     /// ```
     #[inline(always)]
     pub fn new(rec_type: u64) -> Self {
-        match rec_type {
-            // rec type 15
-            stdf_record_type::REC_PTR => StdfRecord::PTR(PTR::new()),
-            stdf_record_type::REC_MPR => StdfRecord::MPR(MPR::new()),
-            stdf_record_type::REC_FTR => StdfRecord::FTR(FTR::new()),
-            stdf_record_type::REC_STR => StdfRecord::STR(STR::new()),
-            // rec type 5
-            stdf_record_type::REC_PIR => StdfRecord::PIR(PIR::new()),
-            stdf_record_type::REC_PRR => StdfRecord::PRR(PRR::new()),
-            // rec type 2
-            stdf_record_type::REC_WIR => StdfRecord::WIR(WIR::new()),
-            stdf_record_type::REC_WRR => StdfRecord::WRR(WRR::new()),
-            stdf_record_type::REC_WCR => StdfRecord::WCR(WCR::new()),
-            // rec type 50
-            stdf_record_type::REC_GDR => StdfRecord::GDR(GDR::new()),
-            stdf_record_type::REC_DTR => StdfRecord::DTR(DTR::new()),
-            // rec type 0
-            stdf_record_type::REC_FAR => StdfRecord::FAR(FAR::new()),
-            stdf_record_type::REC_ATR => StdfRecord::ATR(ATR::new()),
-            stdf_record_type::REC_VUR => StdfRecord::VUR(VUR::new()),
-            // rec type 1
-            stdf_record_type::REC_MIR => StdfRecord::MIR(MIR::new()),
-            stdf_record_type::REC_MRR => StdfRecord::MRR(MRR::new()),
-            stdf_record_type::REC_PCR => StdfRecord::PCR(PCR::new()),
-            stdf_record_type::REC_HBR => StdfRecord::HBR(HBR::new()),
-            stdf_record_type::REC_SBR => StdfRecord::SBR(SBR::new()),
-            stdf_record_type::REC_PMR => StdfRecord::PMR(PMR::new()),
-            stdf_record_type::REC_PGR => StdfRecord::PGR(PGR::new()),
-            stdf_record_type::REC_PLR => StdfRecord::PLR(PLR::new()),
-            stdf_record_type::REC_RDR => StdfRecord::RDR(RDR::new()),
-            stdf_record_type::REC_SDR => StdfRecord::SDR(SDR::new()),
-            stdf_record_type::REC_PSR => StdfRecord::PSR(PSR::new()),
-            stdf_record_type::REC_NMR => StdfRecord::NMR(NMR::new()),
-            stdf_record_type::REC_CNR => StdfRecord::CNR(CNR::new()),
-            stdf_record_type::REC_SSR => StdfRecord::SSR(SSR::new()),
-            stdf_record_type::REC_CDR => StdfRecord::CDR(CDR::new()),
-            // rec type 10
-            stdf_record_type::REC_TSR => StdfRecord::TSR(TSR::new()),
-            // rec type 20
-            stdf_record_type::REC_BPS => StdfRecord::BPS(BPS::new()),
-            stdf_record_type::REC_EPS => StdfRecord::EPS(EPS::new()),
-            // rec type 180: Reserved
-            // rec type 181: Reserved
-            stdf_record_type::REC_RESERVE => StdfRecord::ReservedRec(ReservedRec::new()),
-            // not matched
-            _ => StdfRecord::InvalidRec(RecordHeader::new()),
-        }
+        stdf_match_expr!(record_new)
     }
 
     /// Create a `StdfRecord` from a `RecordHeader` with default data
@@ -2238,59 +1692,16 @@ impl StdfRecord {
     /// ```
     #[inline(always)]
     pub fn new_from_header(header: RecordHeader) -> Self {
-        // I can use `header.get_type_code()` to get type_code
-        // and reuse the code from `new()`
-        // but match a tuple directly may be more efficient?
-        match (header.typ, header.sub) {
-            // rec type 15
-            (15, 10) => StdfRecord::PTR(PTR::new()),
-            (15, 15) => StdfRecord::MPR(MPR::new()),
-            (15, 20) => StdfRecord::FTR(FTR::new()),
-            (15, 30) => StdfRecord::STR(STR::new()),
-            // rec type 5
-            (5, 10) => StdfRecord::PIR(PIR::new()),
-            (5, 20) => StdfRecord::PRR(PRR::new()),
-            // rec type 2
-            (2, 10) => StdfRecord::WIR(WIR::new()),
-            (2, 20) => StdfRecord::WRR(WRR::new()),
-            (2, 30) => StdfRecord::WCR(WCR::new()),
-            // rec type 50
-            (50, 10) => StdfRecord::GDR(GDR::new()),
-            (50, 30) => StdfRecord::DTR(DTR::new()),
-            // rec type 0
-            (0, 10) => StdfRecord::FAR(FAR::new()),
-            (0, 20) => StdfRecord::ATR(ATR::new()),
-            (0, 30) => StdfRecord::VUR(VUR::new()),
-            // rec type 1
-            (1, 10) => StdfRecord::MIR(MIR::new()),
-            (1, 20) => StdfRecord::MRR(MRR::new()),
-            (1, 30) => StdfRecord::PCR(PCR::new()),
-            (1, 40) => StdfRecord::HBR(HBR::new()),
-            (1, 50) => StdfRecord::SBR(SBR::new()),
-            (1, 60) => StdfRecord::PMR(PMR::new()),
-            (1, 62) => StdfRecord::PGR(PGR::new()),
-            (1, 63) => StdfRecord::PLR(PLR::new()),
-            (1, 70) => StdfRecord::RDR(RDR::new()),
-            (1, 80) => StdfRecord::SDR(SDR::new()),
-            (1, 90) => StdfRecord::PSR(PSR::new()),
-            (1, 91) => StdfRecord::NMR(NMR::new()),
-            (1, 92) => StdfRecord::CNR(CNR::new()),
-            (1, 93) => StdfRecord::SSR(SSR::new()),
-            (1, 94) => StdfRecord::CDR(CDR::new()),
-            // rec type 10
-            (10, 30) => StdfRecord::TSR(TSR::new()),
-            // rec type 20
-            (20, 10) => StdfRecord::BPS(BPS::new()),
-            (20, 20) => StdfRecord::EPS(EPS::new()),
-            // rec type 180: Reserved
-            // rec type 181: Reserved
-            (180 | 181, _) => StdfRecord::ReservedRec(ReservedRec::new()),
-            // not matched
-            _ => StdfRecord::InvalidRec(header),
+        let code = stdf_record_type::get_code_from_typ_sub(header.typ, header.sub);
+        if code == stdf_record_type::REC_INVALID {
+            // Preserve the invalid header so callers can inspect it for debugging.
+            StdfRecord::InvalidRec(header)
+        } else {
+            StdfRecord::new(code)
         }
     }
 
-    /// returns the record type cdoe of the given StdfRecord,
+    /// Returns the record type cdoe of the given StdfRecord,
     /// which is defined in `rust_stdf::stdf_record_type::*` module.
     ///
     /// ```
@@ -2310,56 +1721,10 @@ impl StdfRecord {
     /// ```
     #[inline(always)]
     pub fn get_type(&self) -> u64 {
-        match &self {
-            // rec type 15
-            StdfRecord::PTR(_) => stdf_record_type::REC_PTR,
-            StdfRecord::MPR(_) => stdf_record_type::REC_MPR,
-            StdfRecord::FTR(_) => stdf_record_type::REC_FTR,
-            StdfRecord::STR(_) => stdf_record_type::REC_STR,
-            // rec type 5
-            StdfRecord::PIR(_) => stdf_record_type::REC_PIR,
-            StdfRecord::PRR(_) => stdf_record_type::REC_PRR,
-            // rec type 2
-            StdfRecord::WIR(_) => stdf_record_type::REC_WIR,
-            StdfRecord::WRR(_) => stdf_record_type::REC_WRR,
-            StdfRecord::WCR(_) => stdf_record_type::REC_WCR,
-            // rec type 50
-            StdfRecord::GDR(_) => stdf_record_type::REC_GDR,
-            StdfRecord::DTR(_) => stdf_record_type::REC_DTR,
-            // rec type 10
-            StdfRecord::TSR(_) => stdf_record_type::REC_TSR,
-            // rec type 1
-            StdfRecord::MIR(_) => stdf_record_type::REC_MIR,
-            StdfRecord::MRR(_) => stdf_record_type::REC_MRR,
-            StdfRecord::PCR(_) => stdf_record_type::REC_PCR,
-            StdfRecord::HBR(_) => stdf_record_type::REC_HBR,
-            StdfRecord::SBR(_) => stdf_record_type::REC_SBR,
-            StdfRecord::PMR(_) => stdf_record_type::REC_PMR,
-            StdfRecord::PGR(_) => stdf_record_type::REC_PGR,
-            StdfRecord::PLR(_) => stdf_record_type::REC_PLR,
-            StdfRecord::RDR(_) => stdf_record_type::REC_RDR,
-            StdfRecord::SDR(_) => stdf_record_type::REC_SDR,
-            StdfRecord::PSR(_) => stdf_record_type::REC_PSR,
-            StdfRecord::NMR(_) => stdf_record_type::REC_NMR,
-            StdfRecord::CNR(_) => stdf_record_type::REC_CNR,
-            StdfRecord::SSR(_) => stdf_record_type::REC_SSR,
-            StdfRecord::CDR(_) => stdf_record_type::REC_CDR,
-            // rec type 0
-            StdfRecord::FAR(_) => stdf_record_type::REC_FAR,
-            StdfRecord::ATR(_) => stdf_record_type::REC_ATR,
-            StdfRecord::VUR(_) => stdf_record_type::REC_VUR,
-            // rec type 20
-            StdfRecord::BPS(_) => stdf_record_type::REC_BPS,
-            StdfRecord::EPS(_) => stdf_record_type::REC_EPS,
-            // rec type 180: Reserved
-            // rec type 181: Reserved
-            StdfRecord::ReservedRec(_) => stdf_record_type::REC_RESERVE,
-            // not matched
-            StdfRecord::InvalidRec(_) => stdf_record_type::REC_INVALID,
-        }
+        stdf_match_expr!(record_type)
     }
 
-    /// check the StdfRecord belongs the given type code(s),
+    /// Check the StdfRecord belongs the given type code(s),
     /// it is useful for filtering the records during the parsing iteration.
     /// ```
     /// use rust_stdf::{StdfRecord, stdf_record_type::*};
@@ -2375,7 +1740,7 @@ impl StdfRecord {
         (self.get_type() & rec_type) != 0
     }
 
-    /// parse StdfRecord from byte data which **DOES NOT**
+    /// Parse StdfRecord from byte data which **DOES NOT**
     /// contain the record header (len, typ, sub),
     ///
     /// requires a mutable StdfRecord to store the parsed data
@@ -2393,61 +1758,15 @@ impl StdfRecord {
     /// ```
     #[inline(always)]
     pub fn read_from_bytes(&mut self, raw_data: &[u8], order: &ByteOrder) {
-        match self {
-            // rec type 15
-            StdfRecord::PTR(ptr_rec) => ptr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::MPR(mpr_rec) => mpr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::FTR(ftr_rec) => ftr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::STR(str_rec) => str_rec.read_from_bytes(raw_data, order),
-            // rec type 5
-            StdfRecord::PIR(pir_rec) => pir_rec.read_from_bytes(raw_data, order),
-            StdfRecord::PRR(prr_rec) => prr_rec.read_from_bytes(raw_data, order),
-            // rec type 2
-            StdfRecord::WIR(wir_rec) => wir_rec.read_from_bytes(raw_data, order),
-            StdfRecord::WRR(wrr_rec) => wrr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::WCR(wcr_rec) => wcr_rec.read_from_bytes(raw_data, order),
-            // rec type 50
-            StdfRecord::GDR(gdr_rec) => gdr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::DTR(dtr_rec) => dtr_rec.read_from_bytes(raw_data, order),
-            // rec type 10
-            StdfRecord::TSR(tsr_rec) => tsr_rec.read_from_bytes(raw_data, order),
-            // rec type 1
-            StdfRecord::MIR(mir_rec) => mir_rec.read_from_bytes(raw_data, order),
-            StdfRecord::MRR(mrr_rec) => mrr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::PCR(pcr_rec) => pcr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::HBR(hbr_rec) => hbr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::SBR(sbr_rec) => sbr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::PMR(pmr_rec) => pmr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::PGR(pgr_rec) => pgr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::PLR(plr_rec) => plr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::RDR(rdr_rec) => rdr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::SDR(sdr_rec) => sdr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::PSR(psr_rec) => psr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::NMR(nmr_rec) => nmr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::CNR(cnr_rec) => cnr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::SSR(ssr_rec) => ssr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::CDR(cdr_rec) => cdr_rec.read_from_bytes(raw_data, order),
-            // rec type 0
-            StdfRecord::FAR(far_rec) => far_rec.read_from_bytes(raw_data, order),
-            StdfRecord::ATR(atr_rec) => atr_rec.read_from_bytes(raw_data, order),
-            StdfRecord::VUR(vur_rec) => vur_rec.read_from_bytes(raw_data, order),
-            // rec type 20
-            StdfRecord::BPS(bps_rec) => bps_rec.read_from_bytes(raw_data, order),
-            StdfRecord::EPS(eps_rec) => eps_rec.read_from_bytes(raw_data, order),
-            // rec type 180: Reserved
-            // rec type 181: Reserved
-            StdfRecord::ReservedRec(reserve_rec) => reserve_rec.read_from_bytes(raw_data, order),
-            // not matched, invalid rec do not parse anything
-            StdfRecord::InvalidRec(_) => (),
-        };
+        stdf_match_expr!(record_read)
     }
 
-    /// parse StdfRecord from byte data which
+    /// Parse StdfRecord from byte data which
     /// **contains** the record header (len, typ, sub).
     ///
     /// ## Error
     /// if the input data is not a valid (wrong typ, sub),
-    /// incomplete data or incorrect byte order, `StdfError` will be
+    /// incomplete data or incorrect byte order, [`StdfError`] will be
     /// returned instead.
     ///
     /// ```
@@ -2487,6 +1806,94 @@ impl StdfRecord {
     }
 }
 
+impl<'a> StdfRecordView<'a> {
+    /// Build a view from `RecordHeader`, raw field data and byte order.
+    ///
+    /// ```
+    /// use rust_stdf::{StdfRecordView, ByteOrder, RecordHeader, stdf_record_type::REC_PTR};
+    ///
+    /// let header = RecordHeader { len: 0, typ: 15, sub: 10 }; // PTR
+    /// let raw: [u8; 0] = []; // empty field data; getters fall back to defaults
+    /// let view = StdfRecordView::read_from_bytes(header, &raw, &ByteOrder::LittleEndian);
+    ///
+    /// if let StdfRecordView::PTR(ptr_view) = view {
+    ///     assert_eq!(0, ptr_view.test_num());
+    /// }
+    /// assert!(view.is_type(REC_PTR));
+    /// ```
+    #[inline]
+    pub fn read_from_bytes(
+        header: RecordHeader,
+        raw_data: &'a [u8],
+        byte_order: &ByteOrder,
+    ) -> Self {
+        stdf_match_expr!(view_read)
+    }
+
+    /// Parse a `StdfRecordView` from byte data that **contains** the record
+    /// header (len, typ, sub).
+    ///
+    /// ## Error
+    /// Returns [`StdfError`] when the input is not a valid header or is
+    /// incomplete (the buffer is shorter than the header declares).
+    ///
+    /// ```
+    /// use rust_stdf::{StdfRecordView, ByteOrder};
+    ///
+    /// let raw_with_header: [u8; 6] = [0, 2, 0, 10, 1, 4];
+    /// let view = StdfRecordView::read_from_bytes_with_header(
+    ///     &raw_with_header,
+    ///     &ByteOrder::BigEndian,
+    /// ).unwrap();
+    ///
+    /// if let StdfRecordView::FAR(far_view) = view {
+    ///     assert_eq!(4, far_view.stdf_ver());
+    /// }
+    /// ```
+    #[inline(always)]
+    pub fn read_from_bytes_with_header(
+        raw_data: &'a [u8],
+        order: &ByteOrder,
+    ) -> Result<Self, StdfError> {
+        let header = RecordHeader::new().read_from_bytes(raw_data, order)?;
+
+        let expected_end_pos = 4 + header.len as usize;
+        if raw_data.len() < expected_end_pos {
+            return Err(StdfError {
+                code: 5,
+                msg: format!(
+                    "Length of stdf field data ({} - 4 = {}) is less than what header specified ({})",
+                    raw_data.len(),
+                    raw_data.len() - 4,
+                    header.len
+                ),
+            });
+        }
+
+        let data_slice = &raw_data[4..expected_end_pos];
+        Ok(Self::read_from_bytes(header, data_slice, order))
+    }
+
+    /// Return the record type code (see `stdf_record_type::*`).
+    #[inline(always)]
+    pub fn get_type(&self) -> u64 {
+        stdf_match_expr!(view_type)
+    }
+
+    /// Check whether this view belongs to the given record type(s).
+    #[inline(always)]
+    pub fn is_type(&self, rec_type: u64) -> bool {
+        (self.get_type() & rec_type) != 0
+    }
+
+    /// Parse this borrowed view into an owned [`StdfRecord`], escaping the
+    /// borrow of the underlying buffer.
+    #[inline]
+    pub fn to_owned(&self) -> StdfRecord {
+        stdf_match_expr!(view_to_owned)
+    }
+}
+
 impl RawDataElement {
     #[inline(always)]
     pub fn is_type(&self, rec_type: u64) -> bool {
@@ -2501,6 +1908,26 @@ impl From<&RawDataElement> for StdfRecord {
         let mut rec = StdfRecord::new_from_header(raw_element.header);
         rec.read_from_bytes(&raw_element.raw_data, &raw_element.byte_order);
         rec
+    }
+}
+
+impl<'a> From<&'a RawDataElement> for StdfRecordView<'a> {
+    /// Build a zero-copy view; does not consume the input.
+    #[inline]
+    fn from(raw_element: &'a RawDataElement) -> Self {
+        Self::read_from_bytes(
+            raw_element.header,
+            &raw_element.raw_data,
+            &raw_element.byte_order,
+        )
+    }
+}
+
+impl<'a> From<&StdfRecordView<'a>> for StdfRecord {
+    /// Parse the borrowed view into an owned record; does not consume the view.
+    #[inline(always)]
+    fn from(view: &StdfRecordView<'a>) -> Self {
+        view.to_owned()
     }
 }
 
@@ -2816,7 +2243,19 @@ pub(crate) fn read_vn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder, k: u1
     read_multi_element!(k, read_v1(raw_data, pos, order))
 }
 
+/// Decode STDF string bytes to `Cow<'a, str>`: valid UTF-8 is borrowed as-is,
+/// otherwise each byte is widened to a `char` (Latin-1) into an owned `String`.
+/// Shared by the eager `read_*` helpers and the `*Ref`/`Kx*Ref` views.
+#[inline(always)]
+pub(crate) fn bytes_to_cow_str(data: &[u8]) -> Cow<'_, str> {
+    match std::str::from_utf8(data) {
+        Ok(s) => Cow::Borrowed(s),
+        Err(_) => Cow::Owned(data.iter().map(|&x| x as char).collect()),
+    }
+}
+
+/// Decode STDF string bytes to `String`; same rule as [`bytes_to_cow_str`].
 #[inline(always)]
 pub(crate) fn bytes_to_string(data: &[u8]) -> String {
-    data.iter().map(|&x| x as char).collect()
+    bytes_to_cow_str(data).into_owned()
 }

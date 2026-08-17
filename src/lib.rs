@@ -34,12 +34,13 @@ extern crate smart_default;
 mod atdf_types;
 mod stdf_error;
 mod stdf_types;
+pub use stdf_error::StdfError;
 pub use stdf_types::*;
 
 /// This module contains STDF Reader
 /// and record iterator
 ///
-/// For more detailed example, see [`StdfReader`].
+/// For more detailed example, see [`StdfReader`](crate::stdf_file::StdfReader).
 pub mod stdf_file;
 
 /// This module contains ATDF Reader
