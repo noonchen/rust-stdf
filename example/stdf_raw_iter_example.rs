@@ -43,7 +43,7 @@ fn main() {
         // build a view from raw data without parsing the whole record,
         // get corresponding field value by getter method.
         //
-        // it can be more efficient than `stdf_example.rs` 
+        // it can be more efficient than `stdf_example.rs`
         // when you only need a few fields of a record.
         let rec_view: StdfRecordView = (&raw).into();
         match rec_view {

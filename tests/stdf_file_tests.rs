@@ -167,22 +167,21 @@ fn record_iter_matches_rawdata_iter() {
     assert_ne!(files.len(), 0);
 
     for file in &files {
-        let mut reader = StdfReader::new(file)
-            .unwrap_or_else(|e| panic!("open {}: {e}", file.display()));
+        let mut reader =
+            StdfReader::new(file).unwrap_or_else(|e| panic!("open {}: {e}", file.display()));
         let raw_records: Vec<StdfRecord> = reader
             .get_rawdata_iter()
             .map(|r| StdfRecord::from(r.unwrap()))
             .collect();
 
-        let mut reader = StdfReader::new(file)
-            .unwrap_or_else(|e| panic!("open {}: {e}", file.display()));
-        let parsed_records: Vec<StdfRecord> = reader
-            .get_record_iter()
-            .map(|r| r.unwrap())
-            .collect();
+        let mut reader =
+            StdfReader::new(file).unwrap_or_else(|e| panic!("open {}: {e}", file.display()));
+        let parsed_records: Vec<StdfRecord> =
+            reader.get_record_iter().map(|r| r.unwrap()).collect();
 
         assert_eq!(
-            raw_records, parsed_records,
+            raw_records,
+            parsed_records,
             "get_record_iter and get_rawdata_iter diverge for {}",
             file.display()
         );
@@ -210,8 +209,7 @@ fn compressed_files_match_uncompressed() {
     assert!(!by_base.is_empty());
 
     let record_types = |p: &PathBuf| -> Vec<u64> {
-        let mut reader = StdfReader::new(p)
-            .unwrap_or_else(|e| panic!("open {}: {e}", p.display()));
+        let mut reader = StdfReader::new(p).unwrap_or_else(|e| panic!("open {}: {e}", p.display()));
         reader
             .get_rawdata_iter()
             .map(|r| r.unwrap().header.get_type())
@@ -219,7 +217,10 @@ fn compressed_files_match_uncompressed() {
     };
 
     for (base, group) in &by_base {
-        assert!(group.len() > 1, "only one variant of {base} present: {group:?}");
+        assert!(
+            group.len() > 1,
+            "only one variant of {base} present: {group:?}"
+        );
         let reference = record_types(&group[0]);
         assert_eq!(reference.first(), Some(&REC_FAR));
         for p in &group[1..] {
@@ -242,8 +243,11 @@ fn compressed_files_match_uncompressed() {
 #[test]
 fn stream_constructor_detects_endianness() {
     for order in [ByteOrder::LittleEndian, ByteOrder::BigEndian] {
-        let mut reader = StdfReader::from(Cursor::new(minimal_stdf(order)), &CompressType::Uncompressed)
-            .unwrap();
+        let mut reader = StdfReader::from(
+            Cursor::new(minimal_stdf(order)),
+            &CompressType::Uncompressed,
+        )
+        .unwrap();
 
         let raws: Vec<_> = reader.get_rawdata_iter().map(|r| r.unwrap()).collect();
         assert_eq!(raws.len(), 2);
@@ -251,8 +255,11 @@ fn stream_constructor_detects_endianness() {
         assert_eq!(raws[1].header.get_type(), REC_MIR);
         assert_eq!(raws[1].byte_order, order, "byte order not detected");
 
-        let mut reader = StdfReader::from(Cursor::new(minimal_stdf(order)), &CompressType::Uncompressed)
-            .unwrap();
+        let mut reader = StdfReader::from(
+            Cursor::new(minimal_stdf(order)),
+            &CompressType::Uncompressed,
+        )
+        .unwrap();
         let recs: Vec<_> = reader.get_record_iter().map(|r| r.unwrap()).collect();
         assert_eq!(recs.len(), 2);
         if let StdfRecord::MIR(mir) = &recs[1] {

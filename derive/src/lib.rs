@@ -54,7 +54,11 @@ enum Kind {
     /// Scalar read with `fn(raw, pos)` (no byte order): `U1`, `I1`.
     ScalarNoOrder { read: Ident, bytes: usize },
     /// Scalar read with `fn(raw, pos, order)`: `U2 I2 U4 I4 U8 R4 R8`.
-    ScalarOrder { read: Ident, bytes: usize, float: bool },
+    ScalarOrder {
+        read: Ident,
+        bytes: usize,
+        float: bool,
+    },
     /// `B1` = `[u8; 1]`.
     B1,
     /// `C1` = single byte read as a `char`.
@@ -71,7 +75,11 @@ enum Kind {
     KxN1,
     /// Fixed-width counted array. `order == false`: `fn(raw, pos, k)` (`KxU1`);
     /// `order == true`: `fn(raw, pos, order, k)` (`KxU2 KxU4 KxU8 KxR4`).
-    KxFixed { read: Ident, elem: usize, order: bool },
+    KxFixed {
+        read: Ident,
+        elem: usize,
+        order: bool,
+    },
     /// Variable-length counted string array. `order == false`: `KxCn`;
     /// `order == true`: `KxSn`.
     KxStr { read: Ident, order: bool },
@@ -143,7 +151,8 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
                         width = Some(meta.value()?.parse()?);
                         Ok(())
                     } else {
-                        Err(meta.error("unknown `stdf` field attribute (expected `count` or `width`)"))
+                        Err(meta
+                            .error("unknown `stdf` field attribute (expected `count` or `width`)"))
                     }
                 })?;
             }
@@ -349,15 +358,49 @@ fn field_default(f: &syn::Field) -> Option<TokenStream2> {
 
 fn classify(leaf: &Ident) -> Option<Kind> {
     Some(match leaf.to_string().as_str() {
-        "U1" => Kind::ScalarNoOrder { read: format_ident!("read_uint8"), bytes: 1 },
-        "I1" => Kind::ScalarNoOrder { read: format_ident!("read_i1"), bytes: 1 },
-        "U2" => Kind::ScalarOrder { read: format_ident!("read_u2"), bytes: 2, float: false },
-        "I2" => Kind::ScalarOrder { read: format_ident!("read_i2"), bytes: 2, float: false },
-        "U4" => Kind::ScalarOrder { read: format_ident!("read_u4"), bytes: 4, float: false },
-        "I4" => Kind::ScalarOrder { read: format_ident!("read_i4"), bytes: 4, float: false },
-        "U8" => Kind::ScalarOrder { read: format_ident!("read_u8"), bytes: 8, float: false },
-        "R4" => Kind::ScalarOrder { read: format_ident!("read_r4"), bytes: 4, float: true },
-        "R8" => Kind::ScalarOrder { read: format_ident!("read_r8"), bytes: 8, float: true },
+        "U1" => Kind::ScalarNoOrder {
+            read: format_ident!("read_uint8"),
+            bytes: 1,
+        },
+        "I1" => Kind::ScalarNoOrder {
+            read: format_ident!("read_i1"),
+            bytes: 1,
+        },
+        "U2" => Kind::ScalarOrder {
+            read: format_ident!("read_u2"),
+            bytes: 2,
+            float: false,
+        },
+        "I2" => Kind::ScalarOrder {
+            read: format_ident!("read_i2"),
+            bytes: 2,
+            float: false,
+        },
+        "U4" => Kind::ScalarOrder {
+            read: format_ident!("read_u4"),
+            bytes: 4,
+            float: false,
+        },
+        "I4" => Kind::ScalarOrder {
+            read: format_ident!("read_i4"),
+            bytes: 4,
+            float: false,
+        },
+        "U8" => Kind::ScalarOrder {
+            read: format_ident!("read_u8"),
+            bytes: 8,
+            float: false,
+        },
+        "R4" => Kind::ScalarOrder {
+            read: format_ident!("read_r4"),
+            bytes: 4,
+            float: true,
+        },
+        "R8" => Kind::ScalarOrder {
+            read: format_ident!("read_r8"),
+            bytes: 8,
+            float: true,
+        },
         "B1" => Kind::B1,
         "C1" => Kind::C1,
         "Cn" => Kind::Cn,
@@ -365,13 +408,39 @@ fn classify(leaf: &Ident) -> Option<Kind> {
         "Bn" => Kind::Bn,
         "Dn" => Kind::Dn,
         "KxN1" => Kind::KxN1,
-        "KxU1" => Kind::KxFixed { read: format_ident!("read_kx_u1"), elem: 1, order: false },
-        "KxU2" => Kind::KxFixed { read: format_ident!("read_kx_u2"), elem: 2, order: true },
-        "KxU4" => Kind::KxFixed { read: format_ident!("read_kx_u4"), elem: 4, order: true },
-        "KxU8" => Kind::KxFixed { read: format_ident!("read_kx_u8"), elem: 8, order: true },
-        "KxR4" => Kind::KxFixed { read: format_ident!("read_kx_r4"), elem: 4, order: true },
-        "KxCn" => Kind::KxStr { read: format_ident!("read_kx_cn"), order: false },
-        "KxSn" => Kind::KxStr { read: format_ident!("read_kx_sn"), order: true },
+        "KxU1" => Kind::KxFixed {
+            read: format_ident!("read_kx_u1"),
+            elem: 1,
+            order: false,
+        },
+        "KxU2" => Kind::KxFixed {
+            read: format_ident!("read_kx_u2"),
+            elem: 2,
+            order: true,
+        },
+        "KxU4" => Kind::KxFixed {
+            read: format_ident!("read_kx_u4"),
+            elem: 4,
+            order: true,
+        },
+        "KxU8" => Kind::KxFixed {
+            read: format_ident!("read_kx_u8"),
+            elem: 8,
+            order: true,
+        },
+        "KxR4" => Kind::KxFixed {
+            read: format_ident!("read_kx_r4"),
+            elem: 4,
+            order: true,
+        },
+        "KxCn" => Kind::KxStr {
+            read: format_ident!("read_kx_cn"),
+            order: false,
+        },
+        "KxSn" => Kind::KxStr {
+            read: format_ident!("read_kx_sn"),
+            order: true,
+        },
         "KxUf" => Kind::KxUf,
         "KxCf" => Kind::KxCf,
         "Vn" => Kind::Vn,
@@ -860,10 +929,13 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             }
         },
         (Kind::ScalarOrder { read, float, .. }, false) => {
-            let dflt = fi
-                .default_expr
-                .clone()
-                .unwrap_or_else(|| if *float { quote!(0.0) } else { quote!(0) });
+            let dflt = fi.default_expr.clone().unwrap_or_else(|| {
+                if *float {
+                    quote!(0.0)
+                } else {
+                    quote!(0)
+                }
+            });
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
@@ -1133,8 +1205,8 @@ fn rec_lit(s: &str) -> syn::LitStr {
     syn::LitStr::new(s, proc_macro2::Span::call_site())
 }
 
-/// `EPS` is the only record without any fields, 
-/// so it doesn't have a view or read_* method, 
+/// `EPS` is the only record without any fields,
+/// so it doesn't have a view or read_* method,
 /// treat it as special case.
 fn is_eps(name: &str) -> bool {
     name == "EPS"
@@ -1242,7 +1314,10 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
     let typs: Vec<u8> = RECORDS.iter().map(|r| r.1).collect();
     let subs: Vec<u8> = RECORDS.iter().map(|r| r.2).collect();
     let lits: Vec<syn::LitStr> = RECORDS.iter().map(|r| rec_lit(r.0)).collect();
-    let qcodes: Vec<TokenStream2> = codes.iter().map(|c| quote! { stdf_record_type::#c }).collect();
+    let qcodes: Vec<TokenStream2> = codes
+        .iter()
+        .map(|c| quote! { stdf_record_type::#c })
+        .collect();
 
     let out = match kind_str.as_str() {
         // --- inside `stdf_record_type` (bare `REC_*`) ---
@@ -1320,7 +1395,7 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                     StdfRecord::InvalidRec(_) => (),
                 }
             }
-        },
+        }
         "view_read" => {
             let arms: Vec<TokenStream2> = RECORDS
                 .iter()
@@ -1345,7 +1420,7 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                     _ => StdfRecordView::InvalidRec(header),
                 }
             }
-        },
+        }
         "view_type" => {
             let arms: Vec<TokenStream2> = RECORDS
                 .iter()
@@ -1369,7 +1444,7 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                     StdfRecordView::InvalidRec(_) => stdf_record_type::REC_INVALID,
                 }
             }
-        },
+        }
         "view_to_owned" => {
             let arms: Vec<TokenStream2> = RECORDS
                 .iter()
@@ -1396,7 +1471,7 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                     StdfRecordView::InvalidRec(h) => StdfRecord::InvalidRec(*h),
                 }
             }
-        },
+        }
         other => {
             return syn::Error::new(
                 kind.span(),

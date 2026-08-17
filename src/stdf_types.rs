@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Mon Aug 17 2026
+// Last Modified: Tue Aug 18 2026
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -251,9 +251,9 @@ pub mod stdf_record_type {
 stdf_records!(rec_enums);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-/// Element yielded by [`RawDataIter`](crate::stdf_file::RawDataIter). It owns unprocessed STDF record data, 
+/// Element yielded by [`RawDataIter`](crate::stdf_file::RawDataIter). It owns unprocessed STDF record data,
 /// and can be converted to [`StdfRecord`], or borrowed as [`StdfRecordView`].
-/// 
+///
 /// ```
 /// use rust_stdf::{RawDataElement, ByteOrder, StdfRecord, RecordHeader, stdf_record_type::REC_FAR};
 ///
@@ -475,9 +475,9 @@ pub struct PMR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PGR {
-    pub grp_indx: U2,   // Unique index associated with pin group
-    pub grp_nam: Cn,    // Name of pin group
-    pub indx_cnt: U2,   // Count of PMR indexes
+    pub grp_indx: U2, // Unique index associated with pin group
+    pub grp_nam: Cn,  // Name of pin group
+    pub indx_cnt: U2, // Count of PMR indexes
     #[stdf(count = indx_cnt)]
     pub pmr_indx: KxU2, // Array of indexes for pins in the group
 }
@@ -490,7 +490,7 @@ pub struct PGR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PLR {
-    pub grp_cnt: U2,    // Count (k) of pins or pin groups
+    pub grp_cnt: U2, // Count (k) of pins or pin groups
     #[stdf(count = grp_cnt)]
     pub grp_indx: KxU2, // Array of pin or pin group indexes
     #[stdf(count = grp_cnt)]
@@ -515,7 +515,7 @@ pub struct PLR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct RDR {
-    pub num_bins: U2,   // Number (k) of bins being retested
+    pub num_bins: U2, // Number (k) of bins being retested
     #[stdf(count = num_bins)]
     pub rtst_bin: KxU2, // Array of retest bin numbers
 }
@@ -528,27 +528,27 @@ pub struct RDR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct SDR {
-    pub head_num: U1,   // Test head number
-    pub site_grp: U1,   // Site group number
-    pub site_cnt: U1,   // Number (k) of test sites in site group
+    pub head_num: U1, // Test head number
+    pub site_grp: U1, // Site group number
+    pub site_cnt: U1, // Number (k) of test sites in site group
     #[stdf(count = site_cnt)]
     pub site_num: KxU1, // Array of test site numbers
-    pub hand_typ: Cn,   // Handler or prober type
-    pub hand_id: Cn,    // Handler or prober ID
-    pub card_typ: Cn,   // Probe card type
-    pub card_id: Cn,    // Probe card ID
-    pub load_typ: Cn,   // Load board type
-    pub load_id: Cn,    // Load board ID
-    pub dib_typ: Cn,    // DIB board type
-    pub dib_id: Cn,     // DIB board ID
-    pub cabl_typ: Cn,   // Interface cable type
-    pub cabl_id: Cn,    // Interface cable ID
-    pub cont_typ: Cn,   // Handler contactor type
-    pub cont_id: Cn,    // Handler contactor ID
-    pub lasr_typ: Cn,   // Laser type
-    pub lasr_id: Cn,    // Laser ID
-    pub extr_typ: Cn,   // Extra equipment type field
-    pub extr_id: Cn,    // Extra equipment ID
+    pub hand_typ: Cn, // Handler or prober type
+    pub hand_id: Cn,  // Handler or prober ID
+    pub card_typ: Cn, // Probe card type
+    pub card_id: Cn,  // Probe card ID
+    pub load_typ: Cn, // Load board type
+    pub load_id: Cn,  // Load board ID
+    pub dib_typ: Cn,  // DIB board type
+    pub dib_id: Cn,   // DIB board ID
+    pub cabl_typ: Cn, // Interface cable type
+    pub cabl_id: Cn,  // Interface cable ID
+    pub cont_typ: Cn, // Handler contactor type
+    pub cont_id: Cn,  // Handler contactor ID
+    pub lasr_typ: Cn, // Laser type
+    pub lasr_id: Cn,  // Laser ID
+    pub extr_typ: Cn, // Extra equipment type field
+    pub extr_id: Cn,  // Extra equipment ID
 }
 
 #[cfg_attr(
@@ -559,10 +559,10 @@ pub struct SDR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PSR {
-    pub cont_flg: B1,   // Continuation PSR record exist
-    pub psr_indx: U2,   // PSR Record Index (used by STR records)
-    pub psr_nam: Cn,    // Symbolic name of PSR record
-    pub opt_flg: B1, // Contains PAT_LBL, FILE_UID, ATPG_DSC, and SRC_ID field missing flag bits and flag for start index for first cycle number.
+    pub cont_flg: B1, // Continuation PSR record exist
+    pub psr_indx: U2, // PSR Record Index (used by STR records)
+    pub psr_nam: Cn,  // Symbolic name of PSR record
+    pub opt_flg: B1,  // Optional data flag
     pub totp_cnt: U2, // Count of total pattern file information sets in the complete PSR data set
     pub locp_cnt: U2, // Count (k) of pattern file information sets in this record
     #[stdf(count = locp_cnt)]
@@ -589,9 +589,9 @@ pub struct PSR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct NMR {
-    pub cont_flg: B1,   // Continuation NMR record follows if not 0
-    pub totm_cnt: U2,   // Count of PMR indexes and ATPG_NAM entries
-    pub locm_cnt: U2,   // Count of (k) PMR indexes and ATPG_NAM entries in this record
+    pub cont_flg: B1, // Continuation NMR record follows if not 0
+    pub totm_cnt: U2, // Count of PMR indexes and ATPG_NAM entries
+    pub locm_cnt: U2, // Count of (k) PMR indexes and ATPG_NAM entries in this record
     #[stdf(count = locm_cnt)]
     pub pmr_indx: KxU2, // Array of PMR indexes
     #[stdf(count = locm_cnt)]
@@ -619,8 +619,8 @@ pub struct CNR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct SSR {
-    pub ssr_nam: Cn,    // Name of the STIL Scan pub structure for reference
-    pub chn_cnt: U2,    // Count (k) of number of Chains listed in CHN_LIST
+    pub ssr_nam: Cn, // Name of the STIL Scan pub structure for reference
+    pub chn_cnt: U2, // Count (k) of number of Chains listed in CHN_LIST
     #[stdf(count = chn_cnt)]
     pub chn_list: KxU2, // Array of CDR Indexes
 }
@@ -744,22 +744,22 @@ pub struct PIR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct PRR {
-    pub head_num: U1, //Test head number
-    pub site_num: U1, //Test site number
-    pub part_flg: B1, //Part information flag
-    pub num_test: U2, //Number of tests executed
-    pub hard_bin: U2, //Hardware bin number
+    pub head_num: U1, // Test head number
+    pub site_num: U1, // Test site number
+    pub part_flg: B1, // Part information flag
+    pub num_test: U2, // Number of tests executed
+    pub hard_bin: U2, // Hardware bin number
     #[default = 65535]
-    pub soft_bin: U2, //Software bin number
+    pub soft_bin: U2, // Software bin number
     #[default(-32768)]
-    pub x_coord: I2, //(Wafer) X coordinate
+    pub x_coord: I2, // (Wafer) X coordinate
     #[default(-32768)]
-    pub y_coord: I2, //(Wafer) Y coordinate
+    pub y_coord: I2, // (Wafer) Y coordinate
     #[default = 0]
-    pub test_t: U4, //Elapsed test time in milliseconds
-    pub part_id: Cn,  //Part identification
-    pub part_txt: Cn, //Part description text
-    pub part_fix: Bn, //Part repair information
+    pub test_t: U4, // Elapsed test time in milliseconds
+    pub part_id: Cn,  // Part identification
+    pub part_txt: Cn, // Part description text
+    pub part_fix: Bn, // Part repair information
 }
 
 #[cfg_attr(
@@ -832,36 +832,36 @@ pub struct PTR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, StdfRecordCodec)]
 pub struct MPR {
-    pub test_num: U4,           // Test number
-    pub head_num: U1,           // Test head number
-    pub site_num: U1,           // Test site number
-    pub test_flg: B1,           // Test flags (fail, alarm, etc.)
-    pub parm_flg: B1,           // Parametric test flags (drift, etc.)
-    pub rtn_icnt: U2,           // Count of PMR indexes
-    pub rslt_cnt: U2,           // Count of returned results
+    pub test_num: U4, // Test number
+    pub head_num: U1, // Test head number
+    pub site_num: U1, // Test site number
+    pub test_flg: B1, // Test flags (fail, alarm, etc.)
+    pub parm_flg: B1, // Parametric test flags (drift, etc.)
+    pub rtn_icnt: U2, // Count of PMR indexes
+    pub rslt_cnt: U2, // Count of returned results
     #[stdf(count = rtn_icnt)]
     pub rtn_stat: KxN1, // Array of returned states
     #[stdf(count = rslt_cnt)]
     pub rtn_rslt: KxR4, // Array of returned results
-    pub test_txt: Cn,           // Descriptive text or label
-    pub alarm_id: Cn,           // Name of alarm
-    pub opt_flag: Option<B1>,   // Optional data flag
-    pub res_scal: Option<I1>,   // Test result scaling exponent
-    pub llm_scal: Option<I1>,   // Test low limit scaling exponent
-    pub hlm_scal: Option<I1>,   // Test high limit scaling exponent
-    pub lo_limit: Option<R4>,   // Test low limit value
-    pub hi_limit: Option<R4>,   // Test high limit value
-    pub start_in: Option<R4>,   // Starting input value (condition)
-    pub incr_in: Option<R4>,    // Increment of input condition
+    pub test_txt: Cn, // Descriptive text or label
+    pub alarm_id: Cn, // Name of alarm
+    pub opt_flag: Option<B1>, // Optional data flag
+    pub res_scal: Option<I1>, // Test result scaling exponent
+    pub llm_scal: Option<I1>, // Test low limit scaling exponent
+    pub hlm_scal: Option<I1>, // Test high limit scaling exponent
+    pub lo_limit: Option<R4>, // Test low limit value
+    pub hi_limit: Option<R4>, // Test high limit value
+    pub start_in: Option<R4>, // Starting input value (condition)
+    pub incr_in: Option<R4>, // Increment of input condition
     #[stdf(count = rtn_icnt)]
     pub rtn_indx: Option<KxU2>, // Array of PMR indexes
-    pub units: Option<Cn>,      // Units of returned results
-    pub units_in: Option<Cn>,   // Input condition units
-    pub c_resfmt: Option<Cn>,   // ANSI C result format string
-    pub c_llmfmt: Option<Cn>,   // ANSI C low limit format string
-    pub c_hlmfmt: Option<Cn>,   // ANSI C high limit format string
-    pub lo_spec: Option<R4>,    // Low specification limit value
-    pub hi_spec: Option<R4>,    // High specification limit value
+    pub units: Option<Cn>, // Units of returned results
+    pub units_in: Option<Cn>, // Input condition units
+    pub c_resfmt: Option<Cn>, // ANSI C result format string
+    pub c_llmfmt: Option<Cn>, // ANSI C low limit format string
+    pub c_hlmfmt: Option<Cn>, // ANSI C high limit format string
+    pub lo_spec: Option<R4>, // Low specification limit value
+    pub hi_spec: Option<R4>, // High specification limit value
 }
 
 #[cfg_attr(
@@ -872,20 +872,20 @@ pub struct MPR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct FTR {
-    pub test_num: U4,   // Test number
-    pub head_num: U1,   // Test head number
-    pub site_num: U1,   // Test site number
-    pub test_flg: B1,   // Test flags (fail, alarm, etc.)
-    pub opt_flag: B1,   // Optional data flag
-    pub cycl_cnt: U4,   // Cycle count of vector
-    pub rel_vadr: U4,   // Relative vector address
-    pub rept_cnt: U4,   // Repeat count of vector
-    pub num_fail: U4,   // Number of pins with 1 or more failures
-    pub xfail_ad: I4,   // X logical device failure address
-    pub yfail_ad: I4,   // Y logical device failure address
-    pub vect_off: I2,   // Offset from vector of interest
-    pub rtn_icnt: U2,   // Count j of return data PMR indexes
-    pub pgm_icnt: U2,   // Count k of programmed state indexes
+    pub test_num: U4, // Test number
+    pub head_num: U1, // Test head number
+    pub site_num: U1, // Test site number
+    pub test_flg: B1, // Test flags (fail, alarm, etc.)
+    pub opt_flag: B1, // Optional data flag
+    pub cycl_cnt: U4, // Cycle count of vector
+    pub rel_vadr: U4, // Relative vector address
+    pub rept_cnt: U4, // Repeat count of vector
+    pub num_fail: U4, // Number of pins with 1 or more failures
+    pub xfail_ad: I4, // X logical device failure address
+    pub yfail_ad: I4, // Y logical device failure address
+    pub vect_off: I2, // Offset from vector of interest
+    pub rtn_icnt: U2, // Count j of return data PMR indexes
+    pub pgm_icnt: U2, // Count k of programmed state indexes
     #[stdf(count = rtn_icnt)]
     pub rtn_indx: KxU2, // Array j of return data PMR indexes
     #[stdf(count = rtn_icnt)]
@@ -894,17 +894,17 @@ pub struct FTR {
     pub pgm_indx: KxU2, // Array k of programmed state indexes
     #[stdf(count = pgm_icnt)]
     pub pgm_stat: KxN1, // Array k of programmed states
-    pub fail_pin: Dn,   // Failing pin bitfield
-    pub vect_nam: Cn,   // Vector module pattern name
-    pub time_set: Cn,   // Time set name
-    pub op_code: Cn,    // Vector Op Code
-    pub test_txt: Cn,   // Descriptive text or label
-    pub alarm_id: Cn,   // Name of alarm
-    pub prog_txt: Cn,   // Additional programmed information
-    pub rslt_txt: Cn,   // Additional result information
+    pub fail_pin: Dn, // Failing pin bitfield
+    pub vect_nam: Cn, // Vector module pattern name
+    pub time_set: Cn, // Time set name
+    pub op_code: Cn,  // Vector Op Code
+    pub test_txt: Cn, // Descriptive text or label
+    pub alarm_id: Cn, // Name of alarm
+    pub prog_txt: Cn, // Additional programmed information
+    pub rslt_txt: Cn, // Additional result information
     #[default = 255]
     pub patg_num: U1, // Pattern generator number
-    pub spin_map: Dn,   // Bit map of enabled comparators
+    pub spin_map: Dn, // Bit map of enabled comparators
 }
 
 #[cfg_attr(
@@ -915,26 +915,26 @@ pub struct FTR {
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, Eq, StdfRecordCodec)]
 pub struct STR {
-    pub cont_flg: B1,   // Continuation STR follows if not 0
-    pub test_num: U4,   // Test number
-    pub head_num: U1,   // Test head number
-    pub site_num: U1,   // Test site number
-    pub psr_ref: U2,    // PSR Index (Pattern Sequence Record)
-    pub test_flg: B1,   // Test flags (fail, alarm, etc.)
-    pub log_typ: Cn,    // User defined description of datalog
-    pub test_txt: Cn,   // Descriptive text or label
-    pub alarm_id: Cn,   // Name of alarm
-    pub prog_txt: Cn,   // Additional Programmed information
-    pub rslt_txt: Cn,   // Additional result information
-    pub z_val: U1,      // Z Handling Flag
-    pub fmu_flg: B1,    // MASK_MAP & FAL_MAP field status & Pattern Changed flag
-    pub mask_map: Dn,   // Bit map of Globally Masked Pins
-    pub fal_map: Dn,    // Bit map of failures after buffer full
-    pub cyc_cnt_t: U8,  // Total cycles executed in test
-    pub totf_cnt: U4,   // Total failures (pin x cycle) detected in test execution
-    pub totl_cnt: U4,   // Total fails logged across the complete STR data set
-    pub cyc_base: U8,   // Cycle offset to apply for the values in the CYCL_NUM array
-    pub bit_base: U4,   // Offset to apply for the values in the BIT_POS array
+    pub cont_flg: B1,  // Continuation STR follows if not 0
+    pub test_num: U4,  // Test number
+    pub head_num: U1,  // Test head number
+    pub site_num: U1,  // Test site number
+    pub psr_ref: U2,   // PSR Index (Pattern Sequence Record)
+    pub test_flg: B1,  // Test flags (fail, alarm, etc.)
+    pub log_typ: Cn,   // User defined description of datalog
+    pub test_txt: Cn,  // Descriptive text or label
+    pub alarm_id: Cn,  // Name of alarm
+    pub prog_txt: Cn,  // Additional Programmed information
+    pub rslt_txt: Cn,  // Additional result information
+    pub z_val: U1,     // Z Handling Flag
+    pub fmu_flg: B1,   // MASK_MAP & FAL_MAP field status & Pattern Changed flag
+    pub mask_map: Dn,  // Bit map of Globally Masked Pins
+    pub fal_map: Dn,   // Bit map of failures after buffer full
+    pub cyc_cnt_t: U8, // Total cycles executed in test
+    pub totf_cnt: U4,  // Total failures (pin x cycle) detected in test execution
+    pub totl_cnt: U4,  // Total fails logged across the complete STR data set
+    pub cyc_base: U8,  // Cycle offset to apply for the values in the CYCL_NUM array
+    pub bit_base: U4,  // Offset to apply for the values in the BIT_POS array
     pub cond_cnt: U2, // Count (g) of Test Conditions and optional data specifications in present record
     pub lim_cnt: U2,  // Count (j) of LIM Arrays in present record, 1 for global specification
     pub cyc_size: U1, // Size (f) of data (1,2,4, or 8 byes) in CYC_OFST field
@@ -979,13 +979,13 @@ pub struct STR {
     pub bit_pos: KxUf, // Array of chain bit positions (Ptn/Chn/Bit format)
     pub usr1_cnt: U2, // Count (k) of USR1 array entries
     #[stdf(count = usr1_cnt, width = u1_size)]
-    pub usr1: KxUf,   // Array of user defined data for each logged fail
+    pub usr1: KxUf, // Array of user defined data for each logged fail
     pub usr2_cnt: U2, // Count (k) of USR2 array entries
     #[stdf(count = usr2_cnt, width = u2_size)]
-    pub usr2: KxUf,   // Array of user defined data for each logged fail
+    pub usr2: KxUf, // Array of user defined data for each logged fail
     pub usr3_cnt: U2, // Count (k) of USR3 array entries
     #[stdf(count = usr3_cnt, width = u3_size)]
-    pub usr3: KxUf,   // Array of user defined data for each logged fail
+    pub usr3: KxUf, // Array of user defined data for each logged fail
     pub txt_cnt: U2,  // Count (k) of USER_TXT array entries
     #[stdf(count = txt_cnt, width = utx_size)]
     pub user_txt: KxCf, // Array of user defined fixed length strings for each logged fail
@@ -1019,7 +1019,7 @@ pub struct EPS {}
 )]
 #[derive(SmartDefault, Debug, Clone, PartialEq, StdfRecordCodec)]
 pub struct GDR {
-    pub fld_cnt: U2,  // Count of data fields in record
+    pub fld_cnt: U2, // Count of data fields in record
     #[stdf(count = fld_cnt)]
     pub gen_data: Vn, // Data type code and data for one field(Repeat GEN_DATA for each data field)
 }
