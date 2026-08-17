@@ -62,10 +62,8 @@ fn main() {
                     continuity_rlt.push(ptr_view.result());
                 }
             }
-            StdfRecordView::MPR(mpr_view) => {
-                if mpr_view.res_scal().is_none() {
-                    println!("{:?}", mpr_view);
-                }
+            StdfRecordView::MPR(mpr_view) if mpr_view.res_scal().is_none() => {
+                println!("{:?}", mpr_view.to_owned());
             }
             _ => {}
         }

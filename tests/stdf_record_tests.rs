@@ -68,7 +68,7 @@ fn record_default_value_test() {
     let empty_raw_data = [0u8; 0];
     // mir
     let (typ, sub) = get_typ_sub_from_code(REC_MIR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut mir_rec = StdfRecord::new(REC_MIR);
     if let StdfRecord::MIR(ref inner) = mir_rec {
         assert_eq!(inner.mode_cod, ' ', "Testing default of new rec");
@@ -97,7 +97,7 @@ fn record_default_value_test() {
 
     // mrr
     let (typ, sub) = get_typ_sub_from_code(REC_MRR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut mrr_rec = StdfRecord::new(REC_MRR);
     if let StdfRecord::MRR(ref inner) = mrr_rec {
         assert_eq!(inner.disp_cod, ' ', "Testing default of new rec");
@@ -114,7 +114,7 @@ fn record_default_value_test() {
 
     // pcr
     let (typ, sub) = get_typ_sub_from_code(REC_PCR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut pcr_rec = StdfRecord::new(REC_PCR);
     if let StdfRecord::PCR(ref inner) = pcr_rec {
         assert_eq!(inner.rtst_cnt, 4_294_967_295, "Testing default of new rec");
@@ -152,7 +152,7 @@ fn record_default_value_test() {
 
     // hbr
     let (typ, sub) = get_typ_sub_from_code(REC_HBR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut hbr_rec = StdfRecord::new(REC_HBR);
     if let StdfRecord::HBR(ref inner) = hbr_rec {
         assert_eq!(inner.hbin_pf, ' ', "Testing default of new rec");
@@ -169,7 +169,7 @@ fn record_default_value_test() {
 
     // sbr
     let (typ, sub) = get_typ_sub_from_code(REC_SBR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut sbr_rec = StdfRecord::new(REC_SBR);
     if let StdfRecord::SBR(ref inner) = sbr_rec {
         assert_eq!(inner.sbin_pf, ' ', "Testing default of new rec");
@@ -186,7 +186,7 @@ fn record_default_value_test() {
 
     // pmr
     let (typ, sub) = get_typ_sub_from_code(REC_PMR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut pmr_rec = StdfRecord::new(REC_PMR);
     if let StdfRecord::PMR(ref inner) = pmr_rec {
         assert_eq!(inner.chan_typ, 0, "Testing default of new rec");
@@ -209,7 +209,7 @@ fn record_default_value_test() {
 
     // cdr
     let (typ, sub) = get_typ_sub_from_code(REC_CDR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut cdr_rec = StdfRecord::new(REC_CDR);
     if let StdfRecord::CDR(ref inner) = cdr_rec {
         assert_eq!(inner.inv_val, 255, "Testing default of new rec");
@@ -226,7 +226,7 @@ fn record_default_value_test() {
 
     // wir
     let (typ, sub) = get_typ_sub_from_code(REC_WIR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut wir_rec = StdfRecord::new(REC_WIR);
     if let StdfRecord::WIR(ref inner) = wir_rec {
         assert_eq!(inner.site_grp, 255, "Testing default of new rec");
@@ -243,7 +243,7 @@ fn record_default_value_test() {
 
     // wrr
     let (typ, sub) = get_typ_sub_from_code(REC_WRR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut wrr_rec = StdfRecord::new(REC_WRR);
     if let StdfRecord::WRR(ref inner) = wrr_rec {
         assert_eq!(inner.site_grp, 255, "Testing default of new rec");
@@ -284,7 +284,7 @@ fn record_default_value_test() {
 
     // wcr
     let (typ, sub) = get_typ_sub_from_code(REC_WCR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut wcr_rec = StdfRecord::new(REC_WCR);
     if let StdfRecord::WCR(ref inner) = wcr_rec {
         assert_eq!(inner.wafr_siz, 0.0, "Testing default of new rec");
@@ -331,7 +331,7 @@ fn record_default_value_test() {
 
     // prr
     let (typ, sub) = get_typ_sub_from_code(REC_PRR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut prr_rec = StdfRecord::new(REC_PRR);
     if let StdfRecord::PRR(ref inner) = prr_rec {
         assert_eq!(inner.soft_bin, 65535, "Testing default of new rec");
@@ -357,7 +357,7 @@ fn record_default_value_test() {
 
     // tsr
     let (typ, sub) = get_typ_sub_from_code(REC_TSR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut tsr_rec = StdfRecord::new(REC_TSR);
     if let StdfRecord::TSR(ref inner) = tsr_rec {
         assert_eq!(inner.test_typ, ' ', "Testing default of new rec");
@@ -392,7 +392,7 @@ fn record_default_value_test() {
 
     // ftr
     let (typ, sub) = get_typ_sub_from_code(REC_FTR).unwrap();
-    let rec_header = RecordHeader { typ: typ, sub: sub, len: empty_raw_data.len() as u16 };
+    let rec_header = RecordHeader { typ, sub, len: empty_raw_data.len() as u16 };
     let mut ftr_rec = StdfRecord::new(REC_FTR);
     if let StdfRecord::FTR(ref inner) = ftr_rec {
         assert_eq!(inner.patg_num, 255, "Testing default of new rec");
@@ -421,9 +421,10 @@ fn record_view_eq_record_test() {
 
     // --- FAR ---
     {
-        let mut raw = Vec::new();
-        raw.push(2); // cpu_type
-        raw.push(4); // stdf_ver
+        let raw = vec![
+            2, // cpu_type
+            4, // stdf_ver
+        ];
         let mut r = FAR::new();
         r.read_from_bytes(&raw, &order);
         let v = FARView::new(&raw, &order);
@@ -637,12 +638,13 @@ fn record_view_eq_record_test() {
 
     // --- SDR ---
     {
-        let mut raw = Vec::new();
-        raw.push(1); // head_num
-        raw.push(2); // site_grp
-        raw.push(2); // site_cnt = 2
-        raw.push(3); // site_num[0]
-        raw.push(4); // site_num[1]
+        let mut raw = vec![
+            1, // head_num
+            2, // site_grp
+            2, // site_cnt = 2
+            3, // site_num[0]
+            4, // site_num[1]
+        ];
         cn(&mut raw, "HANDT");  // hand_typ
         cn(&mut raw, "HANDID"); // hand_id
         cn(&mut raw, "CARDT");  // card_typ
@@ -824,9 +826,10 @@ fn record_view_eq_record_test() {
 
     // --- PIR ---
     {
-        let mut raw = Vec::new();
-        raw.push(1); // head_num
-        raw.push(2); // site_num
+        let raw = vec![
+            1, // head_num
+            2, // site_num
+        ];
         let mut r = PIR::new();
         r.read_from_bytes(&raw, &order);
         let v = PIRView::new(&raw, &order);

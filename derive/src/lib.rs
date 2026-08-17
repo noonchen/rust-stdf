@@ -264,6 +264,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             }
 
             #[inline(always)]
+            #[allow(clippy::int_plus_one)]
             pub fn read_from_bytes(&mut self, raw_data: &[u8], #eager_order: &ByteOrder) {
                 let pos = &mut 0usize;
                 #(#eager_stmts)*
@@ -281,6 +282,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         impl<'a> #view<'a> {
             /// Scan the raw record once, recording each field's byte offset.
             #[inline]
+            #[allow(clippy::int_plus_one)]
             pub fn new(raw: &'a [u8], order: &ByteOrder) -> Self {
                 let pos = &mut 0usize;
                 #(#scan_stmts)*

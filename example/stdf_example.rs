@@ -49,10 +49,8 @@ fn main() {
                     continuity_rlt.push(ptr_rec.result);
                 }
             }
-            StdfRecord::MPR(ref mpr_rec) => {
-                if mpr_rec.res_scal.is_none() {
-                    println!("{:?}", mpr_rec);
-                }
+            StdfRecord::MPR(ref mpr_rec) if mpr_rec.res_scal.is_none() => {
+                println!("{:?}", mpr_rec);
             }
             _ => {}
         }
