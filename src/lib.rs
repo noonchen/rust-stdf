@@ -32,10 +32,12 @@ extern crate smart_default;
 
 #[cfg(feature = "atdf")]
 mod atdf_types;
+mod records;
+mod stdf_codec;
 mod stdf_error;
-mod stdf_types;
+pub use records::*;
+pub use stdf_codec::*;
 pub use stdf_error::StdfError;
-pub use stdf_types::*;
 
 /// This module contains STDF Reader
 /// and record iterator
@@ -53,7 +55,7 @@ pub mod atdf_file;
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use stdf_types::ByteOrder;
+    use stdf_codec::ByteOrder;
 
     // unsigned data type
     #[test]
@@ -61,11 +63,11 @@ mod tests {
         let raw_data = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8];
         for i in 0..raw_data.len() {
             let mut pos = i;
-            assert_eq!(raw_data[pos], stdf_types::read_uint8(&raw_data, &mut pos));
+            assert_eq!(raw_data[pos], stdf_codec::read_uint8(&raw_data, &mut pos));
             assert_eq!(pos, i + 1);
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_uint8(&raw_data, &mut pos));
+        assert_eq!(0, stdf_codec::read_uint8(&raw_data, &mut pos));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -79,7 +81,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expect[pos],
-                stdf_types::read_u2(&raw_data, &mut pos, &order)
+                stdf_codec::read_u2(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -89,7 +91,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_u2(&raw_data, &mut pos, &order));
+        assert_eq!(0, stdf_codec::read_u2(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -103,7 +105,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expect[pos],
-                stdf_types::read_u2(&raw_data, &mut pos, &order)
+                stdf_codec::read_u2(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -113,7 +115,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_u2(&raw_data, &mut pos, &order));
+        assert_eq!(0, stdf_codec::read_u2(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -129,7 +131,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expect[pos],
-                stdf_types::read_u4(&raw_data, &mut pos, &order)
+                stdf_codec::read_u4(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -139,7 +141,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_u4(&raw_data, &mut pos, &order));
+        assert_eq!(0, stdf_codec::read_u4(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -155,7 +157,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expect[pos],
-                stdf_types::read_u4(&raw_data, &mut pos, &order)
+                stdf_codec::read_u4(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -165,7 +167,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_u4(&raw_data, &mut pos, &order));
+        assert_eq!(0, stdf_codec::read_u4(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -179,7 +181,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expect[pos],
-                stdf_types::read_u8(&raw_data, &mut pos, &order)
+                stdf_codec::read_u8(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -189,7 +191,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_u8(&raw_data, &mut pos, &order));
+        assert_eq!(0, stdf_codec::read_u8(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -203,7 +205,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expect[pos],
-                stdf_types::read_u8(&raw_data, &mut pos, &order)
+                stdf_codec::read_u8(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -213,7 +215,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_u8(&raw_data, &mut pos, &order));
+        assert_eq!(0, stdf_codec::read_u8(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -224,11 +226,11 @@ mod tests {
         let expected: [i8; 8] = [0, 1, 127, -2, -128, -127, -113, -1];
         for i in 0..raw_data.len() {
             let mut pos = i;
-            assert_eq!(expected[pos], stdf_types::read_i1(&raw_data, &mut pos));
+            assert_eq!(expected[pos], stdf_codec::read_i1(&raw_data, &mut pos));
             assert_eq!(pos, i + 1);
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_uint8(&raw_data, &mut pos));
+        assert_eq!(0, stdf_codec::read_uint8(&raw_data, &mut pos));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -242,7 +244,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expected[pos],
-                stdf_types::read_i2(&raw_data, &mut pos, &order)
+                stdf_codec::read_i2(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -252,7 +254,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_i2(&raw_data, &mut pos, &order));
+        assert_eq!(0, stdf_codec::read_i2(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -266,7 +268,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expected[pos],
-                stdf_types::read_i2(&raw_data, &mut pos, &order)
+                stdf_codec::read_i2(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -276,7 +278,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_i2(&raw_data, &mut pos, &order));
+        assert_eq!(0, stdf_codec::read_i2(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -299,7 +301,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expected[pos],
-                stdf_types::read_i4(&raw_data, &mut pos, &order)
+                stdf_codec::read_i4(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -309,7 +311,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_i4(&raw_data, &mut pos, &order));
+        assert_eq!(0, stdf_codec::read_i4(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -332,7 +334,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expected[pos],
-                stdf_types::read_i4(&raw_data, &mut pos, &order)
+                stdf_codec::read_i4(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -342,7 +344,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0, stdf_types::read_i4(&raw_data, &mut pos, &order));
+        assert_eq!(0, stdf_codec::read_i4(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -366,7 +368,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expected[pos],
-                stdf_types::read_r4(&raw_data, &mut pos, &order)
+                stdf_codec::read_r4(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -376,7 +378,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0.0, stdf_types::read_r4(&raw_data, &mut pos, &order));
+        assert_eq!(0.0, stdf_codec::read_r4(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -399,7 +401,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expected[pos],
-                stdf_types::read_r4(&raw_data, &mut pos, &order)
+                stdf_codec::read_r4(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -409,7 +411,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0.0, stdf_types::read_r4(&raw_data, &mut pos, &order));
+        assert_eq!(0.0, stdf_codec::read_r4(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -433,7 +435,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expected[pos],
-                stdf_types::read_r8(&raw_data, &mut pos, &order)
+                stdf_codec::read_r8(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -443,7 +445,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0.0, stdf_types::read_r8(&raw_data, &mut pos, &order));
+        assert_eq!(0.0, stdf_codec::read_r8(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -467,7 +469,7 @@ mod tests {
             let mut pos = i;
             assert_eq!(
                 expected[pos],
-                stdf_types::read_r8(&raw_data, &mut pos, &order)
+                stdf_codec::read_r8(&raw_data, &mut pos, &order)
             );
 
             if i <= raw_data.len() - byte_len {
@@ -477,7 +479,7 @@ mod tests {
             }
         }
         let mut pos = raw_data.len();
-        assert_eq!(0.0, stdf_types::read_r8(&raw_data, &mut pos, &order));
+        assert_eq!(0.0, stdf_codec::read_r8(&raw_data, &mut pos, &order));
         assert_eq!(pos, raw_data.len());
     }
 
@@ -489,23 +491,23 @@ mod tests {
         let expect_pos = |p: usize| std::cmp::min(1 + p + raw_data[p] as usize, raw_data.len());
         assert_eq!(
             "Test OK".to_string(),
-            stdf_types::read_cn(&raw_data, &mut pos)
+            stdf_codec::read_cn(&raw_data, &mut pos)
         );
         assert_eq!(pos, expect_pos(0));
         let mut pos = 4;
         assert_eq!(
             " OK\0".to_string(),
-            stdf_types::read_cn(&raw_data, &mut pos)
+            stdf_codec::read_cn(&raw_data, &mut pos)
         );
         assert_eq!(pos, expect_pos(4));
         let mut pos = 8;
-        assert_eq!("".to_string(), stdf_types::read_cn(&raw_data, &mut pos));
+        assert_eq!("".to_string(), stdf_codec::read_cn(&raw_data, &mut pos));
         assert_eq!(pos, expect_pos(8));
         // latin1 check
         let raw_data_latin: [u8; 7] = [6, 52, 50, 176, 67, 191, 255];
         assert_eq!(
             "42°C¿ÿ".to_string(),
-            stdf_types::read_cn(&raw_data_latin, &mut 0)
+            stdf_codec::read_cn(&raw_data_latin, &mut 0)
         );
     }
 
@@ -516,19 +518,19 @@ mod tests {
         let order = ByteOrder::LittleEndian;
         assert_eq!(
             "Test OK".to_string(),
-            stdf_types::read_sn(&raw_data, &mut pos, &order)
+            stdf_codec::read_sn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 9);
         let mut pos = 4;
         assert_eq!(
             " OK\0".to_string(),
-            stdf_types::read_sn(&raw_data, &mut pos, &order)
+            stdf_codec::read_sn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 10);
         let mut pos = 9;
         assert_eq!(
             "".to_string(),
-            stdf_types::read_sn(&raw_data, &mut pos, &order)
+            stdf_codec::read_sn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 9);
     }
@@ -540,19 +542,19 @@ mod tests {
         let order = ByteOrder::BigEndian;
         assert_eq!(
             "Test OK".to_string(),
-            stdf_types::read_sn(&raw_data, &mut pos, &order)
+            stdf_codec::read_sn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 9);
         let mut pos = 4;
         assert_eq!(
             " OK\0".to_string(),
-            stdf_types::read_sn(&raw_data, &mut pos, &order)
+            stdf_codec::read_sn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 10);
         let mut pos = 9;
         assert_eq!(
             "".to_string(),
-            stdf_types::read_sn(&raw_data, &mut pos, &order)
+            stdf_codec::read_sn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 9);
     }
@@ -563,17 +565,17 @@ mod tests {
         let mut pos = 1;
         assert_eq!(
             "Test OK".to_string(),
-            stdf_types::read_cf(&raw_data, &mut pos, 7)
+            stdf_codec::read_cf(&raw_data, &mut pos, 7)
         );
         assert_eq!(pos, 8);
         let mut pos = 5;
         assert_eq!(
             " OK\0".to_string(),
-            stdf_types::read_cf(&raw_data, &mut pos, 100)
+            stdf_codec::read_cf(&raw_data, &mut pos, 100)
         );
         assert_eq!(pos, 9);
         let mut pos = 8;
-        assert_eq!("".to_string(), stdf_types::read_cf(&raw_data, &mut pos, 0));
+        assert_eq!("".to_string(), stdf_codec::read_cf(&raw_data, &mut pos, 0));
         assert_eq!(pos, 8);
     }
 
@@ -583,17 +585,17 @@ mod tests {
         let mut pos = 0;
         assert_eq!(
             vec![84, 101, 115, 116, 32, 79, 75],
-            stdf_types::read_bn(&raw_data, &mut pos)
+            stdf_codec::read_bn(&raw_data, &mut pos)
         );
         assert_eq!(pos, 8);
         let mut pos = 4;
         assert_eq!(
             vec![32, 79, 75, 0],
-            stdf_types::read_bn(&raw_data, &mut pos)
+            stdf_codec::read_bn(&raw_data, &mut pos)
         );
         assert_eq!(pos, 9);
         let mut pos = 100;
-        assert_eq!(vec![0u8; 0], stdf_types::read_bn(&raw_data, &mut pos));
+        assert_eq!(vec![0u8; 0], stdf_codec::read_bn(&raw_data, &mut pos));
         assert_eq!(pos, 100);
     }
 
@@ -604,19 +606,19 @@ mod tests {
         let order = ByteOrder::LittleEndian;
         assert_eq!(
             vec![84, 101, 115, 116, 32, 79, 75],
-            stdf_types::read_dn(&raw_data, &mut pos, &order)
+            stdf_codec::read_dn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 9);
         let mut pos = 4;
         assert_eq!(
             vec![32, 79, 75, 0],
-            stdf_types::read_dn(&raw_data, &mut pos, &order)
+            stdf_codec::read_dn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 10);
         let mut pos = 100;
         assert_eq!(
             vec![0u8; 0],
-            stdf_types::read_dn(&raw_data, &mut pos, &order)
+            stdf_codec::read_dn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 100);
     }
@@ -633,7 +635,7 @@ mod tests {
                 " ".to_string(),
                 "OK".to_string()
             ],
-            stdf_types::read_kx_cn(&raw_data, &mut pos, 4)
+            stdf_codec::read_kx_cn(&raw_data, &mut pos, 4)
         );
         assert_eq!(pos, 11);
         let mut pos = 3;
@@ -644,12 +646,12 @@ mod tests {
                 "OK".to_string(),
                 "".to_string()
             ],
-            stdf_types::read_kx_cn(&raw_data, &mut pos, 4)
+            stdf_codec::read_kx_cn(&raw_data, &mut pos, 4)
         );
         assert_eq!(pos, 12);
         assert_eq!(
             Vec::<String>::new(),
-            stdf_types::read_kx_cn(&raw_data, &mut pos, 0)
+            stdf_codec::read_kx_cn(&raw_data, &mut pos, 0)
         );
     }
 
@@ -665,7 +667,7 @@ mod tests {
                 " ".to_string(),
                 "OK".to_string()
             ],
-            stdf_types::read_kx_sn(&raw_data, &mut pos, &order, 4)
+            stdf_codec::read_kx_sn(&raw_data, &mut pos, &order, 4)
         );
         assert_eq!(pos, 15);
         let mut pos = 4;
@@ -676,12 +678,12 @@ mod tests {
                 "OK".to_string(),
                 "".to_string()
             ],
-            stdf_types::read_kx_sn(&raw_data, &mut pos, &order, 4)
+            stdf_codec::read_kx_sn(&raw_data, &mut pos, &order, 4)
         );
         assert_eq!(pos, 15);
         assert_eq!(
             Vec::<String>::new(),
-            stdf_types::read_kx_sn(&raw_data, &mut pos, &order, 0)
+            stdf_codec::read_kx_sn(&raw_data, &mut pos, &order, 0)
         );
     }
 
@@ -696,7 +698,7 @@ mod tests {
                 "  ".to_string(),
                 "OK".to_string()
             ],
-            stdf_types::read_kx_cf(&raw_data, &mut pos, 4, 2)
+            stdf_codec::read_kx_cf(&raw_data, &mut pos, 4, 2)
         );
         assert_eq!(pos, 8);
         let mut pos = 3;
@@ -707,7 +709,7 @@ mod tests {
                 "".to_string(),
                 "".to_string()
             ],
-            stdf_types::read_kx_cf(&raw_data, &mut pos, 4, 0)
+            stdf_codec::read_kx_cf(&raw_data, &mut pos, 4, 0)
         );
         assert_eq!(pos, 3);
         // k == 0 returns an empty vec without moving the cursor.
@@ -715,7 +717,7 @@ mod tests {
         let mut pos = 5;
         assert_eq!(
             Vec::<String>::new(),
-            stdf_types::read_kx_cf(&raw_data, &mut pos, 0, 0)
+            stdf_codec::read_kx_cf(&raw_data, &mut pos, 0, 0)
         );
         assert_eq!(pos, 5);
     }
@@ -726,11 +728,11 @@ mod tests {
         let mut pos = 0;
         assert_eq!(
             vec![84, 101, 115, 116, 32, 32, 79, 75, 0],
-            stdf_types::read_kx_u1(&raw_data, &mut pos, 9)
+            stdf_codec::read_kx_u1(&raw_data, &mut pos, 9)
         );
         assert_eq!(pos, 9);
         let mut pos = 3;
-        assert_eq!(vec![0u8; 0], stdf_types::read_kx_u1(&raw_data, &mut pos, 0));
+        assert_eq!(vec![0u8; 0], stdf_codec::read_kx_u1(&raw_data, &mut pos, 0));
         assert_eq!(pos, 3);
     }
 
@@ -741,13 +743,13 @@ mod tests {
         let order = ByteOrder::LittleEndian;
         assert_eq!(
             vec![0x2312, 0x7845, 0xBC9A, 0xFFDE, 0],
-            stdf_types::read_kx_u2(&raw_data, &mut pos, &order, 5)
+            stdf_codec::read_kx_u2(&raw_data, &mut pos, &order, 5)
         );
         assert_eq!(pos, 8);
         let mut pos = 3;
         assert_eq!(
             vec![0u16; 0],
-            stdf_types::read_kx_u2(&raw_data, &mut pos, &order, 0)
+            stdf_codec::read_kx_u2(&raw_data, &mut pos, &order, 0)
         );
         assert_eq!(pos, 3);
     }
@@ -759,13 +761,13 @@ mod tests {
         let order = ByteOrder::LittleEndian;
         assert_eq!(
             vec![0x78452312, 0xFFDEBC9A, 0, 0, 0],
-            stdf_types::read_kx_u4(&raw_data, &mut pos, &order, 5)
+            stdf_codec::read_kx_u4(&raw_data, &mut pos, &order, 5)
         );
         assert_eq!(pos, 8);
         let mut pos = 3;
         assert_eq!(
             vec![0u32; 0],
-            stdf_types::read_kx_u4(&raw_data, &mut pos, &order, 0)
+            stdf_codec::read_kx_u4(&raw_data, &mut pos, &order, 0)
         );
         assert_eq!(pos, 3);
     }
@@ -777,13 +779,13 @@ mod tests {
         let order = ByteOrder::LittleEndian;
         assert_eq!(
             vec![0xFFDEBC9A78452312, 0, 0, 0, 0],
-            stdf_types::read_kx_u8(&raw_data, &mut pos, &order, 5)
+            stdf_codec::read_kx_u8(&raw_data, &mut pos, &order, 5)
         );
         assert_eq!(pos, 8);
         let mut pos = 3;
         assert_eq!(
             vec![0u64; 0],
-            stdf_types::read_kx_u8(&raw_data, &mut pos, &order, 0)
+            stdf_codec::read_kx_u8(&raw_data, &mut pos, &order, 0)
         );
         assert_eq!(pos, 3);
     }
@@ -794,32 +796,32 @@ mod tests {
         let mut pos = 0;
         let order = ByteOrder::LittleEndian;
         assert_eq!(
-            stdf_types::KxUf::F1(vec![0x12, 0x23, 0x45, 0x78, 0x9A]),
-            stdf_types::read_kx_uf(&raw_data, &mut pos, &order, 5, 1)
+            stdf_codec::KxUf::F1(vec![0x12, 0x23, 0x45, 0x78, 0x9A]),
+            stdf_codec::read_kx_uf(&raw_data, &mut pos, &order, 5, 1)
         );
         assert_eq!(pos, 5);
         let mut pos = 0;
         assert_eq!(
-            stdf_types::KxUf::F2(vec![0x2312, 0x7845, 0xBC9A, 0xFFDE, 0]),
-            stdf_types::read_kx_uf(&raw_data, &mut pos, &order, 5, 2)
+            stdf_codec::KxUf::F2(vec![0x2312, 0x7845, 0xBC9A, 0xFFDE, 0]),
+            stdf_codec::read_kx_uf(&raw_data, &mut pos, &order, 5, 2)
         );
         assert_eq!(pos, 8);
         let mut pos = 0;
         assert_eq!(
-            stdf_types::KxUf::F4(vec![0x78452312, 0xFFDEBC9A, 0, 0, 0]),
-            stdf_types::read_kx_uf(&raw_data, &mut pos, &order, 5, 4)
+            stdf_codec::KxUf::F4(vec![0x78452312, 0xFFDEBC9A, 0, 0, 0]),
+            stdf_codec::read_kx_uf(&raw_data, &mut pos, &order, 5, 4)
         );
         assert_eq!(pos, 8);
         let mut pos = 0;
         assert_eq!(
-            stdf_types::KxUf::F8(vec![0xFFDEBC9A78452312, 0, 0, 0, 0]),
-            stdf_types::read_kx_uf(&raw_data, &mut pos, &order, 5, 8)
+            stdf_codec::KxUf::F8(vec![0xFFDEBC9A78452312, 0, 0, 0, 0]),
+            stdf_codec::read_kx_uf(&raw_data, &mut pos, &order, 5, 8)
         );
         assert_eq!(pos, 8);
         let mut pos = 3;
         assert_eq!(
-            stdf_types::KxUf::F1(vec![0u8; 0]),
-            stdf_types::read_kx_uf(&raw_data, &mut pos, &order, 100, 0)
+            stdf_codec::KxUf::F1(vec![0u8; 0]),
+            stdf_codec::read_kx_uf(&raw_data, &mut pos, &order, 100, 0)
         );
         assert_eq!(pos, 3);
     }
@@ -831,13 +833,13 @@ mod tests {
         let order = ByteOrder::LittleEndian;
         assert_eq!(
             vec![1.5399896e-36, 4.063216e-34, 0.0, 0.0, 0.0],
-            stdf_types::read_kx_r4(&raw_data, &mut pos, &order, 5)
+            stdf_codec::read_kx_r4(&raw_data, &mut pos, &order, 5)
         );
         assert_eq!(pos, 8);
         let mut pos = 3;
         assert_eq!(
             vec![0.0; 0],
-            stdf_types::read_kx_r4(&raw_data, &mut pos, &order, 0)
+            stdf_codec::read_kx_r4(&raw_data, &mut pos, &order, 0)
         );
         assert_eq!(pos, 3);
     }
@@ -848,11 +850,11 @@ mod tests {
         let mut pos = 0;
         assert_eq!(
             vec![0x2, 0x1, 0x3, 0x2, 0x5],
-            stdf_types::read_kx_n1(&raw_data, &mut pos, 5)
+            stdf_codec::read_kx_n1(&raw_data, &mut pos, 5)
         );
         assert_eq!(pos, 3);
         let mut pos = 3;
-        assert_eq!(vec![0u8; 0], stdf_types::read_kx_n1(&raw_data, &mut pos, 0));
+        assert_eq!(vec![0u8; 0], stdf_codec::read_kx_n1(&raw_data, &mut pos, 0));
         assert_eq!(pos, 3);
     }
 
@@ -866,19 +868,19 @@ mod tests {
         let order = ByteOrder::LittleEndian;
         assert_eq!(
             vec![
-                stdf_types::V1::Cn("AB".to_string()),
-                stdf_types::V1::U1(0xFF),
-                stdf_types::V1::B0,
-                stdf_types::V1::I2(510),
-                stdf_types::V1::N1(0x5),
+                stdf_codec::V1::Cn("AB".to_string()),
+                stdf_codec::V1::U1(0xFF),
+                stdf_codec::V1::B0,
+                stdf_codec::V1::I2(510),
+                stdf_codec::V1::N1(0x5),
             ],
-            stdf_types::read_vn(&raw_data, &mut pos, &order, 5)
+            stdf_codec::read_vn(&raw_data, &mut pos, &order, 5)
         );
         assert_eq!(pos, 14);
         let mut pos = 3;
         assert_eq!(
-            vec![stdf_types::V1::Invalid; 0],
-            stdf_types::read_vn(&raw_data, &mut pos, &order, 0)
+            vec![stdf_codec::V1::Invalid; 0],
+            stdf_codec::read_vn(&raw_data, &mut pos, &order, 0)
         );
         assert_eq!(pos, 3);
     }

@@ -10,9 +10,9 @@
 //
 
 use crate::atdf_types::AtdfRecord;
+use crate::stdf_codec::{bytes_to_string, CompressType};
 use crate::stdf_error::{StdfError, StdfErrorKind};
 use crate::stdf_file::{rewind_stream_position, StdfStream};
-use crate::stdf_types::{bytes_to_string, CompressType};
 #[cfg(feature = "bzip")]
 use bzip2::bufread::BzDecoder;
 #[cfg(feature = "gzip")]
