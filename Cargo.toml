@@ -52,6 +52,10 @@ name = "stdf_raw_iter_example"
 path = "example/stdf_raw_iter_example.rs"
 
 [[example]]
+name = "stdf_raw_view_iter_example"
+path = "example/stdf_raw_view_iter_example.rs"
+
+[[example]]
 name = "stdf_to_xlsx"
 path = "example/stdf_to_xlsx.rs"
 required-features = ["serialize"]
