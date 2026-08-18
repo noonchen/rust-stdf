@@ -9,8 +9,9 @@
 // Copyright (c) 2022 noonchen
 //
 
+use crate::records::*;
+use crate::stdf_codec::*;
 use crate::stdf_error::{StdfError, StdfErrorKind};
-use crate::stdf_types::*;
 #[cfg(feature = "bzip")]
 use bzip2::bufread::BzDecoder;
 #[cfg(feature = "gzip")]
