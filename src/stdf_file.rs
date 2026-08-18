@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Mon Nov 14 2022
+// Last Modified: Wed Aug 19 2026
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -104,15 +104,56 @@ pub struct StdfReader<R> {
     stream: StdfStream<R>,
 }
 
+/// Iterator over [`StdfRecord`]s, created by [`StdfReader::get_record_iter`].
+///
+/// Each item is a fully parsed [`StdfRecord`].
 pub struct RecordIter<'a, R> {
     inner: &'a mut StdfReader<R>,
     // reused across records, bytes are only borrowed during parsing
     buffer: Vec<u8>,
 }
 
+/// Iterator over unprocessed STDF records, created by [`StdfReader::get_rawdata_iter`].
+///
+/// Each item is an unprocessed [`RawDataElement`] that holds an owned record data buffer.
 pub struct RawDataIter<'a, R> {
     offset: u64,
     inner: &'a mut StdfReader<R>,
+}
+
+/// Iterator over unprocessed STDF records that borrows the record bytes,
+/// created by [`StdfReader::get_rawdata_view_iter`].
+///
+/// Each item is an unprocessed [`RawDataElementView`] that borrows record data buffer.
+///
+/// This iterator outperforms [`RawDataIter`] because there is no allocation, but
+/// it cannot implement [`Iterator`], so it can only be driven by `next`.
+///
+/// The yielded item is only valid until the following `next` call.
+///
+/// # Example
+///
+/// ```no_run
+/// use rust_stdf::{stdf_file::*, stdf_record_type::*, StdfRecordView};
+///
+/// let mut reader = StdfReader::new("demo_file.stdf").unwrap();
+/// let mut iter = reader.get_rawdata_view_iter();
+/// while let Some(item) = iter.next() {
+///     let raw = item.unwrap();
+///     if !raw.is_type(REC_PTR) {
+///         continue;
+///     }
+///     let rec_view: StdfRecordView = (&raw).into();
+///     if let StdfRecordView::PTR(ptr) = rec_view {
+///         println!("{}", ptr.result());
+///     }
+/// }
+/// ```
+pub struct RawDataViewIter<'a, R> {
+    offset: u64,
+    inner: &'a mut StdfReader<R>,
+    // reused across records, bytes are borrowed by the yielded view
+    buffer: Vec<u8>,
 }
 
 // implementations
@@ -201,27 +242,44 @@ impl<R: BufRead + Seek> StdfReader<R> {
         RecordHeader::new().read_from_bytes(&buf, &self.endianness)
     }
 
-    /// return an iterator for StdfRecord
+    /// Return an iterator for [`StdfRecord`].
     ///
-    /// Only the records after the current file position
-    /// can be read.
+    /// The iterator yields records starting from the current
+    /// file position onward.
     #[inline(always)]
     pub fn get_record_iter(&mut self) -> RecordIter<'_, R> {
         RecordIter {
             inner: self,
-            buffer: Vec::new(),
+            buffer: Vec::with_capacity(1024),
         }
     }
 
-    /// return an iterator for unprocessed STDF bytes
+    /// Return an iterator for unprocessed STDF bytes [`RawDataElement`].
     ///
-    /// beware that internal `offset` counter is starting
-    /// from the current position.
+    /// The iterator yields records starting from the current file position
+    /// onward, and the `offset` field is counted relative to that position.
     #[inline(always)]
     pub fn get_rawdata_iter(&mut self) -> RawDataIter<'_, R> {
         RawDataIter {
             offset: 0,
             inner: self,
+        }
+    }
+
+    /// Return a buffer-reusing iterator for unprocessed STDF bytes [`RawDataElementView`].
+    ///
+    /// Unlike [`get_rawdata_iter`](Self::get_rawdata_iter), the yielded
+    /// [`RawDataElementView`] borrows the iterator's reused buffer,
+    /// so it performs no per-record allocation. See [`RawDataViewIter`] for usage.
+    ///
+    /// The iterator yields records starting from the current file position
+    /// onward, and the `offset` field is counted relative to that position.
+    #[inline(always)]
+    pub fn get_rawdata_view_iter(&mut self) -> RawDataViewIter<'_, R> {
+        RawDataViewIter {
+            offset: 0,
+            inner: self,
+            buffer: Vec::with_capacity(1024),
         }
     }
 }
@@ -368,6 +426,49 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
             offset: data_offset,
             header,
             raw_data: buffer,
+            byte_order: self.inner.endianness,
+        }))
+    }
+}
+
+impl<R: BufRead + Seek> RawDataViewIter<'_, R> {
+    /// Advance the iterator, returning the next [`RawDataElementView`], or `None` at EOF.
+    ///
+    /// The returned item will be invalidated by the following call.
+    ///
+    /// It mirrors [`Iterator::next`] but cannot be part of the [`Iterator`] trait
+    /// because the item borrows from `self`.
+    #[inline(always)]
+    #[allow(clippy::should_implement_trait)] // lending iterator: item borrows `self`
+    pub fn next(&mut self) -> Option<Result<RawDataElementView<'_>, StdfError>> {
+        let header = match self.inner.read_header() {
+            Ok(h) => h,
+            Err(e) => {
+                return match e.kind() {
+                    // Eof indicates normal EOF, UnexpectedEof indicates unexpected EOF
+                    Some(StdfErrorKind::Eof) => None,
+                    _ => Some(Err(e)),
+                };
+            }
+        };
+        // advance position by 4 after reading a header successfully
+        self.offset += 4;
+        let data_offset = self.offset;
+        // grow only when this record is larger than any seen so far, then
+        // fill just the [..len] prefix and borrow it in the view
+        let len = header.len as usize;
+        if self.buffer.len() < len {
+            self.buffer.resize(len, 0);
+        }
+        if let Err(io_e) = self.inner.stream.read_exact(&mut self.buffer[..len]) {
+            return Some(Err(StdfError::new(StdfErrorKind::Io, io_e.to_string())));
+        }
+        self.offset += header.len as u64;
+
+        Some(Ok(RawDataElementView {
+            offset: data_offset,
+            header,
+            raw_data: &self.buffer[..len],
             byte_order: self.inner.endianness,
         }))
     }
