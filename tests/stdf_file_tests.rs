@@ -11,7 +11,8 @@
 
 use rand::prelude::*;
 use rust_stdf::{
-    stdf_file::*, stdf_record_type::*, ByteOrder, CompressType, StdfRecord, StdfRecordView,
+    stdf_file::*, stdf_record_type::*, ByteOrder, CompressType, RawDataElement, StdfRecord,
+    StdfRecordView,
 };
 use std::{
     collections::HashMap,
@@ -267,6 +268,27 @@ fn stream_constructor_detects_endianness() {
         } else {
             panic!("expected MIR, got {:?}", recs[1].get_type());
         }
+
+        // view iterator: lending, so read one item at a time
+        let mut reader = StdfReader::from(
+            Cursor::new(minimal_stdf(order)),
+            &CompressType::Uncompressed,
+        )
+        .unwrap();
+        let mut view_iter = reader.get_rawdata_view_iter();
+        let far = view_iter.next().unwrap().unwrap();
+        assert_eq!(far.header.get_type(), REC_FAR);
+        assert_eq!(far.byte_order, order);
+        let mir = view_iter.next().unwrap().unwrap();
+        assert_eq!(mir.header.get_type(), REC_MIR);
+        assert_eq!(mir.byte_order, order, "byte order not detected");
+        match StdfRecord::from(&mir) {
+            StdfRecord::MIR(m) => {
+                assert_eq!(m.setup_t, 0x01020304, "MIR parsed in wrong byte order")
+            }
+            other => panic!("expected MIR, got {:?}", other.get_type()),
+        }
+        assert!(view_iter.next().is_none());
     }
 }
 
@@ -342,6 +364,17 @@ fn truncated_body_yields_io_error() {
         Err(e) => assert_eq!(e.code, 3, "record iterator should report IO error"),
         Ok(_) => panic!("truncated body should error, got Ok"),
     }
+
+    // view iterator: lending, so it can't `.collect()`; drive it manually
+    let mut reader =
+        StdfReader::from(Cursor::new(truncated()), &CompressType::Uncompressed).unwrap();
+    let mut view_iter = reader.get_rawdata_view_iter();
+    assert!(view_iter.next().unwrap().is_ok(), "FAR should parse");
+    match view_iter.next() {
+        Some(Err(e)) => assert_eq!(e.code, 3, "view iterator should report IO error"),
+        Some(Ok(_)) => panic!("truncated body should error, got Ok"),
+        None => panic!("truncated body should error, got None"),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -367,6 +400,22 @@ fn iterator_stops_at_eof() {
     .unwrap();
     assert_eq!(reader.get_record_iter().count(), 2);
     assert_eq!(reader.get_record_iter().count(), 0);
+
+    // view iterator: lending, so it can't `.count()`; drive it manually
+    let mut reader = StdfReader::from(
+        Cursor::new(minimal_stdf(ByteOrder::LittleEndian)),
+        &CompressType::Uncompressed,
+    )
+    .unwrap();
+    let mut count = 0;
+    let mut view_iter = reader.get_rawdata_view_iter();
+    while let Some(item) = view_iter.next() {
+        item.unwrap();
+        count += 1;
+    }
+    assert_eq!(count, 2);
+    let mut view_iter = reader.get_rawdata_view_iter();
+    assert!(view_iter.next().is_none());
 }
 
 // ---------------------------------------------------------------------------
@@ -403,5 +452,103 @@ fn rawdata_element_conversions() {
         // consuming conversion
         let rec_consumed: StdfRecord = raw.into();
         assert_eq!(rec_consumed, rec);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RawDataViewIter (buffer-reusing, borrowing raw iterator)
+// ---------------------------------------------------------------------------
+
+// The borrowing view iterator must yield the same records (type, offset and
+// parsed content) as the owning `get_rawdata_iter`, for every demo file.
+#[test]
+fn view_iter_matches_rawdata_iter() {
+    let files = get_test_stdf_files();
+    assert_ne!(files.len(), 0);
+
+    for file in &files {
+        let mut reader =
+            StdfReader::new(file).unwrap_or_else(|e| panic!("open {}: {e}", file.display()));
+        let owned: Vec<(u64, u64, StdfRecord)> = reader
+            .get_rawdata_iter()
+            .map(|r| {
+                let raw = r.unwrap();
+                (raw.header.get_type(), raw.offset, StdfRecord::from(raw))
+            })
+            .collect();
+
+        let mut reader =
+            StdfReader::new(file).unwrap_or_else(|e| panic!("open {}: {e}", file.display()));
+        let mut view_iter = reader.get_rawdata_view_iter();
+        let mut i = 0;
+        while let Some(item) = view_iter.next() {
+            let raw = item.unwrap();
+            let (typ, offset, ref rec) = owned[i];
+            assert_eq!(
+                raw.header.get_type(),
+                typ,
+                "type mismatch at #{i} in {}",
+                file.display()
+            );
+            assert_eq!(
+                raw.offset,
+                offset,
+                "offset mismatch at #{i} in {}",
+                file.display()
+            );
+            let parsed: StdfRecord = (&raw).into();
+            assert_eq!(
+                &parsed,
+                rec,
+                "record mismatch at #{i} in {}",
+                file.display()
+            );
+            i += 1;
+        }
+        assert_eq!(
+            i,
+            owned.len(),
+            "view iterator length mismatch for {}",
+            file.display()
+        );
+    }
+}
+
+// `RawDataElementView` type check and every conversion: to `StdfRecord`,
+// `StdfRecordView`, and an owned `RawDataElement`.
+#[test]
+fn rawdata_element_view_conversions() {
+    let mut data = Vec::new();
+    data.extend_from_slice(&2u16.to_le_bytes());
+    data.push(0);
+    data.push(10); // FAR header
+    data.push(1);
+    data.push(4); // FAR body
+    write_header(&mut data, 4, 1, 10, ByteOrder::LittleEndian);
+    data.extend_from_slice(&0x01020304u32.to_le_bytes()); // MIR body
+
+    let mut reader = StdfReader::from(Cursor::new(data), &CompressType::Uncompressed).unwrap();
+    let mut iter = reader.get_rawdata_view_iter();
+    while let Some(item) = iter.next() {
+        let raw = item.unwrap();
+        let code = raw.header.get_type();
+
+        // type checks
+        assert!(raw.is_type(code));
+        assert!(!raw.is_type(REC_INVALID));
+
+        // borrowed conversions
+        let rec: StdfRecord = (&raw).into();
+        assert_eq!(rec.get_type(), code);
+        let view: StdfRecordView = (&raw).into();
+        assert_eq!(view.get_type(), code);
+
+        // copy into an owned RawDataElement that outlives the borrow
+        let owned: RawDataElement = (&raw).into();
+        assert_eq!(owned.offset, raw.offset);
+        assert_eq!(owned.header, raw.header);
+        assert_eq!(owned.raw_data, raw.raw_data);
+        assert_eq!(owned.byte_order, raw.byte_order);
+        assert_eq!(StdfRecord::from(&owned), rec);
     }
 }

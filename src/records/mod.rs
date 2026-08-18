@@ -153,6 +153,51 @@ pub struct RawDataElement {
     pub byte_order: ByteOrder,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Element yielded by [`RawDataViewIter`](crate::stdf_file::RawDataViewIter). Unlike [`RawDataElement`],
+/// it borrows the unprocessed record bytes from the iterator's reused buffer, so it's only valid
+/// until the next call to [`RawDataViewIter::next`](crate::stdf_file::RawDataViewIter::next).
+///
+/// In return, it offers better performance and a lower heap footprint.
+///
+/// It can be converted to [`StdfRecord`], borrowed as [`StdfRecordView`], or copied into an owned
+/// [`RawDataElement`] when it needs to outlive the current iteration scope.
+///
+/// ```
+/// use rust_stdf::{RawDataElementView, ByteOrder, StdfRecord, RecordHeader, stdf_record_type::REC_FAR};
+///
+/// let raw = [0u8; 0];
+/// let rdv = RawDataElementView {
+///     offset: 0,
+///     header: RecordHeader {typ: 0, sub: 10, len: 2},
+///     raw_data: &raw,
+///     byte_order: ByteOrder::LittleEndian
+/// };
+/// let rec: StdfRecord = (&rdv).into();
+/// println!("{:?}", rec);
+/// assert!(rec.is_type(REC_FAR));
+/// ```
+pub struct RawDataElementView<'a> {
+    /// file offset of `raw_data` in file,
+    /// after header.len and before raw_data
+    ///
+    /// |-typ-|-sub-|--len--⬇️--raw..data--|
+    ///
+    /// note that the offset is relative to the
+    /// file position that runs `get_rawdata_view_iter`,
+    ///
+    /// it can be treated as file position **only if**
+    /// the iteration starts from beginning of the file.
+    pub offset: u64,
+
+    /// used for identifying StdfRecord types
+    pub header: RecordHeader,
+
+    /// field data of current STDF Record, borrowed from the iterator's reused buffer
+    pub raw_data: &'a [u8],
+    pub byte_order: ByteOrder,
+}
+
 // implementation
 
 impl RecordHeader {
@@ -483,6 +528,44 @@ impl From<RawDataElement> for StdfRecord {
         let mut rec = StdfRecord::new_from_header(raw_element.header);
         rec.read_from_bytes(&raw_element.raw_data, &raw_element.byte_order);
         rec
+    }
+}
+
+impl RawDataElementView<'_> {
+    #[inline(always)]
+    pub fn is_type(&self, rec_type: u64) -> bool {
+        (self.header.get_type() & rec_type) != 0
+    }
+}
+
+impl From<&RawDataElementView<'_>> for StdfRecord {
+    /// Parse the borrowed bytes into an owned record; does not consume the input.
+    #[inline(always)]
+    fn from(raw_view: &RawDataElementView<'_>) -> Self {
+        let mut rec = StdfRecord::new_from_header(raw_view.header);
+        rec.read_from_bytes(raw_view.raw_data, &raw_view.byte_order);
+        rec
+    }
+}
+
+impl<'a> From<&RawDataElementView<'a>> for StdfRecordView<'a> {
+    /// Build a zero-copy view; does not consume the input.
+    #[inline]
+    fn from(raw_view: &RawDataElementView<'a>) -> Self {
+        Self::read_from_bytes(raw_view.header, raw_view.raw_data, &raw_view.byte_order)
+    }
+}
+
+impl From<&RawDataElementView<'_>> for RawDataElement {
+    /// Copy the borrowed bytes into an owned [`RawDataElement`]; does not consume the input.
+    #[inline(always)]
+    fn from(raw_view: &RawDataElementView<'_>) -> Self {
+        RawDataElement {
+            offset: raw_view.offset,
+            header: raw_view.header,
+            raw_data: raw_view.raw_data.to_vec(),
+            byte_order: raw_view.byte_order,
+        }
     }
 }
 
