@@ -6,6 +6,7 @@ use std::borrow::Cow;
 use serde::Serialize;
 
 // Common Type
+#[cfg_attr(feature = "serialize", derive(Serialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ByteOrder {
     LittleEndian,
