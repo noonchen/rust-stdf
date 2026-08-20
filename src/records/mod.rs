@@ -270,7 +270,7 @@ impl StdfRecord {
     /// Create a `StdfRecord` from a `RecordHeader` with default data
     ///
     /// The difference between `new()` is that this method can save
-    /// the info of an invalid record header, help the caller to
+    /// the info of an unknown/reserved record header, help the caller to
     /// debug
     ///
     /// ```
@@ -279,7 +279,7 @@ impl StdfRecord {
     /// // create a PMR StdfRecord from header
     /// // (1, 60)
     /// let pmr_header = RecordHeader {typ: 1, sub: 60, len: 0 };
-    /// let new_rec = StdfRecord::new_from_header(pmr_header);
+    /// let new_rec = StdfRecord::new_from_header(&pmr_header);
     ///
     /// if let StdfRecord::PMR(pmr_rec) = new_rec {
     ///     assert_eq!(pmr_rec.head_num, 1);
@@ -289,13 +289,22 @@ impl StdfRecord {
     /// }
     /// ```
     #[inline(always)]
-    pub fn new_from_header(header: RecordHeader) -> Self {
+    pub fn new_from_header(header: &RecordHeader) -> Self {
         let code = stdf_record_type::get_code_from_typ_sub(header.typ, header.sub);
-        if code == stdf_record_type::REC_INVALID {
-            // Preserve the invalid header so callers can inspect it for debugging.
-            StdfRecord::InvalidRec(header)
-        } else {
-            StdfRecord::new(code)
+        match code {
+            stdf_record_type::REC_RESERVE => {
+                let mut rec = ReservedRec::new();
+                rec.typ = header.typ;
+                rec.sub = header.sub;
+                StdfRecord::ReservedRec(rec)
+            }
+            stdf_record_type::REC_UNKNOWN => {
+                let mut rec = ReservedRec::new();
+                rec.typ = header.typ;
+                rec.sub = header.sub;
+                StdfRecord::UnknownRec(rec)
+            }
+            _ => StdfRecord::new(code),
         }
     }
 
@@ -398,7 +407,7 @@ impl StdfRecord {
         }
 
         let data_slice = &raw_data[4..expected_end_pos];
-        let mut rec = StdfRecord::new(header.get_type());
+        let mut rec = StdfRecord::new_from_header(&header);
         rec.read_from_bytes(data_slice, order);
         Ok(rec)
     }
@@ -503,7 +512,7 @@ impl From<&RawDataElement> for StdfRecord {
     /// it will NOT consume the input RawDataElement
     #[inline(always)]
     fn from(raw_element: &RawDataElement) -> Self {
-        let mut rec = StdfRecord::new_from_header(raw_element.header);
+        let mut rec = StdfRecord::new_from_header(&raw_element.header);
         rec.read_from_bytes(&raw_element.raw_data, &raw_element.byte_order);
         rec
     }
@@ -525,7 +534,7 @@ impl From<RawDataElement> for StdfRecord {
     /// it will consume the input RawDataElement
     #[inline(always)]
     fn from(raw_element: RawDataElement) -> Self {
-        let mut rec = StdfRecord::new_from_header(raw_element.header);
+        let mut rec = StdfRecord::new_from_header(&raw_element.header);
         rec.read_from_bytes(&raw_element.raw_data, &raw_element.byte_order);
         rec
     }
@@ -542,7 +551,7 @@ impl From<&RawDataElementView<'_>> for StdfRecord {
     /// Parse the borrowed bytes into an owned record; does not consume the input.
     #[inline(always)]
     fn from(raw_view: &RawDataElementView<'_>) -> Self {
-        let mut rec = StdfRecord::new_from_header(raw_view.header);
+        let mut rec = StdfRecord::new_from_header(&raw_view.header);
         rec.read_from_bytes(raw_view.raw_data, &raw_view.byte_order);
         rec
     }

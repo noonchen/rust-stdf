@@ -160,17 +160,23 @@ pub(crate) fn read_bn(raw_data: &[u8], pos: &mut usize) -> Bn {
 /// Read Dn (u16 + Vec<u8>) from byte array with offset "pos", u16 is bit counts
 #[inline(always)]
 pub(crate) fn read_dn(raw_data: &[u8], pos: &mut usize, order: &ByteOrder) -> Dn {
-    let bitcount = read_u2(raw_data, pos, order) as usize;
-    let bytecount = bitcount.div_ceil(8);
+    let bitcount = read_u2(raw_data, pos, order);
+    let bytecount = (bitcount as usize).div_ceil(8);
     if bytecount != 0 {
         let min_pos = std::cmp::min(*pos + bytecount, raw_data.len());
         let data_slice = &raw_data[*pos..min_pos];
         *pos = min_pos;
         let mut value = vec![0u8; data_slice.len()];
         value.copy_from_slice(data_slice);
-        value
+        Dn {
+            bit_count: bitcount,
+            bit_data: value,
+        }
     } else {
-        vec![0u8; 0]
+        Dn {
+            bit_count: bitcount,
+            bit_data: Vec::new(),
+        }
     }
 }
 

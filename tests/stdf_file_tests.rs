@@ -440,7 +440,7 @@ fn rawdata_element_conversions() {
 
         // type checks
         assert!(raw.is_type(code));
-        assert!(!raw.is_type(REC_INVALID));
+        assert!(!raw.is_type(REC_UNKNOWN));
         assert_eq!(raw.header.get_type(), code);
 
         // non-consuming conversions
@@ -535,7 +535,7 @@ fn rawdata_element_view_conversions() {
 
         // type checks
         assert!(raw.is_type(code));
-        assert!(!raw.is_type(REC_INVALID));
+        assert!(!raw.is_type(REC_UNKNOWN));
 
         // borrowed conversions
         let rec: StdfRecord = (&raw).into();

@@ -359,7 +359,7 @@ impl AtdfRecord {
         // do some ATDF syntax checking here, start parsing ATDF rec
         let (rec_name, rec_data) = atdf_str.split_once(':').unwrap_or(("", atdf_str));
         let type_code = get_code_from_rec_name(rec_name);
-        if type_code == REC_INVALID {
+        if type_code == REC_UNKNOWN {
             return Err(StdfError::new(
                 StdfErrorKind::InvalidRecordType,
                 format!(
@@ -654,8 +654,8 @@ impl From<&StdfRecord> for AtdfRecord {
             // rec type 181: Reserved
             // not matched
             _ => {
-                type_code = REC_INVALID;
-                rec_name = "INVALID".to_string();
+                type_code = REC_UNKNOWN;
+                rec_name = "UNKNOWN".to_string();
                 atdf_fields = &INVALID_FIELD;
                 data_list = vec![];
             }
@@ -914,28 +914,28 @@ pub(crate) fn atdf_data_from_ftr(rec: &FTR) -> Vec<String> {
         } else {
             "F".to_string()
         },
-        alarm_flags,                     //AlarmFlags
-        rec.vect_nam.clone(),            //VECT_NAM
-        rec.time_set.clone(),            //TIME_SET
-        rec.cycl_cnt.to_string(),        //CYCL_CNT
-        rec.rel_vadr.to_string(),        //REL_VADR
-        rec.rept_cnt.to_string(),        //REPT_CNT
-        rec.num_fail.to_string(),        //NUM_FAIL
-        rec.xfail_ad.to_string(),        //XFAIL_AD
-        rec.yfail_ad.to_string(),        //YFAIL_AD
-        rec.vect_off.to_string(),        //VECT_OFF
-        ser_stdf_kx_data(&rec.rtn_indx), //RTN_INDX
-        ser_kx_digit_hex(&rec.rtn_stat), //RTN_STAT
-        ser_stdf_kx_data(&rec.pgm_indx), //PGM_INDX
-        ser_kx_digit_hex(&rec.pgm_stat), //PGM_STAT
-        ser_stdf_kx_data(&rec.fail_pin), //FAIL_PIN
-        rec.op_code.clone(),             //OP_CODE
-        rec.test_txt.clone(),            //TEST_TXT
-        rec.alarm_id.clone(),            //ALARM_ID
-        rec.prog_txt.clone(),            //PROG_TXT
-        rec.rslt_txt.clone(),            //RSLT_TXT
-        rec.patg_num.to_string(),        //PATG_NUM
-        ser_stdf_kx_data(&rec.spin_map), //SPIN_MAP
+        alarm_flags,                              //AlarmFlags
+        rec.vect_nam.clone(),                     //VECT_NAM
+        rec.time_set.clone(),                     //TIME_SET
+        rec.cycl_cnt.to_string(),                 //CYCL_CNT
+        rec.rel_vadr.to_string(),                 //REL_VADR
+        rec.rept_cnt.to_string(),                 //REPT_CNT
+        rec.num_fail.to_string(),                 //NUM_FAIL
+        rec.xfail_ad.to_string(),                 //XFAIL_AD
+        rec.yfail_ad.to_string(),                 //YFAIL_AD
+        rec.vect_off.to_string(),                 //VECT_OFF
+        ser_stdf_kx_data(&rec.rtn_indx),          //RTN_INDX
+        ser_kx_digit_hex(&rec.rtn_stat),          //RTN_STAT
+        ser_stdf_kx_data(&rec.pgm_indx),          //PGM_INDX
+        ser_kx_digit_hex(&rec.pgm_stat),          //PGM_STAT
+        ser_stdf_kx_data(&rec.fail_pin.bit_data), //FAIL_PIN
+        rec.op_code.clone(),                      //OP_CODE
+        rec.test_txt.clone(),                     //TEST_TXT
+        rec.alarm_id.clone(),                     //ALARM_ID
+        rec.prog_txt.clone(),                     //PROG_TXT
+        rec.rslt_txt.clone(),                     //RSLT_TXT
+        rec.patg_num.to_string(),                 //PATG_NUM
+        ser_stdf_kx_data(&rec.spin_map.bit_data), //SPIN_MAP
     ]
 }
 
@@ -1051,7 +1051,7 @@ pub(crate) fn atdf_data_from_gdr(rec: &GDR) -> Vec<String> {
             V1::R8(r8) => gen_data_list.push(format!("D{}", r8)),
             V1::Cn(cn) => gen_data_list.push(format!("T{}", cn)),
             V1::Bn(bn) => gen_data_list.push(format!("X{}", ser_bn_dn(bn))),
-            V1::Dn(dn) => gen_data_list.push(format!("Y{}", ser_bn_dn(dn))),
+            V1::Dn(dn) => gen_data_list.push(format!("Y{}", ser_bn_dn(&dn.bit_data))),
             V1::N1(n1) => gen_data_list.push(format!("N{}", n1)),
             // No pad bytes in ATDF
             _ => {

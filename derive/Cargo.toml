@@ -1,6 +1,6 @@
 [package]
 name = "rust-stdf-derive"
-version = "0.4.1"
+version = "1.0.0"
 edition = "2021"
 license = "MIT"
 description = "Internal derive macros for the rust-stdf crate (STDF record codec + zero-copy views)."

@@ -605,19 +605,28 @@ mod tests {
         let mut pos = 0;
         let order = ByteOrder::LittleEndian;
         assert_eq!(
-            vec![84, 101, 115, 116, 32, 79, 75],
+            Dn {
+                bit_count: 56,
+                bit_data: vec![84, 101, 115, 116, 32, 79, 75],
+            },
             stdf_codec::read_dn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 9);
         let mut pos = 4;
         assert_eq!(
-            vec![32, 79, 75, 0],
+            Dn {
+                bit_count: 0x7473,
+                bit_data: vec![32, 79, 75, 0],
+            },
             stdf_codec::read_dn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 10);
         let mut pos = 100;
         assert_eq!(
-            vec![0u8; 0],
+            Dn {
+                bit_count: 0,
+                bit_data: Vec::new(),
+            },
             stdf_codec::read_dn(&raw_data, &mut pos, &order)
         );
         assert_eq!(pos, 100);

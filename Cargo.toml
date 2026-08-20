@@ -6,7 +6,7 @@ repository = "https://github.com/noonchen/rust-stdf"
 documentation = "https://docs.rs/rust-stdf/"
 readme = "README.md"
 license = "MIT"
-version = "0.4.1"
+version = "1.0.0"
 edition = "2021"
 keywords = ["stdf", "atdf", "semiconductor", "parse"]
 exclude = ["/demo_stdf"]
@@ -20,7 +20,7 @@ lto = "fat"
 codegen-units = 1
 
 [dependencies]
-rust-stdf-derive = { path = "derive", version = "0.4.1" }
+rust-stdf-derive = { path = "derive", version = "1.0.0" }
 smart-default = "0.6.0"
 flate2 = { version = "1.1.9", optional = true}
 bzip2 = { version = "0.6.1", optional = true}

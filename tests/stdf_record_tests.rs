@@ -1680,9 +1680,9 @@ fn record_kx_sn_ref_test() {
 }
 
 // `KxCfRef` (an STR `user_txt` array): fixed-width `f`-byte elements, no
-// length prefix, same decoding rule.
+// length prefix, same decoding rule. Also covers `DnRef` via `mask_map`/`fal_map`.
 #[test]
-fn record_kx_cf_ref_test() {
+fn record_kx_cf_ref_and_dn_ref_test() {
     use std::borrow::Cow;
 
     let order = ByteOrder::LittleEndian;
@@ -1700,8 +1700,8 @@ fn record_kx_cf_ref_test() {
     cn(&mut raw, ""); // rslt_txt
     raw.push(0); // z_val
     raw.push(0); // fmu_flg
-    dn(&mut raw, 0, &[]); // mask_map
-    dn(&mut raw, 0, &[]); // fal_map
+    dn(&mut raw, 8, &[0xFF]); // mask_map
+    dn(&mut raw, 4, &[0x0F]); // fal_map
     raw.extend_from_slice(&0u64.to_le_bytes()); // cyc_cnt_t
     raw.extend_from_slice(&0u32.to_le_bytes()); // totf_cnt
     raw.extend_from_slice(&0u32.to_le_bytes()); // totl_cnt
@@ -1740,6 +1740,35 @@ fn record_kx_cf_ref_test() {
     r.read_from_bytes(&raw, &order);
     let v = STRView::new(&raw, &order);
 
+    // DnRef exposes both the declared bit count and the packed bytes.
+    let mask_map = v.mask_map();
+    assert_eq!(mask_map.bit_count(), 8);
+    assert_eq!(mask_map.as_bytes(), &[0xFF][..]);
+    assert_eq!(mask_map.len(), 1);
+    assert!(!mask_map.is_empty());
+    assert_eq!(mask_map.to_owned(), r.mask_map);
+    assert_eq!(
+        mask_map.to_owned(),
+        Dn {
+            bit_count: 8,
+            bit_data: vec![0xFF],
+        }
+    );
+
+    let fal_map = v.fal_map();
+    assert_eq!(fal_map.bit_count(), 4);
+    assert_eq!(fal_map.as_bytes(), &[0x0F][..]);
+    assert_eq!(fal_map.len(), 1);
+    assert!(!fal_map.is_empty());
+    assert_eq!(fal_map.to_owned(), r.fal_map);
+    assert_eq!(
+        fal_map.to_owned(),
+        Dn {
+            bit_count: 4,
+            bit_data: vec![0x0F],
+        }
+    );
+
     let kx = v.user_txt();
     assert_eq!(kx.len(), 3);
     assert!(matches!(&kx.get_str(0).unwrap(), Cow::Borrowed(_)));
@@ -1755,4 +1784,69 @@ fn record_kx_cf_ref_test() {
         seen.push(s);
     }
     assert_eq!(seen, kx.as_vec());
+}
+
+// Reserved/unknown records must preserve the header fields and byte order so a
+// future writer can reconstruct the original record header from `raw_data.len()`.
+#[test]
+fn reserved_unknown_record_preserves_header_and_order() {
+    let order = ByteOrder::BigEndian;
+
+    // Reserved record: typ=180, sub=10, body = [0xAA, 0xBB, 0xCC]
+    let mut reserved_raw = Vec::new();
+    reserved_raw.extend_from_slice(&3u16.to_be_bytes());
+    reserved_raw.push(180);
+    reserved_raw.push(10);
+    reserved_raw.extend_from_slice(&[0xAA, 0xBB, 0xCC]);
+
+    let rec = StdfRecord::read_from_bytes_with_header(&reserved_raw, &order).unwrap();
+    match rec {
+        StdfRecord::ReservedRec(r) => {
+            assert_eq!(r.typ, 180);
+            assert_eq!(r.sub, 10);
+            assert_eq!(r.byte_order, order);
+            assert_eq!(r.raw_data, vec![0xAA, 0xBB, 0xCC]);
+        }
+        other => panic!("expected ReservedRec, got {other:?}"),
+    }
+
+    let view = StdfRecordView::read_from_bytes_with_header(&reserved_raw, &order).unwrap();
+    match view.to_owned() {
+        StdfRecord::ReservedRec(r) => {
+            assert_eq!(r.typ, 180);
+            assert_eq!(r.sub, 10);
+            assert_eq!(r.byte_order, order);
+            assert_eq!(r.raw_data, vec![0xAA, 0xBB, 0xCC]);
+        }
+        other => panic!("expected ReservedRec from view, got {other:?}"),
+    }
+
+    // Unknown record: typ=99, sub=7, body = [1, 2]
+    let mut unknown_raw = Vec::new();
+    unknown_raw.extend_from_slice(&2u16.to_be_bytes());
+    unknown_raw.push(99);
+    unknown_raw.push(7);
+    unknown_raw.extend_from_slice(&[1, 2]);
+
+    let rec = StdfRecord::read_from_bytes_with_header(&unknown_raw, &order).unwrap();
+    match rec {
+        StdfRecord::UnknownRec(r) => {
+            assert_eq!(r.typ, 99);
+            assert_eq!(r.sub, 7);
+            assert_eq!(r.byte_order, order);
+            assert_eq!(r.raw_data, vec![1, 2]);
+        }
+        other => panic!("expected UnknownRec, got {other:?}"),
+    }
+
+    let view = StdfRecordView::read_from_bytes_with_header(&unknown_raw, &order).unwrap();
+    match view.to_owned() {
+        StdfRecord::UnknownRec(r) => {
+            assert_eq!(r.typ, 99);
+            assert_eq!(r.sub, 7);
+            assert_eq!(r.byte_order, order);
+            assert_eq!(r.raw_data, vec![1, 2]);
+        }
+        other => panic!("expected UnknownRec from view, got {other:?}"),
+    }
 }
