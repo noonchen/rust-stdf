@@ -270,7 +270,7 @@ impl StdfRecord {
     /// Create a `StdfRecord` from a `RecordHeader` with default data
     ///
     /// The difference between `new()` is that this method can save
-    /// the info of an invalid record header, help the caller to
+    /// the info of an unknown/reserved record header, help the caller to
     /// debug
     ///
     /// ```
@@ -291,11 +291,20 @@ impl StdfRecord {
     #[inline(always)]
     pub fn new_from_header(header: RecordHeader) -> Self {
         let code = stdf_record_type::get_code_from_typ_sub(header.typ, header.sub);
-        if code == stdf_record_type::REC_INVALID {
-            // Preserve the invalid header so callers can inspect it for debugging.
-            StdfRecord::InvalidRec(header)
-        } else {
-            StdfRecord::new(code)
+        match code {
+            stdf_record_type::REC_RESERVE => {
+                let mut rec = ReservedRec::new();
+                rec.typ = header.typ;
+                rec.sub = header.sub;
+                StdfRecord::ReservedRec(rec)
+            }
+            stdf_record_type::REC_UNKNOWN => {
+                let mut rec = ReservedRec::new();
+                rec.typ = header.typ;
+                rec.sub = header.sub;
+                StdfRecord::UnknownRec(rec)
+            }
+            _ => StdfRecord::new(code),
         }
     }
 
@@ -398,7 +407,7 @@ impl StdfRecord {
         }
 
         let data_slice = &raw_data[4..expected_end_pos];
-        let mut rec = StdfRecord::new(header.get_type());
+        let mut rec = StdfRecord::new_from_header(&header);
         rec.read_from_bytes(data_slice, order);
         Ok(rec)
     }

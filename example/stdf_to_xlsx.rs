@@ -53,9 +53,9 @@ fn main() -> Result<(), XlsxError> {
         // if file is abnormally truncated, the last
         // `stdf_rec` will be an error.
         //
-        // Invalid record in the middle of file stream
+        // Unknown record in the middle of file stream
         // will not throw error, instead returning a
-        // `StdfRecord::InvalidRec`.
+        // `StdfRecord::UnknownRec`.
         let stdf_rec = stdf_rec.unwrap();
         // use record name as hashmap key
         let rec_name = get_rec_name_from_code(stdf_rec.get_type());
@@ -223,8 +223,8 @@ fn main() -> Result<(), XlsxError> {
                 let json = serde_json::to_value(&r).unwrap();
                 write_json_to_sheet(json, field_names, sheet, row)?;
             }
-            StdfRecord::InvalidRec(h) => {
-                panic!("Invalid record found! {h:?}")
+            StdfRecord::UnknownRec(r) => {
+                panic!("Unknown record found! {r:?}")
             }
         }
     }

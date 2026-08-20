@@ -359,7 +359,7 @@ impl AtdfRecord {
         // do some ATDF syntax checking here, start parsing ATDF rec
         let (rec_name, rec_data) = atdf_str.split_once(':').unwrap_or(("", atdf_str));
         let type_code = get_code_from_rec_name(rec_name);
-        if type_code == REC_INVALID {
+        if type_code == REC_UNKNOWN {
             return Err(StdfError::new(
                 StdfErrorKind::InvalidRecordType,
                 format!(
@@ -654,8 +654,8 @@ impl From<&StdfRecord> for AtdfRecord {
             // rec type 181: Reserved
             // not matched
             _ => {
-                type_code = REC_INVALID;
-                rec_name = "INVALID".to_string();
+                type_code = REC_UNKNOWN;
+                rec_name = "UNKNOWN".to_string();
                 atdf_fields = &INVALID_FIELD;
                 data_list = vec![];
             }

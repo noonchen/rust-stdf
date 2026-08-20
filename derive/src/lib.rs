@@ -1232,7 +1232,7 @@ pub fn stdf_records(input: TokenStream) -> TokenStream {
                 // rec type 180: Reserved
                 // rec type 181: Reserved
                 pub const REC_RESERVE: u64 = 1u64 << #reserve_bit;
-                pub const REC_INVALID: u64 = 1u64 << #invalid_bit;
+                pub const REC_UNKNOWN: u64 = 1u64 << #invalid_bit;
             }
             .into()
         }
@@ -1275,7 +1275,7 @@ pub fn stdf_records(input: TokenStream) -> TokenStream {
                     // rec type 180: Reserved
                     // rec type 181: Reserved
                     ReservedRec(ReservedRec),
-                    InvalidRec(RecordHeader),
+                    UnknownRec(ReservedRec),
                 }
 
                 /// Zero-copy view over the field data of a single STDF record.
@@ -1295,8 +1295,8 @@ pub fn stdf_records(input: TokenStream) -> TokenStream {
                     #( #view_variants, )*
                     // rec type 180: Reserved
                     // rec type 181: Reserved
-                    ReservedRec { raw_data: &'a [u8] },
-                    InvalidRec(RecordHeader),
+                    ReservedRec(ReservedRecView<'a>),
+                    UnknownRec(ReservedRecView<'a>),
                 }
             }
             .into()
@@ -1340,7 +1340,7 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                 // rec type 181: Reserved
                 (180 | 181, _) => REC_RESERVE,
                 // not matched
-                _ => REC_INVALID,
+                _ => REC_UNKNOWN,
             }
         },
         "name_from_code" => quote! {
@@ -1350,13 +1350,14 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                 // rec type 181: Reserved
                 REC_RESERVE => "ReservedRec",
                 // not matched
-                _ => "InvalidRec",
+                _ => "UnknownRec",
             }
         },
         "code_from_name" => quote! {
             match rec_name {
                 #( #lits => #codes, )*
-                _ => REC_INVALID,
+                "ReservedRec" => REC_RESERVE,
+                _ => REC_UNKNOWN,
             }
         },
 
@@ -1366,7 +1367,7 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                 #( #qcodes => StdfRecord::#names(#names::new()), )*
                 stdf_record_type::REC_RESERVE => StdfRecord::ReservedRec(ReservedRec::new()),
                 // not matched
-                _ => StdfRecord::InvalidRec(RecordHeader::new()),
+                _ => StdfRecord::UnknownRec(ReservedRec::new()),
             }
         },
         "record_type" => quote! {
@@ -1376,7 +1377,7 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                 // rec type 181: Reserved
                 StdfRecord::ReservedRec(_) => stdf_record_type::REC_RESERVE,
                 // not matched
-                StdfRecord::InvalidRec(_) => stdf_record_type::REC_INVALID,
+                StdfRecord::UnknownRec(_) => stdf_record_type::REC_UNKNOWN,
             }
         },
         "record_read" => {
@@ -1397,8 +1398,8 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                     // rec type 180: Reserved
                     // rec type 181: Reserved
                     StdfRecord::ReservedRec(rec) => rec.read_from_bytes(raw_data, order),
-                    // not matched, invalid rec do not parse anything
-                    StdfRecord::InvalidRec(_) => (),
+                    // not matched
+                    StdfRecord::UnknownRec(rec) => rec.read_from_bytes(raw_data, order),
                 }
             }
         }
@@ -1421,9 +1422,19 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                     #( #arms, )*
                     // rec type 180: Reserved
                     // rec type 181: Reserved
-                    stdf_record_type::REC_RESERVE => StdfRecordView::ReservedRec { raw_data },
+                    stdf_record_type::REC_RESERVE => StdfRecordView::ReservedRec(ReservedRecView {
+                        typ: header.typ,
+                        sub: header.sub,
+                        byte_order: *byte_order,
+                        raw_data,
+                    }),
                     // not matched
-                    _ => StdfRecordView::InvalidRec(header),
+                    _ => StdfRecordView::UnknownRec(ReservedRecView {
+                        typ: header.typ,
+                        sub: header.sub,
+                        byte_order: *byte_order,
+                        raw_data,
+                    }),
                 }
             }
         }
@@ -1445,9 +1456,9 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                     #( #arms, )*
                     // rec type 180: Reserved
                     // rec type 181: Reserved
-                    StdfRecordView::ReservedRec { .. } => stdf_record_type::REC_RESERVE,
+                    StdfRecordView::ReservedRec(_) => stdf_record_type::REC_RESERVE,
                     // not matched
-                    StdfRecordView::InvalidRec(_) => stdf_record_type::REC_INVALID,
+                    StdfRecordView::UnknownRec(_) => stdf_record_type::REC_UNKNOWN,
                 }
             }
         }
@@ -1468,13 +1479,21 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                     #( #arms, )*
                     // rec type 180: Reserved
                     // rec type 181: Reserved
-                    StdfRecordView::ReservedRec { raw_data } => {
+                    StdfRecordView::ReservedRec(v) => {
                         let mut rec = ReservedRec::new();
-                        rec.read_from_bytes(raw_data, &ByteOrder::LittleEndian);
+                        rec.typ = v.typ;
+                        rec.sub = v.sub;
+                        rec.read_from_bytes(v.raw_data, &v.byte_order);
                         StdfRecord::ReservedRec(rec)
                     }
                     // not matched
-                    StdfRecordView::InvalidRec(h) => StdfRecord::InvalidRec(*h),
+                    StdfRecordView::UnknownRec(v) => {
+                        let mut rec = ReservedRec::new();
+                        rec.typ = v.typ;
+                        rec.sub = v.sub;
+                        rec.read_from_bytes(v.raw_data, &v.byte_order);
+                        StdfRecord::UnknownRec(rec)
+                    },
                 }
             }
         }
