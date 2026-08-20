@@ -41,20 +41,28 @@ pub type I4 = i32;
 pub type R4 = f32;
 pub type R8 = f64;
 
-// Cn;	//first byte = unsigned count of bytes to follow (maximum of 255 bytes)
+// Variable length character string, first byte = unsigned count of bytes to follow (maximum of 255 bytes)
 pub type Cn = String;
 
 // Variable length character string, string length is stored in another field
 pub type Cf = String;
 
-// first two bytes = unsigned count of bytes to follow (maximum of 65535 bytes)
+// Variable length character string, first two bytes = unsigned count of bytes to follow (maximum of 65535 bytes)
 pub type Sn = String;
 
-// Bn;	//First byte = unsigned count of bytes to follow (maximum of 255 bytes)
+// Variable length byte array, first byte = unsigned count of bytes to follow (maximum of 255 bytes)
 pub type Bn = Vec<u8>;
 
-// Dn;	//First two bytes = unsigned count of bits to follow (maximum of 65,535 bits)
-pub type Dn = Vec<u8>;
+/// Variable length bit array, first two bytes = unsigned count of bits to follow (maximum of 65,535 bits)
+///
+/// `bit_count` is the declared number of bits, and `bit_data` stores the
+/// packed bytes (length should be `ceil(bit_count / 8)`).
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[derive(SmartDefault, Debug, Clone, PartialEq, Eq)]
+pub struct Dn {
+    pub bit_count: u16,
+    pub bit_data: Vec<u8>,
+}
 
 pub type KxCn = Vec<Cn>;
 pub type KxSn = Vec<Sn>;
@@ -141,7 +149,10 @@ pub struct BnRef<'a>(&'a [u8]);
 /// Zero-copy borrow of a `Dn` payload (the bytes *after* the 2-byte,
 /// byte-order-dependent bit-count prefix).
 #[derive(SmartDefault, Clone, Copy, Debug)]
-pub struct DnRef<'a>(&'a [u8]);
+pub struct DnRef<'a> {
+    bit_count: u16,
+    bit_data: &'a [u8],
+}
 
 /// Zero-copy view over the `k` elements of a `KxCn` array (each element is a
 /// 1-byte length prefix followed by the payload).
@@ -344,33 +355,45 @@ impl<'a> DnRef<'a> {
     pub(crate) fn read_at(raw: &'a [u8], off: u16, order: &ByteOrder) -> Option<Self> {
         let p = validate_offset(off)?;
         let mut cp = p;
-        let bitcount = read_u2(raw, &mut cp, order) as usize;
-        let bytecount = bitcount.div_ceil(8);
+        let bitcount = read_u2(raw, &mut cp, order);
+        let bytecount = (bitcount as usize).div_ceil(8);
         let start = cp;
         let end = std::cmp::min(start + bytecount, raw.len());
-        Some(DnRef(raw.get(start..end).unwrap_or(&[])))
+        Some(DnRef {
+            bit_count: bitcount,
+            bit_data: raw.get(start..end).unwrap_or(&[]),
+        })
     }
 
-    /// Raw bytes, always zero-copy.
+    /// Declared number of bits in this `Dn` field.
+    #[inline]
+    pub fn bit_count(&self) -> u16 {
+        self.bit_count
+    }
+
+    /// Raw packed bytes, always zero-copy.
     #[inline]
     pub fn as_bytes(&self) -> &'a [u8] {
-        self.0
+        self.bit_data
     }
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.bit_data.is_empty()
     }
 
     #[inline]
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.bit_data.len()
     }
 
     /// Allocating; reproduces the owned `Dn` (byte copy) semantics used by
     /// `StdfRecord`, so results match the eager parser.
     pub fn to_owned(&self) -> Dn {
-        self.0.to_vec()
+        Dn {
+            bit_count: self.bit_count,
+            bit_data: self.bit_data.to_vec(),
+        }
     }
 }
 
