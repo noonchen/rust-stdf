@@ -279,7 +279,7 @@ impl StdfRecord {
     /// // create a PMR StdfRecord from header
     /// // (1, 60)
     /// let pmr_header = RecordHeader {typ: 1, sub: 60, len: 0 };
-    /// let new_rec = StdfRecord::new_from_header(pmr_header);
+    /// let new_rec = StdfRecord::new_from_header(&pmr_header);
     ///
     /// if let StdfRecord::PMR(pmr_rec) = new_rec {
     ///     assert_eq!(pmr_rec.head_num, 1);
@@ -289,7 +289,7 @@ impl StdfRecord {
     /// }
     /// ```
     #[inline(always)]
-    pub fn new_from_header(header: RecordHeader) -> Self {
+    pub fn new_from_header(header: &RecordHeader) -> Self {
         let code = stdf_record_type::get_code_from_typ_sub(header.typ, header.sub);
         match code {
             stdf_record_type::REC_RESERVE => {
@@ -512,7 +512,7 @@ impl From<&RawDataElement> for StdfRecord {
     /// it will NOT consume the input RawDataElement
     #[inline(always)]
     fn from(raw_element: &RawDataElement) -> Self {
-        let mut rec = StdfRecord::new_from_header(raw_element.header);
+        let mut rec = StdfRecord::new_from_header(&raw_element.header);
         rec.read_from_bytes(&raw_element.raw_data, &raw_element.byte_order);
         rec
     }
@@ -534,7 +534,7 @@ impl From<RawDataElement> for StdfRecord {
     /// it will consume the input RawDataElement
     #[inline(always)]
     fn from(raw_element: RawDataElement) -> Self {
-        let mut rec = StdfRecord::new_from_header(raw_element.header);
+        let mut rec = StdfRecord::new_from_header(&raw_element.header);
         rec.read_from_bytes(&raw_element.raw_data, &raw_element.byte_order);
         rec
     }
@@ -551,7 +551,7 @@ impl From<&RawDataElementView<'_>> for StdfRecord {
     /// Parse the borrowed bytes into an owned record; does not consume the input.
     #[inline(always)]
     fn from(raw_view: &RawDataElementView<'_>) -> Self {
-        let mut rec = StdfRecord::new_from_header(raw_view.header);
+        let mut rec = StdfRecord::new_from_header(&raw_view.header);
         rec.read_from_bytes(raw_view.raw_data, &raw_view.byte_order);
         rec
     }

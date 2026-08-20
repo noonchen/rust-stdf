@@ -391,7 +391,7 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
             return Some(Err(StdfError::new(StdfErrorKind::Io, io_e.to_string())));
         }
 
-        let mut rec = StdfRecord::new_from_header(header);
+        let mut rec = StdfRecord::new_from_header(&header);
         rec.read_from_bytes(&self.buffer[..len], &self.inner.endianness);
         Some(Ok(rec))
     }
