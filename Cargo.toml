@@ -20,20 +20,20 @@ lto = "fat"
 codegen-units = 1
 
 [dependencies]
-rust-stdf-derive = { path = "derive", version = "0.3.1" }
+rust-stdf-derive = { path = "derive", version = "0.4.1" }
 smart-default = "0.6.0"
-flate2 = { version = "1.0.24", optional = true}
-bzip2 = { version = "0.4.3", optional = true}
-zip = { version = "0.6.3", default-features = false, features = [ "deflate", "bzip2" ], optional = true }
-chrono = { version = "0.4.31", optional = true}
+flate2 = { version = "1.1.9", optional = true}
+bzip2 = { version = "0.6.1", optional = true}
+zip = { version = "2.4.2", default-features = false, features = [ "deflate", "bzip2" ], optional = true }
+chrono = { version = "0.4.45", optional = true}
 hex = { version = "0.4.3", optional = true }
-serde = { version = "1.0.147", features = ["derive"], optional = true}
+serde = { version = "1.0.229", features = ["derive"], optional = true}
 struct-field-names-as-array = { version = "0.1.4", optional = true}
 
 [dev-dependencies]
-rand = "0.8.5"
-serde_json = "1.0.87"
-rust_xlsxwriter = "0.12.1"
+rand = "0.8.7"
+serde_json = "1.0.151"
+rust_xlsxwriter = { version = "0.84.1", features = ["constant_memory"] }
 
 [features]
 gzip = ["flate2"]

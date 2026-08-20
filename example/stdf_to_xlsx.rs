@@ -65,11 +65,11 @@ fn main() -> Result<(), XlsxError> {
             Ok(s) => s,
             Err(_) => {
                 // create new if not exist
-                let s = xlsx.add_worksheet();
+                let s = xlsx.add_worksheet_with_constant_memory();
                 s.set_name(rec_name)?;
                 // based on the record type, write the column header
                 for (col, field) in field_names.iter().enumerate() {
-                    s.write_string(0, col as u16, field, &bold_format)?;
+                    s.write_string_with_format(0, col as u16, *field, &bold_format)?;
                 }
                 s
             }
@@ -229,7 +229,7 @@ fn main() -> Result<(), XlsxError> {
         }
     }
     // save xlsx to path
-    xlsx.save_to_path(std::path::Path::new(&xlsx_path))?;
+    xlsx.save(std::path::Path::new(&xlsx_path))?;
     Ok(())
 }
 
@@ -296,11 +296,11 @@ fn write_json_to_sheet(
         let v = &json[field];
         match v {
             serde_json::Value::Number(n) => {
-                sheet.write_number_only(row, col, n.as_f64().unwrap_or(f64::NAN))?
+                sheet.write_number(row, col, n.as_f64().unwrap_or(f64::NAN))?
             }
-            serde_json::Value::Null => sheet.write_string_only(row, col, "N/A")?,
-            serde_json::Value::String(s) => sheet.write_string_only(row, col, s)?,
-            _ => sheet.write_string_only(row, col, &v.to_string())?,
+            serde_json::Value::Null => sheet.write_string(row, col, "N/A")?,
+            serde_json::Value::String(s) => sheet.write_string(row, col, s)?,
+            _ => sheet.write_string(row, col, &v.to_string())?,
         };
     }
     Ok(())
