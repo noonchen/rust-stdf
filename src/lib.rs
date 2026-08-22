@@ -3,7 +3,8 @@
 //! of version V4 and V4-2007.
 //!
 //! Current capability:
-//!  - Reading & parsing STDF files.
+//!  - Reading & parsing STDF files with [`StdfReader`](crate::stdf_file::StdfReader).
+//!  - Writing STDF records with [`StdfWriter`](crate::stdf_file::StdfWriter).
 //!  - Reading & parsing ATDF files. (feature: `atdf`)
 //!  - Support several compressed formats.
 //!
@@ -15,7 +16,6 @@
 //!  - `serialize`: serialize STDF records by `serde`
 //!
 //! In development:
-//!  - (dev) Dump `StdfRecord` to a new stdf file.
 //!  - (dev) Functions for ATDF <-> STDF format.
 
 // lib.rs
@@ -37,9 +37,9 @@ mod stdf_codec;
 mod stdf_error;
 pub use records::*;
 pub use stdf_codec::*;
-pub use stdf_error::StdfError;
+pub use stdf_error::{StdfError, StdfErrorKind};
 
-/// This module contains STDF Reader
+/// This module contains STDF Reader/Writer
 /// and record iterator
 ///
 /// For more detailed example, see [`StdfReader`](crate::stdf_file::StdfReader).
