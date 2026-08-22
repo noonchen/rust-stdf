@@ -48,6 +48,10 @@ name = "stdf_record_printer"
 path = "example/stdf_example.rs"
 
 [[example]]
+name = "stdf_write_example"
+path = "example/stdf_write_example.rs"
+
+[[example]]
 name = "stdf_raw_iter_example"
 path = "example/stdf_raw_iter_example.rs"
 

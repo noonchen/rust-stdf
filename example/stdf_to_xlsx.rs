@@ -300,7 +300,7 @@ fn write_json_to_sheet(
             }
             serde_json::Value::Null => sheet.write_string(row, col, "N/A")?,
             serde_json::Value::String(s) => sheet.write_string(row, col, s)?,
-            _ => sheet.write_string(row, col, &v.to_string())?,
+            _ => sheet.write_string(row, col, v.to_string())?,
         };
     }
     Ok(())
