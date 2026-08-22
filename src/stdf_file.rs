@@ -396,6 +396,12 @@ impl<R: BufRead + Seek> StdfReader<R> {
         Ok(StdfReader { endianness, stream })
     }
 
+    /// Return the endianness of the STDF file.
+    #[inline(always)]
+    pub fn get_byte_order(&self) -> ByteOrder {
+        self.endianness
+    }
+
     #[inline(always)]
     fn read_header(&mut self) -> Result<RecordHeader, StdfError> {
         let mut buf = [0u8; 4];
