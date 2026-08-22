@@ -53,8 +53,8 @@ pub mod stdf_record_type {
     // Generates the `REC_*` record-type code constants.
     stdf_records!(rec_codes);
 
-    /// This function convert record type constant to
-    /// STDF record (typ, sub)
+    /// This function gets record (typ, sub)
+    /// from record type constant.
     ///
     /// ```
     /// use rust_stdf::stdf_record_type::*;
@@ -67,8 +67,8 @@ pub mod stdf_record_type {
         stdf_match_expr!(typ_sub_from_code)
     }
 
-    /// This function convert (typ, sub) to
-    /// STDF record type constant
+    /// This function gets record type constant
+    /// from record (typ, sub).
     ///
     /// ```
     /// use rust_stdf::stdf_record_type::*;
@@ -81,8 +81,8 @@ pub mod stdf_record_type {
         stdf_match_expr!(code_from_typ_sub)
     }
 
-    /// This function convert record type constant to
-    /// STDF record name string
+    /// This function gets record name string
+    /// from record type constant.
     ///
     /// ```
     /// use rust_stdf::stdf_record_type::*;
@@ -95,8 +95,8 @@ pub mod stdf_record_type {
         stdf_match_expr!(name_from_code)
     }
 
-    /// This function convert record name string to
-    /// STDF record type constant
+    /// This function gets the record type constant
+    /// from record name string.
     ///
     /// ```
     /// use rust_stdf::stdf_record_type::*;
@@ -114,7 +114,6 @@ pub mod stdf_record_type {
 // Generates the `StdfRecord` and `StdfRecordView` enums.
 stdf_records!(rec_enums);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 /// Element yielded by [`RawDataIter`](crate::stdf_file::RawDataIter). It owns unprocessed STDF record data,
 /// and can be converted to [`StdfRecord`], or borrowed as [`StdfRecordView`].
 ///
@@ -132,6 +131,7 @@ stdf_records!(rec_enums);
 /// println!("{:?}", rec);
 /// assert!(rec.is_type(REC_FAR));
 /// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawDataElement {
     /// file offset of `raw_data` in file,
     /// after header.len and before raw_data
@@ -153,12 +153,11 @@ pub struct RawDataElement {
     pub byte_order: ByteOrder,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Element yielded by [`RawDataViewIter`](crate::stdf_file::RawDataViewIter). Unlike [`RawDataElement`],
 /// it borrows the unprocessed record bytes from the iterator's reused buffer, so it's only valid
 /// until the next call to [`RawDataViewIter::next`](crate::stdf_file::RawDataViewIter::next).
 ///
-/// In return, it offers better performance and a lower heap footprint.
+/// In return, it offers better performance and lower heap footprints.
 ///
 /// It can be converted to [`StdfRecord`], borrowed as [`StdfRecordView`], or copied into an owned
 /// [`RawDataElement`] when it needs to outlive the current iteration scope.
@@ -177,6 +176,7 @@ pub struct RawDataElement {
 /// println!("{:?}", rec);
 /// assert!(rec.is_type(REC_FAR));
 /// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RawDataElementView<'a> {
     /// file offset of `raw_data` in file,
     /// after header.len and before raw_data
@@ -509,7 +509,7 @@ impl RawDataElement {
 }
 
 impl From<&RawDataElement> for StdfRecord {
-    /// it will NOT consume the input RawDataElement
+    /// It will NOT consume the input RawDataElement
     #[inline(always)]
     fn from(raw_element: &RawDataElement) -> Self {
         let mut rec = StdfRecord::new_from_header(&raw_element.header);
@@ -531,7 +531,7 @@ impl<'a> From<&'a RawDataElement> for StdfRecordView<'a> {
 }
 
 impl From<RawDataElement> for StdfRecord {
-    /// it will consume the input RawDataElement
+    /// It will consume the input RawDataElement
     #[inline(always)]
     fn from(raw_element: RawDataElement) -> Self {
         let mut rec = StdfRecord::new_from_header(&raw_element.header);
