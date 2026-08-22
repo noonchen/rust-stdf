@@ -2,8 +2,9 @@
 //!
 //! `#[derive(StdfRecordCodec)]` generates, from a single record `struct`
 //! definition:
-//!  - `new()` + `read_from_bytes()` — the eager parser, and
-//!  - a zero-copy `*View` struct with a per-field byte offset and typed getters.
+//!  - `new()` + `read_from_bytes()` — the eager parser.
+//!  - A zero-copy `*View` struct and getter methods.
+//!  - `StdfRecordWrite` trait implementation.
 //!
 //! The two parsing paths are therefore generated from one source (the struct's
 //! field list) and cannot drift apart.
@@ -12,27 +13,14 @@
 //! A generated `*View` borrows the raw record bytes and exposes one getter per
 //! field. Instead of eagerly parsing every field into an owned `StdfRecord`
 //! (which allocates a `String`/`Vec` for every `Cn`/`Bn`/`Kx*` field), a view
-//! scans the record once to record each field's byte offset, then reads a field
-//! only when its getter is called. Scalar fields cost O(1) and zero allocation;
-//! string fields allocate only when you call `to_owned()`.
-//!
-//! The per-field byte offsets are stored in **private** fields of the view, so
-//! users only ever interact with the typed getters — never with the raw layout.
-//!
-//! ## Field kinds
-//! Each field's kind is inferred from its type alias: `U1 I1 U2 I2 U4 I4 U8 R4
-//! R8 B1 C1 Cn Sn Bn Dn` and the arrays `KxN1 KxU1 KxU2 KxU4 KxU8 KxR4 KxCn KxSn
-//! KxUf KxCf Vn`. Optional trailing fields are recognized by `Option<..>`.
+//! scans the record once and stores the byte offset of each field, the field is
+//! only read when its getter is called.
 //!
 //! ## Attributes
 //!  - `#[stdf(count = <field>)]` (field) — required on `Kx*` arrays; names the
 //!    (earlier) field holding the element count (`k`).
 //!  - `#[stdf(width = <field>)]` (field) — required on `KxUf`/`KxCf` arrays;
 //!    names the (earlier) field holding the per-element byte width (`f`).
-//!
-//! The generated code refers to items that must be in scope at the derive site
-//! (i.e. inside `rust_stdf::stdf_types`): the `read_*` leaf readers, `ByteOrder`,
-//! `CnRef`/`SnRef`/`BnRef`/`DnRef`, `validate_offset`, and `VIEW_ABSENT_OFT`.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -41,6 +29,14 @@ use syn::{
     parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, PathArguments, Type,
 };
 
+/// `StdfRecordCodec` derive is for STDF record types, it implements the
+/// eager parser, zero-copy view and `StdfRecordWrite` trait.
+///
+/// ## Attributes
+///  - `#[stdf(count = <field>)]`: required on `Kx*` arrays; names the
+///    field holding the element count (`k`).
+///  - `#[stdf(width = <field>)]`: required on `KxUf`/`KxCf` arrays;
+///    names the field holding the element byte width (`f`).
 #[proc_macro_derive(StdfRecordCodec, attributes(stdf))]
 pub fn derive_stdf_record_codec(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -49,15 +45,15 @@ pub fn derive_stdf_record_codec(input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// How a single field is parsed / laid out.
+/// Classifying record field types into kinds.
 enum Kind {
-    /// Scalar read with `fn(raw, pos)` (no byte order): `U1`, `I1`.
-    ScalarNoOrder { read: Ident, bytes: usize },
-    /// Scalar read with `fn(raw, pos, order)`: `U2 I2 U4 I4 U8 R4 R8`.
-    ScalarOrder {
-        read: Ident,
-        bytes: usize,
-        float: bool,
+    /// Single-byte scalar: `U1`, `I1`.
+    Scalar1B { read_fn: Ident, size: usize },
+    /// Multi-byte scalar: `U2 I2 U4 I4 U8 R4 R8`.
+    ScalarMB {
+        read_fn: Ident,
+        size: usize,
+        is_float: bool,
     },
     /// `B1` = `[u8; 1]`.
     B1,
@@ -71,30 +67,31 @@ enum Kind {
     Bn,
     /// `Dn` bit-field byte array (2-byte, byte-order-dependent bit length).
     Dn,
-    /// `KxN1` nibble-packed array (`fn(raw, pos, k)`).
+    /// `KxN1` nibble-packed array.
     KxN1,
-    /// Fixed-width counted array. `order == false`: `fn(raw, pos, k)` (`KxU1`);
-    /// `order == true`: `fn(raw, pos, order, k)` (`KxU2 KxU4 KxU8 KxR4`).
+    /// Fixed-width counted array. `is_mb == false`: `KxU1`;
+    /// `is_mb == true`: `KxU2 KxU4 KxU8 KxR4`.
     KxFixed {
-        read: Ident,
-        elem: usize,
-        order: bool,
+        read_fn: Ident,
+        elem_sz: usize,
+        is_mb: bool,
     },
-    /// Variable-length counted string array. `order == false`: `KxCn`;
-    /// `order == true`: `KxSn`.
-    KxStr { read: Ident, order: bool },
-    /// `KxUf` counted array of `f`-byte integers (`fn(raw, pos, order, k, f)`).
+    /// Variable-length counted string array. `is_mb == false`: `KxCn`;
+    /// `is_mb == true`: `KxSn`.
+    KxStr { read_fn: Ident, is_mb: bool },
+    /// Counted array of `f`-byte integers.
     KxUf,
-    /// `KxCf` counted array of `f`-byte strings (`fn(raw, pos, k, f)`).
+    /// Counted array of `f`-byte strings.
     KxCf,
-    /// `Vn` generic-data array (terminal, `fn(raw, pos, order, k)`).
+    /// `Vn` generic-data array.
     Vn,
 }
 
+/// Information about a record field, used to generate the eager parser and view.
 struct FieldInfo {
     ident: Ident,
     inner_ty: Type,
-    optional: bool,
+    is_optional: bool,
     kind: Kind,
     count: Option<Ident>,
     /// Byte width (1 or 2) of the `count` field, resolved in a second pass.
@@ -133,7 +130,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     let mut infos: Vec<FieldInfo> = Vec::with_capacity(fields.len());
     for f in fields {
         let ident = f.ident.clone().unwrap();
-        let (optional, inner_ty) = unwrap_option(&f.ty);
+        let (is_optional, inner_ty) = unwrap_option(&f.ty);
         let leaf = leaf_ident(&inner_ty).ok_or_else(|| {
             syn::Error::new_spanned(&f.ty, "unsupported field type for StdfRecordCodec")
         })?;
@@ -158,10 +155,10 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             }
         }
 
-        let kind = classify(&leaf).ok_or_else(|| {
+        let kind = stdf_field_type_to_kind(&leaf).ok_or_else(|| {
             syn::Error::new_spanned(
                 &f.ty,
-                format!("StdfRecordCodec: unsupported field kind `{leaf}`"),
+                format!("StdfRecordCodec: unsupported field type `{leaf}`"),
             )
         })?;
 
@@ -198,7 +195,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         infos.push(FieldInfo {
             ident,
             inner_ty,
-            optional,
+            is_optional,
             kind,
             count,
             count_bytes: None,
@@ -213,8 +210,8 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     let width_map: std::collections::HashMap<String, usize> = infos
         .iter()
         .filter_map(|fi| match &fi.kind {
-            Kind::ScalarNoOrder { bytes, .. } | Kind::ScalarOrder { bytes, .. } => {
-                Some((fi.ident.to_string(), *bytes))
+            Kind::Scalar1B { size, .. } | Kind::ScalarMB { size, .. } => {
+                Some((fi.ident.to_string(), *size))
             }
             _ => None,
         })
@@ -228,8 +225,31 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         }
     }
 
+    let (rec_typ, rec_sub) = record_typ_sub(&name).ok_or_else(|| {
+        syn::Error::new_spanned(
+            &name,
+            "StdfRecordCodec cannot find current record in the RECORDS table",
+        )
+    })?;
+
+    // Reject a struct definition where a non-optional field follows an optional one.
+    let mut seen_optional = false;
+    for fi in &infos {
+        if fi.is_optional {
+            seen_optional = true;
+        } else if seen_optional {
+            return Err(syn::Error::new_spanned(
+                &fi.inner_ty,
+                "non-optional field may not follow an optional field",
+            ));
+        }
+    }
+
+    // record [view] related
     let view_fields = infos.iter().map(|fi| {
         let id = &fi.ident;
+        // record view uses same field names as the record,
+        // but stores the byte offset (u16) of each field.
         quote! { #id: u16, }
     });
     let view_field_idents = infos.iter().map(|fi| fi.ident.clone()).collect::<Vec<_>>();
@@ -237,23 +257,30 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     let eager_stmts = infos.iter().map(gen_eager);
     let getters = infos.iter().map(gen_getter);
 
-    // The eager `read_from_bytes` only touches `order` when a field is read with
-    // a byte-order-dependent leaf reader; otherwise name the param `_order`.
+    // record write related
+    let validate_stmts = infos.iter().map(|fi| gen_validate(fi, &name));
+    let write_stmts = infos.iter().map(gen_write);
+    let payload_len_exprs = infos.iter().map(gen_payload_len);
+    let optional_order_stmts = gen_optional_order(&infos, &name);
+
+    // check `byteOrder` is needed for eager parser function `read_from_bytes`.
     let eager_uses_order = infos.iter().any(|fi| {
         matches!(
             &fi.kind,
-            Kind::ScalarOrder { .. }
+            Kind::ScalarMB { .. }
                 | Kind::Sn
                 | Kind::Dn
                 | Kind::Vn
-                | Kind::KxFixed { order: true, .. }
-                | Kind::KxStr { order: true, .. }
+                | Kind::KxFixed { is_mb: true, .. }
+                | Kind::KxStr { is_mb: true, .. }
                 | Kind::KxUf
         )
     });
     let eager_order = if eager_uses_order {
         format_ident!("order")
     } else {
+        // add `_order` to avoid unused variable warning
+        // when `byteOrder` is not needed.
         format_ident!("_order")
     };
 
@@ -289,7 +316,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         }
 
         impl<'a> #view<'a> {
-            /// Scan the raw record once, recording each field's byte offset.
+            /// Scan the given raw data and store byte offset of each field.
             #[inline]
             #[allow(clippy::int_plus_one)]
             pub fn new(raw: &'a [u8], order: &ByteOrder) -> Self {
@@ -306,7 +333,46 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
                 rec
             }
 
+            /// Return the borrowed payload, used in `stdf_match_expr!(view_write)`.
+            #[inline]
+            pub(crate) fn raw_payload(&self) -> &'a [u8] {
+                self.raw
+            }
+
+            /// Return the byte order of borrowed payload.
+            #[inline]
+            pub(crate) fn byte_order(&self) -> ByteOrder {
+                self.order
+            }
+
             #(#getters)*
+        }
+
+        impl StdfRecordWrite for #name {
+            const REC_TYP: u8 = #rec_typ;
+            const REC_SUB: u8 = #rec_sub;
+
+            #[inline]
+            fn validate(&self) -> Result<(), crate::StdfError> {
+                #(#validate_stmts)*
+                #optional_order_stmts
+                Ok(())
+            }
+
+            #[inline]
+            fn payload_len(&self) -> usize {
+                0usize #(+ #payload_len_exprs)*
+            }
+
+            #[inline]
+            fn write_payload<W: std::io::Write>(
+                &self,
+                w: &mut W,
+                order: &ByteOrder,
+            ) -> Result<(), crate::StdfError> {
+                #(#write_stmts)*
+                Ok(())
+            }
         }
     })
 }
@@ -335,6 +401,20 @@ fn leaf_ident(ty: &Type) -> Option<Ident> {
     }
 }
 
+/// `read_*` leaf ident → corresponding `write_*` leaf ident.
+fn write_ident(read_fn: &Ident) -> Ident {
+    format_ident!("{}", read_fn.to_string().replacen("read_", "write_", 1))
+}
+
+/// Look up the wire `(typ, sub)` pair for a derived record from the same
+/// `RECORDS` table used by the enum macros.
+fn record_typ_sub(name: &Ident) -> Option<(u8, u8)> {
+    RECORDS
+        .iter()
+        .find(|(n, _, _)| name == *n)
+        .map(|(_, t, s)| (*t, *s))
+}
+
 /// Extract a `smart_default` sentinel from a field: `#[default = <expr>]` or
 /// `#[default(<expr>)]`. A bare `#[default]` (type default) yields `None`.
 fn field_default(f: &syn::Field) -> Option<TokenStream2> {
@@ -356,50 +436,50 @@ fn field_default(f: &syn::Field) -> Option<TokenStream2> {
     None
 }
 
-fn classify(leaf: &Ident) -> Option<Kind> {
+fn stdf_field_type_to_kind(leaf: &Ident) -> Option<Kind> {
     Some(match leaf.to_string().as_str() {
-        "U1" => Kind::ScalarNoOrder {
-            read: format_ident!("read_uint8"),
-            bytes: 1,
+        "U1" => Kind::Scalar1B {
+            read_fn: format_ident!("read_uint8"),
+            size: 1,
         },
-        "I1" => Kind::ScalarNoOrder {
-            read: format_ident!("read_i1"),
-            bytes: 1,
+        "I1" => Kind::Scalar1B {
+            read_fn: format_ident!("read_i1"),
+            size: 1,
         },
-        "U2" => Kind::ScalarOrder {
-            read: format_ident!("read_u2"),
-            bytes: 2,
-            float: false,
+        "U2" => Kind::ScalarMB {
+            read_fn: format_ident!("read_u2"),
+            size: 2,
+            is_float: false,
         },
-        "I2" => Kind::ScalarOrder {
-            read: format_ident!("read_i2"),
-            bytes: 2,
-            float: false,
+        "I2" => Kind::ScalarMB {
+            read_fn: format_ident!("read_i2"),
+            size: 2,
+            is_float: false,
         },
-        "U4" => Kind::ScalarOrder {
-            read: format_ident!("read_u4"),
-            bytes: 4,
-            float: false,
+        "U4" => Kind::ScalarMB {
+            read_fn: format_ident!("read_u4"),
+            size: 4,
+            is_float: false,
         },
-        "I4" => Kind::ScalarOrder {
-            read: format_ident!("read_i4"),
-            bytes: 4,
-            float: false,
+        "I4" => Kind::ScalarMB {
+            read_fn: format_ident!("read_i4"),
+            size: 4,
+            is_float: false,
         },
-        "U8" => Kind::ScalarOrder {
-            read: format_ident!("read_u8"),
-            bytes: 8,
-            float: false,
+        "U8" => Kind::ScalarMB {
+            read_fn: format_ident!("read_u8"),
+            size: 8,
+            is_float: false,
         },
-        "R4" => Kind::ScalarOrder {
-            read: format_ident!("read_r4"),
-            bytes: 4,
-            float: true,
+        "R4" => Kind::ScalarMB {
+            read_fn: format_ident!("read_r4"),
+            size: 4,
+            is_float: true,
         },
-        "R8" => Kind::ScalarOrder {
-            read: format_ident!("read_r8"),
-            bytes: 8,
-            float: true,
+        "R8" => Kind::ScalarMB {
+            read_fn: format_ident!("read_r8"),
+            size: 8,
+            is_float: true,
         },
         "B1" => Kind::B1,
         "C1" => Kind::C1,
@@ -409,37 +489,37 @@ fn classify(leaf: &Ident) -> Option<Kind> {
         "Dn" => Kind::Dn,
         "KxN1" => Kind::KxN1,
         "KxU1" => Kind::KxFixed {
-            read: format_ident!("read_kx_u1"),
-            elem: 1,
-            order: false,
+            read_fn: format_ident!("read_kx_u1"),
+            elem_sz: 1,
+            is_mb: false,
         },
         "KxU2" => Kind::KxFixed {
-            read: format_ident!("read_kx_u2"),
-            elem: 2,
-            order: true,
+            read_fn: format_ident!("read_kx_u2"),
+            elem_sz: 2,
+            is_mb: true,
         },
         "KxU4" => Kind::KxFixed {
-            read: format_ident!("read_kx_u4"),
-            elem: 4,
-            order: true,
+            read_fn: format_ident!("read_kx_u4"),
+            elem_sz: 4,
+            is_mb: true,
         },
         "KxU8" => Kind::KxFixed {
-            read: format_ident!("read_kx_u8"),
-            elem: 8,
-            order: true,
+            read_fn: format_ident!("read_kx_u8"),
+            elem_sz: 8,
+            is_mb: true,
         },
         "KxR4" => Kind::KxFixed {
-            read: format_ident!("read_kx_r4"),
-            elem: 4,
-            order: true,
+            read_fn: format_ident!("read_kx_r4"),
+            elem_sz: 4,
+            is_mb: true,
         },
         "KxCn" => Kind::KxStr {
-            read: format_ident!("read_kx_cn"),
-            order: false,
+            read_fn: format_ident!("read_kx_cn"),
+            is_mb: false,
         },
         "KxSn" => Kind::KxStr {
-            read: format_ident!("read_kx_sn"),
-            order: true,
+            read_fn: format_ident!("read_kx_sn"),
+            is_mb: true,
         },
         "KxUf" => Kind::KxUf,
         "KxCf" => Kind::KxCf,
@@ -448,8 +528,8 @@ fn classify(leaf: &Ident) -> Option<Kind> {
     })
 }
 
-/// `__k` expression (a `u16`) that reads the count *value* from its stored
-/// offset var `#count` during the view scan, using the count field's own width.
+/// return an expression that reads the count (K) for Kx* fields,
+/// used in `gen_scan()`.
 fn scan_count_expr(fi: &FieldInfo) -> TokenStream2 {
     let c = fi.count.as_ref().unwrap();
     match fi.count_bytes {
@@ -462,17 +542,9 @@ fn scan_count_expr(fi: &FieldInfo) -> TokenStream2 {
     }
 }
 
-/// Count value (`u16`) for the eager reader, taken from the already-parsed field.
-fn eager_count_val(fi: &FieldInfo) -> TokenStream2 {
-    let c = fi.count.as_ref().unwrap();
-    match fi.count_bytes {
-        Some(1) => quote!(self.#c as u16),
-        _ => quote!(self.#c),
-    }
-}
-
-/// Count value (`u16`) for a view getter, read via the count field's getter.
-fn getter_count_val(fi: &FieldInfo) -> TokenStream2 {
+/// return an expression that yields the count (K) for Kx* fields,
+/// read via the count field's getter, used in `gen_getter()`.
+fn getter_count_expr(fi: &FieldInfo) -> TokenStream2 {
     let c = fi.count.as_ref().unwrap();
     match fi.count_bytes {
         Some(1) => quote!(self.#c() as u16),
@@ -480,8 +552,18 @@ fn getter_count_val(fi: &FieldInfo) -> TokenStream2 {
     }
 }
 
-/// `__f` expression (a `u8`) that reads the width *value* from its stored
-/// offset var `#width` during the view scan, using the width field's own width.
+/// return an expression that yields the count (K) for Kx* fields,
+/// taken from the already-parsed field, used in `gen_eager()`.
+fn eager_count_expr(fi: &FieldInfo) -> TokenStream2 {
+    let c = fi.count.as_ref().unwrap();
+    match fi.count_bytes {
+        Some(1) => quote!(self.#c as u16),
+        _ => quote!(self.#c),
+    }
+}
+
+/// return an expression that reads the width (f) for KxCf/KxUf fields,
+/// used in `gen_scan()`.
 fn scan_width_expr(fi: &FieldInfo) -> TokenStream2 {
     let w = fi.width.as_ref().unwrap();
     match fi.width_bytes {
@@ -494,17 +576,9 @@ fn scan_width_expr(fi: &FieldInfo) -> TokenStream2 {
     }
 }
 
-/// Width value (`u8`) for the eager reader, taken from the already-parsed field.
-fn eager_width_val(fi: &FieldInfo) -> TokenStream2 {
-    let w = fi.width.as_ref().unwrap();
-    match fi.width_bytes {
-        Some(1) => quote!(self.#w),
-        _ => quote!(self.#w as u8),
-    }
-}
-
-/// Width value (`u8`) for a view getter, read via the width field's getter.
-fn getter_width_val(fi: &FieldInfo) -> TokenStream2 {
+/// return an expression that yields the width (f) for KxCf/KxUf fields,
+/// read via the width field's getter, used in `gen_getter()`.
+fn getter_width_expr(fi: &FieldInfo) -> TokenStream2 {
     let w = fi.width.as_ref().unwrap();
     match fi.width_bytes {
         Some(1) => quote!(self.#w()),
@@ -512,18 +586,28 @@ fn getter_width_val(fi: &FieldInfo) -> TokenStream2 {
     }
 }
 
-/// One `let <field>: u16 = ...;` offset-recording statement for `View::new`.
+/// return an expression that yields the width (f) for KxCf/KxUf fields,
+/// taken from the already-parsed field, used in `gen_eager()`.
+fn eager_width_expr(fi: &FieldInfo) -> TokenStream2 {
+    let w = fi.width.as_ref().unwrap();
+    match fi.width_bytes {
+        Some(1) => quote!(self.#w),
+        _ => quote!(self.#w as u8),
+    }
+}
+
+/// Generate field offset scanning statement in `View::new` for record view types.
 fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
     let id = &fi.ident;
     match &fi.kind {
-        Kind::ScalarNoOrder { bytes, .. } => scan_fixed(id, *bytes, fi.optional),
-        Kind::ScalarOrder { bytes, .. } => scan_fixed(id, *bytes, fi.optional),
-        Kind::B1 => scan_fixed(id, 1, fi.optional),
-        Kind::C1 => scan_fixed(id, 1, fi.optional),
+        Kind::Scalar1B { size, .. } => scan_fixed(id, *size, fi.is_optional),
+        Kind::ScalarMB { size, .. } => scan_fixed(id, *size, fi.is_optional),
+        Kind::B1 => scan_fixed(id, 1, fi.is_optional),
+        Kind::C1 => scan_fixed(id, 1, fi.is_optional),
         // `Cn` and `Bn` share the 1-byte length prefix. For an optional field
         // the length byte must be present (eager returns `None` otherwise).
         Kind::Cn | Kind::Bn => {
-            let else_body = if fi.optional {
+            let else_body = if fi.is_optional {
                 quote! { *pos = raw.len() + 1; VIEW_ABSENT_OFT }
             } else {
                 quote! { VIEW_ABSENT_OFT }
@@ -539,12 +623,12 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
             }
         }
         Kind::Sn => {
-            let guard = if fi.optional {
+            let guard = if fi.is_optional {
                 quote! { *pos + 2 <= raw.len() }
             } else {
                 quote! { *pos < raw.len() }
             };
-            let else_body = if fi.optional {
+            let else_body = if fi.is_optional {
                 quote! { *pos = raw.len() + 1; VIEW_ABSENT_OFT }
             } else {
                 quote! { VIEW_ABSENT_OFT }
@@ -561,12 +645,12 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
             }
         }
         Kind::Dn => {
-            let guard = if fi.optional {
+            let guard = if fi.is_optional {
                 quote! { *pos + 2 <= raw.len() }
             } else {
                 quote! { *pos < raw.len() }
             };
-            let else_body = if fi.optional {
+            let else_body = if fi.is_optional {
                 quote! { *pos = raw.len() + 1; VIEW_ABSENT_OFT }
             } else {
                 quote! { VIEW_ABSENT_OFT }
@@ -595,16 +679,16 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                 };
             }
         }
-        Kind::KxFixed { elem, .. } => {
-            let elem = *elem;
+        Kind::KxFixed { elem_sz, .. } => {
+            let elem_sz = *elem_sz;
             let count = scan_count_expr(fi);
-            if fi.optional {
+            if fi.is_optional {
                 quote! {
                     let #id: u16 = {
                         let __k = #count;
-                        if *pos + (#elem as usize) * __k as usize <= raw.len() {
+                        if *pos + (#elem_sz as usize) * __k as usize <= raw.len() {
                             let off = *pos as u16;
-                            *pos += (#elem as usize) * __k as usize;
+                            *pos += (#elem_sz as usize) * __k as usize;
                             off
                         } else {
                             *pos = raw.len() + 1;
@@ -617,7 +701,7 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                     let #id: u16 = if *pos < raw.len() {
                         let off = *pos as u16;
                         let __k = #count;
-                        *pos += (#elem as usize) * __k as usize;
+                        *pos += (#elem_sz as usize) * __k as usize;
                         off
                     } else {
                         VIEW_ABSENT_OFT
@@ -625,9 +709,9 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
                 }
             }
         }
-        Kind::KxStr { order, .. } => {
+        Kind::KxStr { is_mb, .. } => {
             let count = scan_count_expr(fi);
-            let advance = if *order {
+            let advance = if *is_mb {
                 // `KxSn`: each element is a 2-byte length prefix + payload.
                 quote! {
                     if *pos + 2 <= raw.len() {
@@ -679,12 +763,12 @@ fn gen_scan(fi: &FieldInfo) -> TokenStream2 {
     }
 }
 
-fn scan_fixed(id: &Ident, bytes: usize, optional: bool) -> TokenStream2 {
-    if optional {
+fn scan_fixed(id: &Ident, size: usize, is_optional: bool) -> TokenStream2 {
+    if is_optional {
         quote! {
-            let #id: u16 = if *pos + #bytes <= raw.len() {
+            let #id: u16 = if *pos + #size <= raw.len() {
                 let off = *pos as u16;
-                *pos += #bytes;
+                *pos += #size;
                 off
             } else {
                 *pos = raw.len() + 1;
@@ -695,7 +779,7 @@ fn scan_fixed(id: &Ident, bytes: usize, optional: bool) -> TokenStream2 {
         quote! {
             let #id: u16 = if *pos < raw.len() {
                 let off = *pos as u16;
-                *pos += #bytes;
+                *pos += #size;
                 off
             } else {
                 VIEW_ABSENT_OFT
@@ -704,233 +788,34 @@ fn scan_fixed(id: &Ident, bytes: usize, optional: bool) -> TokenStream2 {
     }
 }
 
-/// One statement of the eager `read_from_bytes` body (writes `self.<field>`).
-///
-/// Optional fields are read greedily, in declaration order, until the buffer
-/// runs out: the first field that does not fit is set to `None` and parsing
-/// stops (`return`), so every later optional field keeps its `new()` default
-/// (`None`).
-fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
-    let id = &fi.ident;
-    match (&fi.kind, fi.optional) {
-        (Kind::ScalarNoOrder { read, bytes }, false) => {
-            if fi.default_expr.is_some() {
-                let b = *bytes;
-                quote! {
-                    if *pos + #b <= raw_data.len() {
-                        self.#id = #read(raw_data, pos);
-                    }
-                }
-            } else {
-                quote! { self.#id = #read(raw_data, pos); }
-            }
-        }
-        (Kind::ScalarNoOrder { read, bytes }, true) => {
-            let b = *bytes;
-            quote! {
-                if *pos + #b > raw_data.len() {
-                    self.#id = None;
-                    return;
-                } else {
-                    self.#id = Some(#read(raw_data, pos));
-                }
-            }
-        }
-        (Kind::ScalarOrder { read, bytes, .. }, false) => {
-            if fi.default_expr.is_some() {
-                let b = *bytes;
-                quote! {
-                    if *pos + #b <= raw_data.len() {
-                        self.#id = #read(raw_data, pos, order);
-                    }
-                }
-            } else {
-                quote! { self.#id = #read(raw_data, pos, order); }
-            }
-        }
-        (Kind::ScalarOrder { read, bytes, .. }, true) => {
-            let b = *bytes;
-            quote! {
-                if *pos + #b > raw_data.len() {
-                    self.#id = None;
-                    return;
-                } else {
-                    self.#id = Some(#read(raw_data, pos, order));
-                }
-            }
-        }
-        (Kind::B1, false) => quote! {
-            self.#id = [read_uint8(raw_data, pos)];
-        },
-        (Kind::B1, true) => quote! {
-            if *pos + 1 > raw_data.len() {
-                self.#id = None;
-                return;
-            } else {
-                self.#id = Some([read_uint8(raw_data, pos)]);
-            }
-        },
-        (Kind::C1, false) => {
-            if fi.default_expr.is_some() {
-                quote! {
-                    if *pos + 1 <= raw_data.len() {
-                        self.#id = read_uint8(raw_data, pos) as char;
-                    }
-                }
-            } else {
-                quote! { self.#id = read_uint8(raw_data, pos) as char; }
-            }
-        }
-        (Kind::C1, true) => quote! {
-            if *pos + 1 > raw_data.len() {
-                self.#id = None;
-                return;
-            } else {
-                self.#id = Some(read_uint8(raw_data, pos) as char);
-            }
-        },
-        (Kind::Cn, false) => quote! {
-            self.#id = read_cn(raw_data, pos);
-        },
-        (Kind::Cn, true) => quote! {
-            if *pos + 1 > raw_data.len() {
-                self.#id = None;
-                return;
-            } else {
-                self.#id = Some(read_cn(raw_data, pos));
-            }
-        },
-        (Kind::Sn, false) => quote! {
-            self.#id = read_sn(raw_data, pos, order);
-        },
-        (Kind::Sn, true) => quote! {
-            if *pos + 2 > raw_data.len() {
-                self.#id = None;
-                return;
-            } else {
-                self.#id = Some(read_sn(raw_data, pos, order));
-            }
-        },
-        (Kind::Bn, false) => quote! {
-            self.#id = read_bn(raw_data, pos);
-        },
-        (Kind::Bn, true) => quote! {
-            if *pos + 1 > raw_data.len() {
-                self.#id = None;
-                return;
-            } else {
-                self.#id = Some(read_bn(raw_data, pos));
-            }
-        },
-        (Kind::Dn, false) => quote! {
-            self.#id = read_dn(raw_data, pos, order);
-        },
-        (Kind::Dn, true) => quote! {
-            if *pos + 2 > raw_data.len() {
-                self.#id = None;
-                return;
-            } else {
-                self.#id = Some(read_dn(raw_data, pos, order));
-            }
-        },
-        (Kind::KxN1, false) => {
-            let count = eager_count_val(fi);
-            quote! { self.#id = read_kx_n1(raw_data, pos, #count); }
-        }
-        (Kind::KxN1, true) => {
-            syn::Error::new_spanned(id, "optional KxN1 is not supported").to_compile_error()
-        }
-        (Kind::KxFixed { read, order, .. }, false) => {
-            let count = eager_count_val(fi);
-            if *order {
-                quote! { self.#id = #read(raw_data, pos, order, #count); }
-            } else {
-                quote! { self.#id = #read(raw_data, pos, #count); }
-            }
-        }
-        (Kind::KxFixed { read, elem, order }, true) => {
-            let elem = *elem;
-            let count = eager_count_val(fi);
-            if *order {
-                quote! {
-                    if *pos + (#elem as usize) * (#count) as usize > raw_data.len() {
-                        self.#id = None;
-                        return;
-                    } else {
-                        self.#id = Some(#read(raw_data, pos, order, #count));
-                    }
-                }
-            } else {
-                quote! {
-                    if *pos + (#elem as usize) * (#count) as usize > raw_data.len() {
-                        self.#id = None;
-                        return;
-                    } else {
-                        self.#id = Some(#read(raw_data, pos, #count));
-                    }
-                }
-            }
-        }
-        (Kind::KxStr { read, order }, false) => {
-            let count = eager_count_val(fi);
-            if *order {
-                quote! { self.#id = #read(raw_data, pos, order, #count); }
-            } else {
-                quote! { self.#id = #read(raw_data, pos, #count); }
-            }
-        }
-        (Kind::KxStr { .. }, true) => {
-            syn::Error::new_spanned(id, "optional KxCn/KxSn is not supported").to_compile_error()
-        }
-        (Kind::KxUf, false) => {
-            let count = eager_count_val(fi);
-            let width = eager_width_val(fi);
-            quote! { self.#id = read_kx_uf(raw_data, pos, order, #count, #width); }
-        }
-        (Kind::KxUf, true) => {
-            syn::Error::new_spanned(id, "optional KxUf is not supported").to_compile_error()
-        }
-        (Kind::KxCf, false) => {
-            let count = eager_count_val(fi);
-            let width = eager_width_val(fi);
-            quote! { self.#id = read_kx_cf(raw_data, pos, #count, #width); }
-        }
-        (Kind::KxCf, true) => {
-            syn::Error::new_spanned(id, "optional KxCf is not supported").to_compile_error()
-        }
-        (Kind::Vn, false) => {
-            let count = eager_count_val(fi);
-            quote! { self.#id = read_vn(raw_data, pos, order, #count); }
-        }
-        (Kind::Vn, true) => {
-            syn::Error::new_spanned(id, "optional Vn is not supported").to_compile_error()
-        }
-    }
-}
-
-/// One `pub fn <field>(&self) -> ...` getter on the view.
+/// Generate getter methods for record view types that return the field value.
 fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
     let id = &fi.ident;
     let ity = &fi.inner_ty;
-    match (&fi.kind, fi.optional) {
-        (Kind::ScalarNoOrder { read, .. }, false) => {
+    match (&fi.kind, fi.is_optional) {
+        (Kind::Scalar1B { read_fn, .. }, false) => {
             let dflt = fi.default_expr.clone().unwrap_or_else(|| quote!(0));
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
-                    validate_offset(self.#id).map(|mut p| #read(self.raw, &mut p)).unwrap_or(#dflt)
+                    validate_offset(self.#id).map(|mut p| #read_fn(self.raw, &mut p)).unwrap_or(#dflt)
                 }
             }
         }
-        (Kind::ScalarNoOrder { read, .. }, true) => quote! {
+        (Kind::Scalar1B { read_fn, .. }, true) => quote! {
             #[inline]
             pub fn #id(&self) -> Option<#ity> {
-                validate_offset(self.#id).map(|mut p| #read(self.raw, &mut p))
+                validate_offset(self.#id).map(|mut p| #read_fn(self.raw, &mut p))
             }
         },
-        (Kind::ScalarOrder { read, float, .. }, false) => {
+        (
+            Kind::ScalarMB {
+                read_fn, is_float, ..
+            },
+            false,
+        ) => {
             let dflt = fi.default_expr.clone().unwrap_or_else(|| {
-                if *float {
+                if *is_float {
                     quote!(0.0)
                 } else {
                     quote!(0)
@@ -940,15 +825,15 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
                 #[inline]
                 pub fn #id(&self) -> #ity {
                     validate_offset(self.#id)
-                        .map(|mut p| #read(self.raw, &mut p, &self.order))
+                        .map(|mut p| #read_fn(self.raw, &mut p, &self.order))
                         .unwrap_or(#dflt)
                 }
             }
         }
-        (Kind::ScalarOrder { read, .. }, true) => quote! {
+        (Kind::ScalarMB { read_fn, .. }, true) => quote! {
             #[inline]
             pub fn #id(&self) -> Option<#ity> {
-                validate_offset(self.#id).map(|mut p| #read(self.raw, &mut p, &self.order))
+                validate_offset(self.#id).map(|mut p| #read_fn(self.raw, &mut p, &self.order))
             }
         },
         (Kind::B1, false) => quote! {
@@ -1031,7 +916,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             }
         },
         (Kind::KxN1, false) => {
-            let count = getter_count_val(fi);
+            let count = getter_count_expr(fi);
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
@@ -1044,12 +929,12 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
         (Kind::KxN1, true) => {
             syn::Error::new_spanned(id, "optional KxN1 is not supported").to_compile_error()
         }
-        (Kind::KxFixed { read, order, .. }, false) => {
-            let count = getter_count_val(fi);
-            let call = if *order {
-                quote!(#read(self.raw, &mut p, &self.order, #count))
+        (Kind::KxFixed { read_fn, is_mb, .. }, false) => {
+            let count = getter_count_expr(fi);
+            let call = if *is_mb {
+                quote!(#read_fn(self.raw, &mut p, &self.order, #count))
             } else {
-                quote!(#read(self.raw, &mut p, #count))
+                quote!(#read_fn(self.raw, &mut p, #count))
             };
             quote! {
                 #[inline]
@@ -1058,12 +943,12 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
                 }
             }
         }
-        (Kind::KxFixed { read, order, .. }, true) => {
-            let count = getter_count_val(fi);
-            let call = if *order {
-                quote!(#read(self.raw, &mut p, &self.order, #count))
+        (Kind::KxFixed { read_fn, is_mb, .. }, true) => {
+            let count = getter_count_expr(fi);
+            let call = if *is_mb {
+                quote!(#read_fn(self.raw, &mut p, &self.order, #count))
             } else {
-                quote!(#read(self.raw, &mut p, #count))
+                quote!(#read_fn(self.raw, &mut p, #count))
             };
             quote! {
                 #[inline]
@@ -1072,9 +957,9 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
                 }
             }
         }
-        (Kind::KxStr { order, .. }, false) => {
-            let count = getter_count_val(fi);
-            let (ref_ty, ctor) = if *order {
+        (Kind::KxStr { is_mb, .. }, false) => {
+            let count = getter_count_expr(fi);
+            let (ref_ty, ctor) = if *is_mb {
                 (
                     quote!(KxSnRef<'a>),
                     quote!(KxSnRef::new(self.raw, p, #count as usize, self.order)),
@@ -1096,8 +981,8 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             syn::Error::new_spanned(id, "optional KxCn/KxSn is not supported").to_compile_error()
         }
         (Kind::KxUf, false) => {
-            let count = getter_count_val(fi);
-            let width = getter_width_val(fi);
+            let count = getter_count_expr(fi);
+            let width = getter_width_expr(fi);
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
@@ -1111,8 +996,8 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             syn::Error::new_spanned(id, "optional KxUf is not supported").to_compile_error()
         }
         (Kind::KxCf, false) => {
-            let count = getter_count_val(fi);
-            let width = getter_width_val(fi);
+            let count = getter_count_expr(fi);
+            let width = getter_width_expr(fi);
             quote! {
                 #[inline]
                 pub fn #id(&self) -> KxCfRef<'a> {
@@ -1126,7 +1011,7 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
             syn::Error::new_spanned(id, "optional KxCf is not supported").to_compile_error()
         }
         (Kind::Vn, false) => {
-            let count = getter_count_val(fi);
+            let count = getter_count_expr(fi);
             quote! {
                 #[inline]
                 pub fn #id(&self) -> #ity {
@@ -1139,6 +1024,450 @@ fn gen_getter(fi: &FieldInfo) -> TokenStream2 {
         (Kind::Vn, true) => {
             syn::Error::new_spanned(id, "optional Vn is not supported").to_compile_error()
         }
+    }
+}
+
+/// Generate statement for eager parser `read_from_bytes`
+/// for record types.
+///
+/// If buffer runs out when reading optional fields,
+/// set current optional field to `None`, then return.
+fn gen_eager(fi: &FieldInfo) -> TokenStream2 {
+    let id = &fi.ident;
+    match (&fi.kind, fi.is_optional) {
+        (Kind::Scalar1B { read_fn, size }, false) => {
+            if fi.default_expr.is_some() {
+                let b = *size;
+                quote! {
+                    if *pos + #b <= raw_data.len() {
+                        self.#id = #read_fn(raw_data, pos);
+                    }
+                }
+            } else {
+                quote! { self.#id = #read_fn(raw_data, pos); }
+            }
+        }
+        (Kind::Scalar1B { read_fn, size }, true) => {
+            let b = *size;
+            quote! {
+                if *pos + #b > raw_data.len() {
+                    self.#id = None;
+                    return;
+                } else {
+                    self.#id = Some(#read_fn(raw_data, pos));
+                }
+            }
+        }
+        (Kind::ScalarMB { read_fn, size, .. }, false) => {
+            if fi.default_expr.is_some() {
+                let b = *size;
+                quote! {
+                    if *pos + #b <= raw_data.len() {
+                        self.#id = #read_fn(raw_data, pos, order);
+                    }
+                }
+            } else {
+                quote! { self.#id = #read_fn(raw_data, pos, order); }
+            }
+        }
+        (Kind::ScalarMB { read_fn, size, .. }, true) => {
+            let b = *size;
+            quote! {
+                if *pos + #b > raw_data.len() {
+                    self.#id = None;
+                    return;
+                } else {
+                    self.#id = Some(#read_fn(raw_data, pos, order));
+                }
+            }
+        }
+        (Kind::B1, false) => quote! {
+            self.#id = [read_uint8(raw_data, pos)];
+        },
+        (Kind::B1, true) => quote! {
+            if *pos + 1 > raw_data.len() {
+                self.#id = None;
+                return;
+            } else {
+                self.#id = Some([read_uint8(raw_data, pos)]);
+            }
+        },
+        (Kind::C1, false) => {
+            if fi.default_expr.is_some() {
+                quote! {
+                    if *pos + 1 <= raw_data.len() {
+                        self.#id = read_uint8(raw_data, pos) as char;
+                    }
+                }
+            } else {
+                quote! { self.#id = read_uint8(raw_data, pos) as char; }
+            }
+        }
+        (Kind::C1, true) => quote! {
+            if *pos + 1 > raw_data.len() {
+                self.#id = None;
+                return;
+            } else {
+                self.#id = Some(read_uint8(raw_data, pos) as char);
+            }
+        },
+        (Kind::Cn, false) => quote! {
+            self.#id = read_cn(raw_data, pos);
+        },
+        (Kind::Cn, true) => quote! {
+            if *pos + 1 > raw_data.len() {
+                self.#id = None;
+                return;
+            } else {
+                self.#id = Some(read_cn(raw_data, pos));
+            }
+        },
+        (Kind::Sn, false) => quote! {
+            self.#id = read_sn(raw_data, pos, order);
+        },
+        (Kind::Sn, true) => quote! {
+            if *pos + 2 > raw_data.len() {
+                self.#id = None;
+                return;
+            } else {
+                self.#id = Some(read_sn(raw_data, pos, order));
+            }
+        },
+        (Kind::Bn, false) => quote! {
+            self.#id = read_bn(raw_data, pos);
+        },
+        (Kind::Bn, true) => quote! {
+            if *pos + 1 > raw_data.len() {
+                self.#id = None;
+                return;
+            } else {
+                self.#id = Some(read_bn(raw_data, pos));
+            }
+        },
+        (Kind::Dn, false) => quote! {
+            self.#id = read_dn(raw_data, pos, order);
+        },
+        (Kind::Dn, true) => quote! {
+            if *pos + 2 > raw_data.len() {
+                self.#id = None;
+                return;
+            } else {
+                self.#id = Some(read_dn(raw_data, pos, order));
+            }
+        },
+        (Kind::KxN1, false) => {
+            let count = eager_count_expr(fi);
+            quote! { self.#id = read_kx_n1(raw_data, pos, #count); }
+        }
+        (Kind::KxN1, true) => {
+            syn::Error::new_spanned(id, "optional KxN1 is not supported").to_compile_error()
+        }
+        (Kind::KxFixed { read_fn, is_mb, .. }, false) => {
+            let count = eager_count_expr(fi);
+            if *is_mb {
+                quote! { self.#id = #read_fn(raw_data, pos, order, #count); }
+            } else {
+                quote! { self.#id = #read_fn(raw_data, pos, #count); }
+            }
+        }
+        (
+            Kind::KxFixed {
+                read_fn,
+                elem_sz,
+                is_mb,
+            },
+            true,
+        ) => {
+            let elem_sz = *elem_sz;
+            let count = eager_count_expr(fi);
+            if *is_mb {
+                quote! {
+                    if *pos + (#elem_sz as usize) * (#count) as usize > raw_data.len() {
+                        self.#id = None;
+                        return;
+                    } else {
+                        self.#id = Some(#read_fn(raw_data, pos, order, #count));
+                    }
+                }
+            } else {
+                quote! {
+                    if *pos + (#elem_sz as usize) * (#count) as usize > raw_data.len() {
+                        self.#id = None;
+                        return;
+                    } else {
+                        self.#id = Some(#read_fn(raw_data, pos, #count));
+                    }
+                }
+            }
+        }
+        (Kind::KxStr { read_fn, is_mb }, false) => {
+            let count = eager_count_expr(fi);
+            if *is_mb {
+                quote! { self.#id = #read_fn(raw_data, pos, order, #count); }
+            } else {
+                quote! { self.#id = #read_fn(raw_data, pos, #count); }
+            }
+        }
+        (Kind::KxStr { .. }, true) => {
+            syn::Error::new_spanned(id, "optional KxCn/KxSn is not supported").to_compile_error()
+        }
+        (Kind::KxUf, false) => {
+            let count = eager_count_expr(fi);
+            let width = eager_width_expr(fi);
+            quote! { self.#id = read_kx_uf(raw_data, pos, order, #count, #width); }
+        }
+        (Kind::KxUf, true) => {
+            syn::Error::new_spanned(id, "optional KxUf is not supported").to_compile_error()
+        }
+        (Kind::KxCf, false) => {
+            let count = eager_count_expr(fi);
+            let width = eager_width_expr(fi);
+            quote! { self.#id = read_kx_cf(raw_data, pos, #count, #width); }
+        }
+        (Kind::KxCf, true) => {
+            syn::Error::new_spanned(id, "optional KxCf is not supported").to_compile_error()
+        }
+        (Kind::Vn, false) => {
+            let count = eager_count_expr(fi);
+            quote! { self.#id = read_vn(raw_data, pos, order, #count); }
+        }
+        (Kind::Vn, true) => {
+            syn::Error::new_spanned(id, "optional Vn is not supported").to_compile_error()
+        }
+    }
+}
+
+// Writer related helpers
+
+fn count_usize_expr(fi: &FieldInfo) -> TokenStream2 {
+    let c = fi.count.as_ref().unwrap();
+    quote!(self.#c as usize)
+}
+
+fn width_usize_expr(fi: &FieldInfo) -> TokenStream2 {
+    let w = fi.width.as_ref().unwrap();
+    quote!(self.#w as usize)
+}
+
+/// Validation leaf call for one field, return `None` when
+/// field types don't need validation, e.g. `U1 U2`.
+fn validation_call(
+    fi: &FieldInfo,
+    target_ref: TokenStream2,
+    target_val: TokenStream2,
+) -> Option<TokenStream2> {
+    match &fi.kind {
+        Kind::Scalar1B { .. } | Kind::ScalarMB { .. } | Kind::B1 => None,
+        Kind::KxFixed { .. } => {
+            let k = count_usize_expr(fi);
+            Some(quote!(validate_kx_count((#target_ref).len(), #k)))
+        }
+        Kind::C1 => Some(quote!(validate_c1(#target_val))),
+        Kind::Cn => Some(quote!(validate_cn(#target_ref))),
+        Kind::Sn => Some(quote!(validate_sn(#target_ref))),
+        Kind::Bn => Some(quote!(validate_bn(#target_ref))),
+        Kind::Dn => Some(quote!(validate_dn(#target_ref))),
+        Kind::KxN1 => {
+            let k = count_usize_expr(fi);
+            Some(quote!(validate_kx_n1(#target_ref, #k)))
+        }
+        Kind::KxStr { is_mb, .. } => {
+            let k = count_usize_expr(fi);
+            if *is_mb {
+                Some(quote!(validate_kx_sn(#target_ref, #k)))
+            } else {
+                Some(quote!(validate_kx_cn(#target_ref, #k)))
+            }
+        }
+        Kind::KxUf => {
+            let k = count_usize_expr(fi);
+            let f = width_usize_expr(fi);
+            Some(quote!(validate_kx_uf(#target_ref, #k, #f)))
+        }
+        Kind::KxCf => {
+            let k = count_usize_expr(fi);
+            let f = width_usize_expr(fi);
+            Some(quote!(validate_kx_cf(#target_ref, #k, #f)))
+        }
+        Kind::Vn => {
+            let k = count_usize_expr(fi);
+            Some(quote!(validate_vn(#target_ref, #k)))
+        }
+    }
+}
+
+/// Generate validation statement for one field in `validate()`.
+fn gen_validate(fi: &FieldInfo, record: &Ident) -> TokenStream2 {
+    let id = &fi.ident;
+    let field_msg = format!("{record}.{id} failed validation");
+
+    let (target_ref, target_val) = if fi.is_optional {
+        (quote!(v), quote!(*v))
+    } else {
+        (quote!(&self.#id), quote!(self.#id))
+    };
+
+    let Some(call) = validation_call(fi, target_ref, target_val) else {
+        return quote!();
+    };
+
+    let stmt = quote! {
+        #call.map_err(|kind| crate::StdfError::new(kind, #field_msg))?;
+    };
+
+    if fi.is_optional {
+        quote! {
+            if let Some(v) = &self.#id {
+                #stmt
+            }
+        }
+    } else {
+        stmt
+    }
+}
+
+/// Generate optional field order check statement in `validate()`.
+fn gen_optional_order(infos: &[FieldInfo], record: &Ident) -> TokenStream2 {
+    let optionals = infos
+        .iter()
+        .filter(|fi| fi.is_optional)
+        .map(|fi| fi.ident.clone())
+        .collect::<Vec<_>>();
+
+    if optionals.is_empty() {
+        return TokenStream2::new();
+    }
+
+    let arms = optionals.iter().map(|id| {
+        let msg = format!("{record}.{id} appears after a None optional field");
+        quote! {
+            if self.#id.is_none() {
+                __optional_ended = true;
+            }
+            if __optional_ended && self.#id.is_some() {
+                return Err(crate::StdfError::new(
+                    crate::stdf_error::StdfErrorKind::InvalidOptionalOrder,
+                    #msg,
+                ));
+            }
+        }
+    });
+
+    quote! {
+        let mut __optional_ended = false;
+        #(#arms)*
+    }
+}
+
+fn gen_payload_len(fi: &FieldInfo) -> TokenStream2 {
+    let id = &fi.ident;
+
+    fn inner(fi: &FieldInfo, target: TokenStream2) -> TokenStream2 {
+        match &fi.kind {
+            Kind::Scalar1B { size, .. } | Kind::ScalarMB { size, .. } => {
+                let b = *size;
+                quote!(#b as usize)
+            }
+            Kind::B1 | Kind::C1 => quote!(1usize),
+            Kind::Cn => quote!(1usize + (#target).len()),
+            Kind::Sn => quote!(2usize + (#target).len()),
+            Kind::Bn => quote!(1usize + (#target).len()),
+            Kind::Dn => quote!(2usize + (#target).bit_data.len()),
+            Kind::KxN1 => {
+                let k = count_usize_expr(fi);
+                quote!((#k).div_ceil(2))
+            }
+            Kind::KxFixed { elem_sz, .. } => {
+                let e_sz = *elem_sz;
+                let k = count_usize_expr(fi);
+                quote!(#e_sz * #k)
+            }
+            Kind::KxStr { is_mb, .. } => {
+                if *is_mb {
+                    quote!((#target).iter().map(|s| 2usize + s.len()).sum::<usize>())
+                } else {
+                    quote!((#target).iter().map(|s| 1usize + s.len()).sum::<usize>())
+                }
+            }
+            Kind::KxUf | Kind::KxCf => {
+                let k = count_usize_expr(fi);
+                let f = width_usize_expr(fi);
+                quote!(#k * #f)
+            }
+            Kind::Vn => quote!(vn_payload_len(#target)),
+        }
+    }
+
+    if fi.is_optional {
+        let e = inner(fi, quote!(v));
+        quote!(self.#id.as_ref().map(|v| #e).unwrap_or(0))
+    } else {
+        inner(fi, quote!(&self.#id))
+    }
+}
+
+fn gen_write(fi: &FieldInfo) -> TokenStream2 {
+    let id = &fi.ident;
+
+    fn call(fi: &FieldInfo, target: TokenStream2) -> TokenStream2 {
+        match &fi.kind {
+            Kind::Scalar1B { read_fn, .. } => {
+                let write = write_ident(read_fn);
+                quote!(#write(w, #target)?;)
+            }
+            Kind::ScalarMB { read_fn, .. } => {
+                let write = write_ident(read_fn);
+                quote!(#write(w, #target, order)?;)
+            }
+            Kind::B1 => quote!(write_b1(w, #target)?;),
+            Kind::C1 => quote!(write_c1(w, #target)?;),
+            Kind::Cn => quote!(write_cn(w, #target)?;),
+            Kind::Sn => quote!(write_sn(w, #target, order)?;),
+            Kind::Bn => quote!(write_bn(w, #target)?;),
+            Kind::Dn => quote!(write_dn(w, #target, order)?;),
+            Kind::KxN1 => quote!(write_kx_n1(w, #target)?;),
+            Kind::KxFixed {
+                read_fn,
+                is_mb: needs_order,
+                ..
+            } => {
+                let write = write_ident(read_fn);
+                if *needs_order {
+                    quote!(#write(w, #target, order)?;)
+                } else {
+                    quote!(#write(w, #target)?;)
+                }
+            }
+            Kind::KxStr { is_mb, .. } => {
+                if *is_mb {
+                    quote!(write_kx_sn(w, #target, order)?;)
+                } else {
+                    quote!(write_kx_cn(w, #target)?;)
+                }
+            }
+            Kind::KxUf => quote!(write_kx_uf(w, #target, order)?;),
+            Kind::KxCf => quote!(write_kx_cf(w, #target)?;),
+            Kind::Vn => quote!(write_vn(w, #target, order)?;),
+        }
+    }
+
+    if fi.is_optional {
+        let target = match &fi.kind {
+            Kind::Scalar1B { .. } | Kind::ScalarMB { .. } | Kind::C1 => quote!(*v),
+            _ => quote!(v),
+        };
+        let e = call(fi, target);
+        quote! {
+            if let Some(v) = &self.#id {
+                #e
+            }
+        }
+    } else {
+        let target = match &fi.kind {
+            Kind::Scalar1B { .. } | Kind::ScalarMB { .. } | Kind::C1 => quote!(self.#id),
+            _ => quote!(&self.#id),
+        };
+        call(fi, target)
     }
 }
 
@@ -1494,6 +1823,70 @@ pub fn stdf_match_expr(input: TokenStream) -> TokenStream {
                         rec.read_from_bytes(v.raw_data, &v.byte_order);
                         StdfRecord::UnknownRec(rec)
                     },
+                }
+            }
+        }
+        "record_write" => {
+            let arms: Vec<TokenStream2> = RECORDS
+                .iter()
+                .map(|rec| {
+                    let name = rec_name(rec.0);
+                    let typ = rec.1;
+                    let sub = rec.2;
+                    if is_eps(rec.0) {
+                        quote! { StdfRecord::#name(_) => self.write_header_and_payload(#typ, #sub, &[]) }
+                    } else {
+                        quote! { StdfRecord::#name(rec) => self.write_record(rec) }
+                    }
+                })
+                .collect();
+            quote! {
+                match r {
+                    #( #arms, )*
+                    // rec type 180: Reserved
+                    // rec type 181: Reserved
+                    StdfRecord::ReservedRec(rec) => {
+                        self.write_guarded_record(rec.typ, rec.sub, &rec.raw_data, rec.byte_order)
+                    }
+                    // not matched
+                    StdfRecord::UnknownRec(rec) => {
+                        self.write_guarded_record(rec.typ, rec.sub, &rec.raw_data, rec.byte_order)
+                    }
+                }
+            }
+        }
+        "view_write" => {
+            let arms: Vec<TokenStream2> = RECORDS
+                .iter()
+                .map(|rec| {
+                    let name = rec_name(rec.0);
+                    let typ = rec.1;
+                    let sub = rec.2;
+                    if is_eps(rec.0) {
+                        quote! { StdfRecordView::#name => self.write_header_and_payload(#typ, #sub, &[]) }
+                    } else {
+                        // Known record: passthrough the raw bytes when the view's
+                        // byte order matches the writer, otherwise re-encode.
+                        quote! { StdfRecordView::#name(v) => if v.byte_order() == self.byte_order {
+                            self.write_header_and_payload(#typ, #sub, v.raw_payload())
+                        } else {
+                            self.write_record(&v.to_owned())
+                        } }
+                    }
+                })
+                .collect();
+            quote! {
+                match v {
+                    #( #arms, )*
+                    // rec type 180: Reserved
+                    // rec type 181: Reserved
+                    StdfRecordView::ReservedRec(v) => {
+                        self.write_guarded_record(v.typ, v.sub, v.raw_data, v.byte_order)
+                    }
+                    // not matched
+                    StdfRecordView::UnknownRec(v) => {
+                        self.write_guarded_record(v.typ, v.sub, v.raw_data, v.byte_order)
+                    }
                 }
             }
         }

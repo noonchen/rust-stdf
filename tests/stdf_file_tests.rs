@@ -11,8 +11,8 @@
 
 use rand::prelude::*;
 use rust_stdf::{
-    stdf_file::*, stdf_record_type::*, ByteOrder, CompressType, RawDataElement, StdfRecord,
-    StdfRecordView,
+    stdf_file::*, stdf_record_type::*, ByteOrder, CompressType, RawDataElement, StdfErrorKind,
+    StdfRecord, StdfRecordView,
 };
 use std::{
     collections::HashMap,
@@ -191,6 +191,7 @@ fn record_iter_matches_rawdata_iter() {
     }
 }
 
+#[cfg(any(feature = "gzip", feature = "bzip", feature = "zipfile"))]
 // The gzip/bzip2/zip variants of a demo file must decode to the same record
 // sequence as the uncompressed original.
 #[test]
@@ -303,32 +304,32 @@ fn reader_rejects_invalid_inputs() {
         Ok(_) => panic!("empty stream should not open"),
         Err(e) => e,
     };
-    assert_eq!(err.code, 4);
+    assert_eq!(err.kind(), StdfErrorKind::Eof);
 
     // plausible little-endian length, but the first record is not FAR
     let err = match StdfReader::from(Cursor::new(vec![2, 0, 9, 9]), &CompressType::Uncompressed) {
         Ok(_) => panic!("non-FAR file should not open"),
         Err(e) => e,
     };
-    assert_eq!(err.code, 1);
+    assert_eq!(err.kind(), StdfErrorKind::InvalidStdfFile);
 
     // FAR record with an unrecognized REC_LEN: byte order cannot be determined
     let err = match StdfReader::from(Cursor::new(vec![7, 0, 0, 10]), &CompressType::Uncompressed) {
         Ok(_) => panic!("unknown endianness should not open"),
         Err(e) => e,
     };
-    assert_eq!(err.code, 1);
+    assert_eq!(err.kind(), StdfErrorKind::InvalidStdfFile);
 
     // opening a file that does not exist
     let err = match StdfReader::new("definitely/not/a/real/stdf/file.stdf") {
         Ok(_) => panic!("missing file should not open"),
         Err(e) => e,
     };
-    assert_eq!(err.code, 3);
+    assert_eq!(err.kind(), StdfErrorKind::Io);
 }
 
 // A header that claims more body bytes than are present must surface as an IO
-// error (code 3), not a silent clean EOF.
+// error (Io), not a silent clean EOF.
 #[test]
 fn truncated_body_yields_io_error() {
     // FAR followed by a record whose header claims 100 body bytes but only 3
@@ -351,7 +352,11 @@ fn truncated_body_yields_io_error() {
     assert_eq!(raw_items.len(), 2);
     assert!(raw_items[0].is_ok(), "FAR should parse");
     match &raw_items[1] {
-        Err(e) => assert_eq!(e.code, 3, "rawdata iterator should report IO error"),
+        Err(e) => assert_eq!(
+            e.kind(),
+            StdfErrorKind::Io,
+            "rawdata iterator should report IO error"
+        ),
         Ok(_) => panic!("truncated body should error, got Ok"),
     }
 
@@ -361,7 +366,11 @@ fn truncated_body_yields_io_error() {
     assert_eq!(rec_items.len(), 2);
     assert!(rec_items[0].is_ok(), "FAR should parse");
     match &rec_items[1] {
-        Err(e) => assert_eq!(e.code, 3, "record iterator should report IO error"),
+        Err(e) => assert_eq!(
+            e.kind(),
+            StdfErrorKind::Io,
+            "record iterator should report IO error"
+        ),
         Ok(_) => panic!("truncated body should error, got Ok"),
     }
 
@@ -371,7 +380,11 @@ fn truncated_body_yields_io_error() {
     let mut view_iter = reader.get_rawdata_view_iter();
     assert!(view_iter.next().unwrap().is_ok(), "FAR should parse");
     match view_iter.next() {
-        Some(Err(e)) => assert_eq!(e.code, 3, "view iterator should report IO error"),
+        Some(Err(e)) => assert_eq!(
+            e.kind(),
+            StdfErrorKind::Io,
+            "view iterator should report IO error"
+        ),
         Some(Ok(_)) => panic!("truncated body should error, got Ok"),
         None => panic!("truncated body should error, got None"),
     }

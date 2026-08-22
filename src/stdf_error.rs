@@ -20,9 +20,13 @@ pub struct StdfError {
     pub msg: String,
 }
 
+/// Category of an [`StdfError`], returned by [`StdfError::kind`].
+///
+/// `#[non_exhaustive]`: `match` arms must include a `_` fallback.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub(crate) enum StdfErrorKind {
+#[non_exhaustive]
+pub enum StdfErrorKind {
     InvalidStdfFile = 1,
     InvalidRecordType = 2,
     Io = 3,
@@ -32,11 +36,19 @@ pub(crate) enum StdfErrorKind {
     InvalidAtdfFile = 7,
     #[cfg(feature = "zipfile")]
     Zip = 8,
+    InvalidLength = 9,
+    CountMismatch = 10,
+    WidthMismatch = 11,
+    InvalidOptionalOrder = 12,
+    InvalidValue = 13,
+    RecordTooLarge = 14,
+    ByteOrderMismatch = 15,
+    Unknown = 255,
 }
 
 impl StdfErrorKind {
-    pub(crate) fn from_u8(code: u8) -> Option<Self> {
-        Some(match code {
+    pub(crate) fn from_u8(code: u8) -> Self {
+        match code {
             1 => Self::InvalidStdfFile,
             2 => Self::InvalidRecordType,
             3 => Self::Io,
@@ -46,8 +58,15 @@ impl StdfErrorKind {
             7 => Self::InvalidAtdfFile,
             #[cfg(feature = "zipfile")]
             8 => Self::Zip,
-            _ => return None,
-        })
+            9 => Self::InvalidLength,
+            10 => Self::CountMismatch,
+            11 => Self::WidthMismatch,
+            12 => Self::InvalidOptionalOrder,
+            13 => Self::InvalidValue,
+            14 => Self::RecordTooLarge,
+            15 => Self::ByteOrderMismatch,
+            _ => Self::Unknown,
+        }
     }
 }
 
@@ -59,7 +78,9 @@ impl StdfError {
         }
     }
 
-    pub(crate) fn kind(&self) -> Option<StdfErrorKind> {
+    /// Returns the structured [`StdfErrorKind`] category for this error,
+    /// falling back to [`StdfErrorKind::Unknown`] for an unrecognized code.
+    pub fn kind(&self) -> StdfErrorKind {
         StdfErrorKind::from_u8(self.code)
     }
 }
@@ -67,16 +88,23 @@ impl StdfError {
 impl fmt::Display for StdfError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let short_msg = match StdfErrorKind::from_u8(self.code) {
-            Some(StdfErrorKind::InvalidStdfFile) => "Invalid STDF File",
-            Some(StdfErrorKind::InvalidRecordType) => "Invalid Record Type",
-            Some(StdfErrorKind::Io) => "IO Error",
-            Some(StdfErrorKind::Eof) => "EOF",
-            Some(StdfErrorKind::UnexpectedEof) => "Unexpected EOF",
-            Some(StdfErrorKind::NonAscii) => "Non-ASCII Found",
-            Some(StdfErrorKind::InvalidAtdfFile) => "Invalid ATDF File",
+            StdfErrorKind::InvalidStdfFile => "Invalid STDF File",
+            StdfErrorKind::InvalidRecordType => "Invalid Record Type",
+            StdfErrorKind::Io => "IO Error",
+            StdfErrorKind::Eof => "EOF",
+            StdfErrorKind::UnexpectedEof => "Unexpected EOF",
+            StdfErrorKind::NonAscii => "Non-ASCII Found",
+            StdfErrorKind::InvalidAtdfFile => "Invalid ATDF File",
             #[cfg(feature = "zipfile")]
-            Some(StdfErrorKind::Zip) => "Zip related",
-            _ => "Other error",
+            StdfErrorKind::Zip => "Zip related",
+            StdfErrorKind::InvalidLength => "Invalid Length",
+            StdfErrorKind::CountMismatch => "Field Count Mismatch",
+            StdfErrorKind::WidthMismatch => "Field Width Mismatch",
+            StdfErrorKind::InvalidOptionalOrder => "Invalid Optional Field Order",
+            StdfErrorKind::InvalidValue => "Invalid Value",
+            StdfErrorKind::RecordTooLarge => "Record Too Large",
+            StdfErrorKind::ByteOrderMismatch => "Byte Order Mismatch",
+            StdfErrorKind::Unknown => "Unknown error",
         };
         write!(f, "{}, {}", short_msg, self.msg)
     }
