@@ -3,7 +3,7 @@
 // Author: noonchen - chennoon233@foxmail.com
 // Created Date: October 3rd 2022
 // -----
-// Last Modified: Wed Aug 19 2026
+// Last Modified: Sun Aug 23 2026
 // Modified By: noonchen
 // -----
 // Copyright (c) 2022 noonchen
@@ -16,8 +16,9 @@ use crate::stdf_error::{StdfError, StdfErrorKind};
 use bzip2::bufread::BzDecoder;
 #[cfg(feature = "gzip")]
 use flate2::bufread::GzDecoder;
+use rust_stdf_derive::stdf_match_expr;
 use std::io::{self, BufReader, SeekFrom}; // struct or enum
-use std::io::{BufRead, Read, Seek};
+use std::io::{BufRead, Read, Seek, Write};
 use std::{fs, path::Path}; // trait
 #[cfg(feature = "zipfile")]
 use zip::{read::ZipFile, ZipArchive};
@@ -102,6 +103,166 @@ pub(crate) enum StdfStream<R> {
 pub struct StdfReader<R> {
     endianness: ByteOrder,
     stream: StdfStream<R>,
+}
+
+/// STDF Writer
+///
+/// This writer accepts streams that implement [`Write`] trait,
+/// and writes STDF records in given byte order.
+///
+/// Multiple APIs are provided to write STDF records, including:
+/// - `write_record` for writing parsed STDF V4-2007 records, not including reserved/unknown records.
+/// - `write_stdf_record` for writing any parsed STDF records.
+/// - `write_stdf_record_view` for writing any STDF record views.
+/// - `write_raw` for writing any unprocessed STDF records.
+/// - `write_raw_view` for writing any unprocessed STDF record views.
+///
+/// ```
+/// use rust_stdf::{stdf_file::StdfWriter, ByteOrder, FAR};
+///
+/// let mut far = FAR::new();
+/// far.cpu_type = 2;
+/// far.stdf_ver = 4;
+///
+/// let mut out = Vec::new();
+/// let mut writer = StdfWriter::new(&mut out, ByteOrder::LittleEndian);
+/// writer.write_record(&far).unwrap();
+///
+/// assert_eq!(out, [2, 0, 0, 10, 2, 4]);
+/// ```
+pub struct StdfWriter<W> {
+    writer: W,
+    byte_order: ByteOrder,
+}
+
+impl<W: Write> StdfWriter<W> {
+    /// Create a new writer with the given output stream and byte order.
+    #[inline(always)]
+    pub fn new(writer: W, byte_order: ByteOrder) -> Self {
+        StdfWriter { writer, byte_order }
+    }
+
+    /// Write a STDF V4-2007 record to the output stream.
+    ///
+    /// Validation will be performed on the record before writing, such as
+    /// length check of Cn field, count check for Kx* fields, returns `StdfError`
+    /// if validation fails.
+    ///
+    /// Note: `ReservedRec` and `UnknownRec` cannot be written with this method,
+    /// use `write_stdf_record` instead.
+    #[inline]
+    #[allow(private_bounds)]
+    pub fn write_record<R: StdfRecordWrite>(&mut self, r: &R) -> Result<(), StdfError> {
+        r.validate()?;
+        let n = r.payload_len();
+        self.write_header(R::REC_TYP, R::REC_SUB, n)?;
+        r.write_payload(&mut self.writer, &self.byte_order)
+    }
+
+    /// Write a STDF V4-2007 record to the output stream, also supports
+    /// `ReservedRec` and `UnknownRec`.
+    ///
+    /// Validation will be performed on the record before writing.
+    ///
+    /// Note: reserved/unknown record must match the writer's byte order,
+    /// otherwise, error [`StdfErrorKind::ByteOrderMismatch`] is returned.
+    #[inline]
+    pub fn write_stdf_record(&mut self, r: &StdfRecord) -> Result<(), StdfError> {
+        stdf_match_expr!(record_write)
+    }
+
+    /// Similar to `write_stdf_record`, but takes a borrowed [`StdfRecordView`].
+    ///
+    /// If known record types have different byte order than the writer, they are re-encoded
+    /// via implicit `to_owned()`. Reserved/unknown views cannot be re-encoded,
+    /// so a byte order mismatch returns error
+    /// [`StdfErrorKind::ByteOrderMismatch`].
+    #[inline]
+    pub fn write_stdf_record_view(&mut self, v: &StdfRecordView) -> Result<(), StdfError> {
+        stdf_match_expr!(view_write)
+    }
+
+    /// Write an unprocessed record [`RawDataElement`] to the output stream.
+    ///
+    /// Byte order of the raw record must match the writer's.
+    pub fn write_raw(&mut self, raw: &RawDataElement) -> Result<(), StdfError> {
+        self.write_guarded_record(
+            raw.header.typ,
+            raw.header.sub,
+            &raw.raw_data,
+            raw.byte_order,
+        )
+    }
+
+    /// Write an unprocessed record view [`RawDataElementView`] to the output stream.
+    ///
+    /// Byte order of the raw record must match the writer's.
+    pub fn write_raw_view(&mut self, v: &RawDataElementView) -> Result<(), StdfError> {
+        self.write_guarded_record(v.header.typ, v.header.sub, v.raw_data, v.byte_order)
+    }
+
+    /// Manually flush any buffered data to the output stream.
+    ///
+    /// `StdfWriter` never buffers internally, but a wrapping `BufWriter` does;
+    /// use this method to force wrapped writers to flush.
+    #[inline]
+    pub fn flush(&mut self) -> Result<(), StdfError> {
+        self.writer.flush()?;
+        Ok(())
+    }
+
+    /// Check byte order before writing raw payload.
+    #[inline]
+    fn write_guarded_record(
+        &mut self,
+        typ: u8,
+        sub: u8,
+        raw_data: &[u8],
+        record_order: ByteOrder,
+    ) -> Result<(), StdfError> {
+        if record_order != self.byte_order {
+            return Err(StdfError::new(
+                StdfErrorKind::ByteOrderMismatch,
+                format!(
+                    "record byte order is {:?}, writer uses {:?}",
+                    record_order, self.byte_order
+                ),
+            ));
+        }
+        self.write_header_and_payload(typ, sub, raw_data)
+    }
+
+    #[inline]
+    fn write_header_and_payload(
+        &mut self,
+        typ: u8,
+        sub: u8,
+        raw_data: &[u8],
+    ) -> Result<(), StdfError> {
+        self.write_header(typ, sub, raw_data.len())?;
+        self.writer.write_all(raw_data)?;
+        Ok(())
+    }
+
+    #[inline]
+    fn write_header(&mut self, typ: u8, sub: u8, payload_len: usize) -> Result<(), StdfError> {
+        if payload_len > u16::MAX as usize {
+            return Err(StdfError::new(
+                StdfErrorKind::RecordTooLarge,
+                format!(
+                    "record ({typ}, {sub}) payload length {payload_len} exceeds {}",
+                    u16::MAX
+                ),
+            ));
+        }
+        let len = payload_len as u16;
+        match self.byte_order {
+            ByteOrder::LittleEndian => self.writer.write_all(&len.to_le_bytes())?,
+            ByteOrder::BigEndian => self.writer.write_all(&len.to_be_bytes())?,
+        }
+        self.writer.write_all(&[typ, sub])?;
+        Ok(())
+    }
 }
 
 /// Iterator over [`StdfRecord`]s, created by [`StdfReader::get_record_iter`].
@@ -376,7 +537,7 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
                 return match e.kind() {
                     // only 2 error will be returned by `read_header`
                     // Eof indicates normal EOF, UnexpectedEof indicates unexpected EOF
-                    Some(StdfErrorKind::Eof) => None,
+                    StdfErrorKind::Eof => None,
                     _ => Some(Err(e)),
                 };
             }
@@ -407,7 +568,7 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
             Err(e) => {
                 return match e.kind() {
                     // Eof indicates normal EOF, UnexpectedEof indicates unexpected EOF
-                    Some(StdfErrorKind::Eof) => None,
+                    StdfErrorKind::Eof => None,
                     _ => Some(Err(e)),
                 };
             }
@@ -446,7 +607,7 @@ impl<R: BufRead + Seek> RawDataViewIter<'_, R> {
             Err(e) => {
                 return match e.kind() {
                     // Eof indicates normal EOF, UnexpectedEof indicates unexpected EOF
-                    Some(StdfErrorKind::Eof) => None,
+                    StdfErrorKind::Eof => None,
                     _ => Some(Err(e)),
                 };
             }
