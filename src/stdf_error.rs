@@ -32,6 +32,7 @@ pub enum StdfErrorKind {
     Io = 3,
     Eof = 4,
     UnexpectedEof = 5,
+    #[deprecated(note = "use InvalidAtdfFile instead")]
     NonAscii = 6,
     InvalidAtdfFile = 7,
     #[cfg(feature = "zipfile")]
@@ -47,6 +48,7 @@ pub enum StdfErrorKind {
 }
 
 impl StdfErrorKind {
+    #[allow(deprecated)]
     pub(crate) fn from_u8(code: u8) -> Self {
         match code {
             1 => Self::InvalidStdfFile,
@@ -85,6 +87,7 @@ impl StdfError {
     }
 }
 
+#[allow(deprecated)]
 impl fmt::Display for StdfError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let short_msg = match StdfErrorKind::from_u8(self.code) {
