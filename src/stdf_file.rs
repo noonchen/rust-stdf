@@ -554,8 +554,8 @@ impl<R: BufRead + Seek> Iterator for RecordIter<'_, R> {
         if self.buffer.len() < len {
             self.buffer.resize(len, 0);
         }
-        if let Err(io_e) = self.inner.stream.read_exact(&mut self.buffer[..len]) {
-            return Some(Err(StdfError::new(StdfErrorKind::Io, io_e.to_string())));
+        if let Err(e) = read_exact_counted(&mut self.inner.stream, &mut self.buffer[..len]) {
+            return Some(Err(e));
         }
 
         let mut rec = StdfRecord::new_from_header(&header);
@@ -584,8 +584,8 @@ impl<R: BufRead + Seek> Iterator for RawDataIter<'_, R> {
         let data_offset = self.offset;
         // create a buffer to store record raw data
         let mut buffer = vec![0u8; header.len as usize];
-        if let Err(io_e) = self.inner.stream.read_exact(&mut buffer) {
-            return Some(Err(StdfError::new(StdfErrorKind::Io, io_e.to_string())));
+        if let Err(e) = read_exact_counted(&mut self.inner.stream, &mut buffer) {
+            return Some(Err(e));
         }
         self.offset += header.len as u64;
 
@@ -627,8 +627,8 @@ impl<R: BufRead + Seek> RawDataViewIter<'_, R> {
         if self.buffer.len() < len {
             self.buffer.resize(len, 0);
         }
-        if let Err(io_e) = self.inner.stream.read_exact(&mut self.buffer[..len]) {
-            return Some(Err(StdfError::new(StdfErrorKind::Io, io_e.to_string())));
+        if let Err(e) = read_exact_counted(&mut self.inner.stream, &mut self.buffer[..len]) {
+            return Some(Err(e));
         }
         self.offset += header.len as u64;
 
@@ -699,4 +699,38 @@ fn general_read_until<T: Read>(r: &mut T, delim: u8, buf: &mut Vec<u8>) -> io::R
         }
     }
     Ok(n)
+}
+
+fn read_exact_counted<R: Read + ?Sized>(
+    reader: &mut R,
+    mut buf: &mut [u8],
+) -> Result<(), StdfError> {
+    let expected = buf.len();
+
+    while !buf.is_empty() {
+        match reader.read(buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                buf = &mut buf[n..];
+            }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => break,
+            Err(e) => {
+                return Err(StdfError::new(StdfErrorKind::Io, e.to_string()));
+            }
+        }
+    }
+
+    if !buf.is_empty() {
+        return Err(StdfError::new(
+            StdfErrorKind::UnexpectedEof,
+            format!(
+                "Reading {} bytes, {} remaining bytes failed to read",
+                expected,
+                buf.len()
+            ),
+        ));
+    }
+
+    Ok(())
 }

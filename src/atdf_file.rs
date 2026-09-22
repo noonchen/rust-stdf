@@ -77,7 +77,7 @@ impl<R: BufRead + Seek> AtdfReader<R> {
         let far_str = bytes_to_string(&far_bytes);
         if !far_str.starts_with("FAR:A") || far_bytes.len() < 9 {
             return Err(StdfError::new(
-                StdfErrorKind::NonAscii,
+                StdfErrorKind::InvalidAtdfFile,
                 format!(
                     "FAR record pattern 'FAR:A' not detected or required fields missing, found {}",
                     far_str
