@@ -328,10 +328,10 @@ fn reader_rejects_invalid_inputs() {
     assert_eq!(err.kind(), StdfErrorKind::Io);
 }
 
-// A header that claims more body bytes than are present must surface as an IO
-// error (Io), not a silent clean EOF.
+// A header that claims more body bytes than are present must surface as an
+// UnexpectedEof, not a silent clean EOF.
 #[test]
-fn truncated_body_yields_io_error() {
+fn truncated_body_yields_unexpected_eof() {
     // FAR followed by a record whose header claims 100 body bytes but only 3
     // are present.
     let truncated = || {
@@ -354,8 +354,8 @@ fn truncated_body_yields_io_error() {
     match &raw_items[1] {
         Err(e) => assert_eq!(
             e.kind(),
-            StdfErrorKind::Io,
-            "rawdata iterator should report IO error"
+            StdfErrorKind::UnexpectedEof,
+            "rawdata iterator should report UnexpectedEof"
         ),
         Ok(_) => panic!("truncated body should error, got Ok"),
     }
@@ -368,8 +368,8 @@ fn truncated_body_yields_io_error() {
     match &rec_items[1] {
         Err(e) => assert_eq!(
             e.kind(),
-            StdfErrorKind::Io,
-            "record iterator should report IO error"
+            StdfErrorKind::UnexpectedEof,
+            "record iterator should report UnexpectedEof"
         ),
         Ok(_) => panic!("truncated body should error, got Ok"),
     }
@@ -382,8 +382,8 @@ fn truncated_body_yields_io_error() {
     match view_iter.next() {
         Some(Err(e)) => assert_eq!(
             e.kind(),
-            StdfErrorKind::Io,
-            "view iterator should report IO error"
+            StdfErrorKind::UnexpectedEof,
+            "view iterator should report UnexpectedEof"
         ),
         Some(Ok(_)) => panic!("truncated body should error, got Ok"),
         None => panic!("truncated body should error, got None"),
