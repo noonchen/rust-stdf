@@ -21,7 +21,7 @@ use std::io::{self, BufReader, SeekFrom}; // struct or enum
 use std::io::{BufRead, Read, Seek, Write};
 use std::{fs, path::Path}; // trait
 #[cfg(feature = "zipfile")]
-use zip::{read::ZipFile, ZipArchive};
+use zip::ZipArchive;
 
 /// `Unsafe` struct for coupling
 /// file and `ZipArchive`
@@ -32,7 +32,7 @@ pub(crate) struct ZipBundle<R> {
     // put `ZipFile` on top
     // to ensure it is dropped
     // before `ZipArchive`
-    file: Option<ZipFile<'static>>,
+    file: Option<Box<dyn Read + 'static>>,
     archive: Box<ZipArchive<R>>,
 }
 
@@ -463,9 +463,7 @@ impl<R: BufRead + Seek> ZipBundle<R> {
         // boxed (address stable across the move below), `file` drops before
         // `archive` (whose Drop reads it), and `archive` is never aliased while
         // `file` is alive (reopen_file clears `file` before re-borrowing).
-        let file = unsafe {
-            std::mem::transmute::<ZipFile<'_>, ZipFile<'static>>(archive.by_index(file_index)?)
-        };
+        let file = unsafe { erase(archive.by_index(file_index)?) };
         Ok(ZipBundle {
             archive,
             file: Some(file),
@@ -476,12 +474,22 @@ impl<R: BufRead + Seek> ZipBundle<R> {
         // Drop the outstanding borrow before re-borrowing `archive`.
         self.file = None;
         // SAFETY: same invariants as `new`. `file` was just cleared above.
-        let file = unsafe {
-            std::mem::transmute::<ZipFile<'_>, ZipFile<'static>>(self.archive.by_index(file_index)?)
-        };
+        let file = unsafe { erase(self.archive.by_index(file_index)?) };
         self.file = Some(file);
         Ok(())
     }
+}
+
+/// Boxes a zip entry and drops its borrow of the archive from the type.
+/// The type of reader is erased with it, so `R` needs no `'static` bound.
+///
+/// # Safety
+///
+/// The caller must drop the result before the archive it borrows.
+#[cfg(feature = "zipfile")]
+unsafe fn erase<'a>(file: impl Read + 'a) -> Box<dyn Read + 'static> {
+    let file: Box<dyn Read + 'a> = Box::new(file);
+    unsafe { std::mem::transmute::<Box<dyn Read + 'a>, Box<dyn Read + 'static>>(file) }
 }
 
 #[cfg(feature = "zipfile")]
