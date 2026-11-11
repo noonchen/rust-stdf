@@ -33,6 +33,10 @@ jobs:
         if: matrix.task == 'test'
         run: cargo test
 
+      - name: Run tests (zipfile)
+        if: matrix.task == 'test'
+        run: cargo test --features zipfile
+
       - name: Build examples (default features)
         if: matrix.task == 'test'
         run: cargo build --examples
